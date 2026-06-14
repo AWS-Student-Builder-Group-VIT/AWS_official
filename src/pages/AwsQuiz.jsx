@@ -38,7 +38,9 @@ export default function AwsQuiz() {
   const [timeLeft, setTimeLeft] = useState(60);
   const [globalStatus, setGlobalStatus] = useState('active');
   const [roundStatusMap, setRoundStatusMap] = useState({});
+  const [wrongCount, setWrongCount] = useState(0);
   const [startTime, setStartTime] = useState(null);
+  const [totalTimeSpent, setTotalTimeSpent] = useState(0);
   const [savedCompositeScore, setSavedCompositeScore] = useState(null);
   const [savedTimeTaken, setSavedTimeTaken] = useState(null);
 
@@ -134,6 +136,7 @@ export default function AwsQuiz() {
         }
         return prev - 1;
       });
+      setTotalTimeSpent(t => t + 1);
     }, 1000);
     return () => clearInterval(timer);
   }, [screen, selected, currentIdx]);
@@ -167,8 +170,10 @@ export default function AwsQuiz() {
     setSelected(null);
     setAnswers([]);
     setScore(0);
+    setScore(0);
     setShowExplanation(false);
     setTimeLeft(60);
+    setTotalTimeSpent(0);
     setStartTime(Date.now());
     setScreen(SCREEN.QUIZ);
   }
@@ -185,7 +190,7 @@ export default function AwsQuiz() {
   function handleNext() {
     if (currentIdx + 1 >= questions.length) {
       // Save score before showing results
-      const totalTime = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+      const totalTime = totalTimeSpent;
       
       const finalScore = score + (selected !== null && selected !== -1 && selected === questions[currentIdx].correct ? 0 : 0);
       
@@ -415,6 +420,25 @@ export default function AwsQuiz() {
   // RESULTS SCREEN
   // ═══════════════════════════════════════════════════════════
   if (screen === SCREEN.RESULTS) {
+    let displayPct = pct;
+    const backendScore = pastAttempt ? pastAttempt.composite_score : savedCompositeScore;
+    if (backendScore !== null && backendScore !== undefined && (parseFloat(backendScore) > 0 || score === 0)) {
+      displayPct = backendScore;
+    } else {
+      // Fallback calculation if backend returned 0.00 erroneously
+      const maxTime = totalQuestions * 60;
+      const acc = totalQuestions ? (score / totalQuestions) * 100 * 0.7 : 0;
+      const tTaken = pastAttempt && pastAttempt.time_taken !== undefined && pastAttempt.time_taken !== null 
+        ? pastAttempt.time_taken 
+        : (savedTimeTaken !== null && savedTimeTaken !== undefined ? savedTimeTaken : totalTimeSpent);
+      const tc = tTaken < maxTime ? (1 - (tTaken / maxTime)) * 100 * 0.3 : 0;
+      displayPct = Math.min(100, Math.max(0, acc + tc)).toFixed(2);
+    }
+
+    const timeToDisplay = pastAttempt && pastAttempt.time_taken !== undefined && pastAttempt.time_taken !== null 
+      ? pastAttempt.time_taken 
+      : (savedTimeTaken !== null && savedTimeTaken !== undefined ? savedTimeTaken : totalTimeSpent);
+
     return (
       <div className="min-h-screen bg-[#0A0C10] text-[#f1dfd1] flex flex-col relative overflow-hidden"
         onMouseMove={handleMouseMove} onMouseLeave={() => setGridState(s => ({ ...s, isVisible: false }))}>
@@ -448,9 +472,7 @@ export default function AwsQuiz() {
               </div>
               <div>
                 <div className="font-mono text-4xl font-bold text-[#FF9900]">
-                  {pastAttempt && pastAttempt.composite_score !== undefined && pastAttempt.composite_score !== null 
-                    ? pastAttempt.composite_score 
-                    : (savedCompositeScore !== null && savedCompositeScore !== undefined ? savedCompositeScore : pct)}
+                  {displayPct}
                   <span className="text-xl"> pts</span>
                 </div>
                 <div className="font-mono text-xs text-[#dbc2ad] mt-1">Composite Score</div>
@@ -460,7 +482,7 @@ export default function AwsQuiz() {
             <div className="grid grid-cols-4 gap-3 mb-4">
               {[
                 { label: 'Accuracy', val: `${pct}%`, color: '#a8e063', bg: 'rgba(99,153,34,0.12)', border: '#639922' },
-                { label: 'Time (s)', val: pastAttempt && pastAttempt.time_taken !== undefined && pastAttempt.time_taken !== null ? pastAttempt.time_taken : (savedTimeTaken !== null && savedTimeTaken !== undefined ? savedTimeTaken : 0), color: '#00a8e0', bg: 'rgba(0,168,224,0.12)', border: '#00a8e0' },
+                { label: 'Time (s)', val: timeToDisplay, color: '#00a8e0', bg: 'rgba(0,168,224,0.12)', border: '#00a8e0' },
                 { label: 'Wrong', val: totalQuestions - score, color: '#f87171', bg: 'rgba(226,75,74,0.12)', border: '#E24B4A' },
                 { label: 'Total Qs', val: totalQuestions, color: '#f1dfd1', bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.12)' },
               ].map(s => (
