@@ -83,7 +83,15 @@ async function initDb() {
     ALTER TABLE quiz_scores ADD COLUMN IF NOT EXISTS time_taken INTEGER DEFAULT 0;
     ALTER TABLE quiz_scores ADD COLUMN IF NOT EXISTS composite_score NUMERIC(5,2) DEFAULT 0;
   `).catch(() => console.log('ALTER columns for time/composite failed (probably already exists).'));
-  console.log('quiz_scores table ready');
+  
+  // Initialize global settings table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS global_settings (
+      key VARCHAR(64) PRIMARY KEY,
+      value VARCHAR(255) NOT NULL
+    );
+  `);
+  console.log('Database tables ready');
 }
 initDb().catch(console.error);
 
@@ -348,18 +356,19 @@ app.get('/api/admin/stats', adminMiddleware, async (req, res) => {
   }
 });
 // ── Global Quiz Status ───────────────────────────────────────
+let cachedQuizStatus = 'inactive';
+let lastStatusFetchTime = 0;
+
 app.get('/api/quiz-status', async (req, res) => {
   try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS global_settings (
-        key VARCHAR(64) PRIMARY KEY,
-        value VARCHAR(255) NOT NULL
-      );
-    `);
-    const result = await pool.query("SELECT value FROM global_settings WHERE key = 'quiz_status'");
-    const status = result.rows.length > 0 ? result.rows[0].value : 'inactive';
+    // Only query the DB at most once every 2 seconds
+    if (Date.now() - lastStatusFetchTime > 2000) {
+      const result = await pool.query("SELECT value FROM global_settings WHERE key = 'quiz_status'");
+      cachedQuizStatus = result.rows.length > 0 ? result.rows[0].value : 'inactive';
+      lastStatusFetchTime = Date.now();
+    }
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.status(200).json({ status });
+    res.status(200).json({ status: cachedQuizStatus });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch status' });
   }
@@ -374,16 +383,13 @@ app.post('/api/admin/quiz-control', adminMiddleware, async (req, res) => {
     const status = action === 'initiate' ? 'active' : 'inactive';
     
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS global_settings (
-        key VARCHAR(64) PRIMARY KEY,
-        value VARCHAR(255) NOT NULL
-      );
-    `);
-
-    await pool.query(`
       INSERT INTO global_settings (key, value) VALUES ('quiz_status', $1)
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
     `, [status]);
+    
+    // Invalidate cache
+    cachedQuizStatus = status;
+    lastStatusFetchTime = Date.now();
 
     res.json({ message: `Quiz ${status} successfully`, status });
   } catch (error) {

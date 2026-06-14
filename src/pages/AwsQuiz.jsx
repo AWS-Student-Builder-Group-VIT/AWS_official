@@ -121,7 +121,7 @@ export default function AwsQuiz() {
           setScreen(SCREEN.RESULTS);
         });
       }
-    }, 5000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [screen, score, questions.length, quizMeta]);
 

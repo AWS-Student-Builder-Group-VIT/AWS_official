@@ -72,7 +72,7 @@ export default function CaseStudyQuiz() {
           timeTaken: totalTimeTaken
         }).then(() => setPhase('results'));
       }
-    }, 5000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [phase, score, bank?.questions?.length, meta, caseId]);
 
