@@ -338,7 +338,7 @@ app.get('/api/admin/stats', adminMiddleware, async (req, res) => {
       pool.query('SELECT ROUND(AVG(pct)) as avg FROM quiz_scores'),
       pool.query(`
         SELECT u.first_name, u.last_name, u.email,
-               ROUND(AVG(qs.pct)) as avg_pct, COUNT(*) as attempts
+               ROUND(AVG(COALESCE(qs.composite_score, qs.pct))) as avg_pct, COUNT(*) as attempts
         FROM quiz_scores qs JOIN users u ON qs.user_id = u.id
         GROUP BY u.id, u.first_name, u.last_name, u.email
         ORDER BY avg_pct DESC LIMIT 5

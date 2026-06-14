@@ -138,7 +138,12 @@ function Dashboard({ token, onLogout }) {
       return matchSearch && matchType;
     })
     .sort((a, b) => {
-      if (sortBy === 'score') return b.pct - a.pct;
+      if (sortBy === 'score') {
+        const compB = parseFloat(b.composite_score || b.pct || 0);
+        const compA = parseFloat(a.composite_score || a.pct || 0);
+        if (compB !== compA) return compB - compA;
+        return (a.time_taken || 0) - (b.time_taken || 0);
+      }
       if (sortBy === 'name') return `${a.first_name}`.localeCompare(`${b.first_name}`);
       return new Date(b.attempted_at) - new Date(a.attempted_at);
     });
