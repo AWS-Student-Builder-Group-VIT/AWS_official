@@ -7,32 +7,32 @@
 export const QUIZZES = [
   {
     id: 'fundamentals',
-    title: 'Cloud Combat 1.0 - Round 1',
-    subtitle: 'Pick the Right DB! One scenario → one correct AWS DB service. 1 point per correct answer. +1 bonus if answered in under 5 seconds.',
+    title: 'AWS 101: The Architecture SandBox - Round 1',
+    subtitle: 'Test your foundational knowledge on virtualisation, OSI model, and basic networking.',
     category: 'Beginner',
-    questions: 5,
-    duration: '6 min',
-    topics: ['RDS', 'DynamoDB', 'ElastiCache', 'Aurora', 'Redshift', 'DocumentDB'],
+    questions: 4,
+    duration: '5 min',
+    topics: ['Virtualisation', 'OSI Model', 'Networking', 'Ports'],
     color: '#FF9900',
   },
   {
     id: 'advanced',
-    title: 'Cloud Combat 1.0 - Round 2',
-    subtitle: 'Design the Right Stack! Each startup has multiple data needs. Pick the correct combination of 2–3 AWS DB services. 3 pts full / 1 pt partial.',
+    title: 'AWS 101: The Architecture SandBox - Round 2',
+    subtitle: 'Intermediate networking and virtualisation concepts, including subnets and stateful firewalls.',
     category: 'Intermediate',
-    questions: 5,
-    duration: '8 min',
-    topics: ['RDS', 'Aurora', 'DynamoDB', 'ElastiCache', 'Redshift', 'DocumentDB'],
+    questions: 3,
+    duration: '5 min',
+    topics: ['Hypervisors', 'Subnets', 'Firewalls'],
     color: '#00a8e0',
   },
   {
     id: 'security',
-    title: 'Cloud Combat 1.0 - Round 3',
-    subtitle: 'Defend Your Answer! A startup made a DB choice — challenge it. 5 pts for correct answer + solid justification.',
+    title: 'AWS 101: The Architecture SandBox - Round 3',
+    subtitle: 'Hard scenarios on security groups, VPC architecture, and troubleshooting.',
     category: 'Advanced',
     questions: 3,
-    duration: '7 min',
-    topics: ['DynamoDB', 'ElastiCache', 'Redshift', 'DocumentDB', 'Aurora', 'RDS'],
+    duration: '5 min',
+    topics: ['Security Groups', 'VPC', 'Troubleshooting', 'DNS'],
     color: '#a855f7',
   },
 ];
@@ -74,142 +74,83 @@ export const CASE_STUDIES = [
 
 export const QUESTION_BANKS = {
   fundamentals: [
-    {id: 1, category: 'Relational',
-      question: 'A food delivery app stores user profiles, order history, and payment info with complex queries. Which AWS database service should they use?',
-      options: ['DynamoDB', 'Amazon RDS', 'ElastiCache', 'Amazon Redshift'],
+    {
+      id: 1, category: 'Virtualisation',
+      question: 'Before virtualisation, a single physical server typically ran one OS and one workload. What was the approximate CPU utilisation in that scenario?',
+      options: ['~10% used, 90% wasted', '~50% used, 50% wasted', '~90% used, 10% wasted', '~30% used, 70% wasted'],
+      correct: 0,
+      explanation: 'Before virtualisation, CPU utilisation was ~10% used with 90% wasted — the core inefficiency that virtualisation was designed to solve.'
+    },
+    {
+      id: 2, category: 'Hypervisors',
+      question: 'Which of the following correctly describes a Type 1 (bare-metal) hypervisor?',
+      options: ['Runs on top of an existing host OS - ideal for developer laptops', 'Installed directly on physical hardware with no host OS required', 'Used primarily by students running VirtualBox', 'Has higher performance overhead due to the host OS layer'],
       correct: 1,
-      explanation: 'Amazon RDS is the right choice for structured, relational data with complex queries. It supports SQL-based operations like JOINs across tables — ideal for user profiles, order history, and payment info.'
+      explanation: 'Type 1 hypervisors (VMware ESXi, Hyper-V, Xen) install directly on hardware with no host OS, giving them direct hardware access and stronger security. AWS, Azure, and Google Cloud all use Type 1.'
     },
     {
-      id: 2, category: 'NoSQL',
-      question: 'A gaming leaderboard needs to serve millions of score lookups per second with single-digit ms latency. Which AWS database should they use?',
-      options: ['Amazon RDS', 'Amazon Redshift', 'DynamoDB', 'DocumentDB'],
-      correct: 2,
-      explanation: 'DynamoDB is a key-value and document NoSQL database designed for single-digit millisecond performance at any scale. It\'s lightning fast for simple lookups like leaderboard scores.'
-    },
-    {
-      id: 3, category: 'Caching',
-      question: 'An e-commerce site wants to cache repeated product search results so the database isn\'t hit every time. What should they use?',
-      options: ['Amazon Aurora', 'Amazon Redshift', 'ElastiCache', 'DocumentDB'],
-      correct: 2,
-      explanation: 'ElastiCache is an in-memory caching service (Redis/Memcached) that sits in front of your database. It serves repeated reads at sub-millisecond speed, reducing load on the primary database.'
-    },
-    {
-      id: 4, category: 'Aurora',
-      question: 'A startup wants a MySQL-compatible database that auto-scales and is fully managed by AWS. Which service fits best?',
-      options: ['Amazon RDS for MySQL', 'Amazon Aurora', 'DynamoDB', 'Amazon Redshift'],
+      id: 3, category: 'OSI Model',
+      question: 'In the OSI model, at which layer do switches primarily operate?',
+      options: ['Layer 1 — Physical', 'Layer 2 — Data Link', 'Layer 3 — Network', 'Layer 4 — Transport'],
       correct: 1,
-      explanation: 'Amazon Aurora is MySQL and PostgreSQL compatible, fully managed, auto-scales storage up to 128 TB, and offers up to 5x the throughput of standard MySQL — with a serverless option available.'
+      explanation: 'Switches operate at Layer 2 (Data Link), forwarding frames based on MAC addresses. Routers operate at Layer 3 (Network) using IP addresses.'
     },
     {
-      id: 5, category: 'Data Warehouse',
-      question: 'A data analytics team runs heavy SQL queries on terabytes of historical transaction logs. Which AWS service is purpose-built for this?',
-      options: ['Amazon RDS', 'DynamoDB', 'Amazon Redshift', 'ElastiCache'],
+      id: 4, category: 'Ports',
+      question: 'Which port number is associated with SSH (Secure Shell)?',
+      options: ['Port 80', 'Port 443', 'Port 22', 'Port 25'],
       correct: 2,
-      explanation: 'Amazon Redshift is a fully managed data warehouse designed for OLAP (Online Analytical Processing). It can handle petabyte-scale analytical queries using columnar storage and massively parallel processing.'
-    },
+      explanation: 'Port 22 = SSH, Port 80 = HTTP, Port 443 = HTTPS.'
+    }
   ],
 
   advanced: [
     {
-      id: 1, category: 'Stack Design',
-      question: 'A food delivery startup needs: user account storage (relational), fast session caching, and flexible restaurant menu storage (JSON schema). Which combination of AWS services is correct?',
-      options: [
-        'DynamoDB + Redshift + Aurora',
-        'RDS + ElastiCache + DocumentDB',
-        'Aurora + DocumentDB + ElastiCache',
-        'ElastiCache + RDS + Redshift'
-      ],
+      id: 1, category: 'Virtualisation',
+      question: 'A developer\'s laptop runs VirtualBox with three VMs - Ubuntu, Windows 10, and Kali Linux, all at the same time. What type of virtualisation setup is this, and what is the performance implication?',
+      options: ['Type 1 bare-metal - maximum performance, no overhead', 'Type 2 hosted - slight performance overhead due to the host OS layer', 'Type 2 hosted - eliminates the need for a host OS entirely', 'Type 1 bare-metal - used because the developer needs cloud-level performance'],
       correct: 1,
-      explanation: 'RDS handles relational user account data with SQL. ElastiCache provides sub-ms session caching. DocumentDB stores flexible JSON restaurant menus that change frequently. This is the ideal 3-service stack.'
+      explanation: 'VirtualBox is a Type 2 (hosted) hypervisor that runs on top of the laptop\'s existing OS, adding a performance overhead layer. Type 1 runs directly on hardware and is used by cloud providers, not dev machines.'
     },
     {
-      id: 2, category: 'Stack Design',
-      question: 'An e-commerce platform needs: product catalogue with complex queries, cart data with fast reads/writes per user, and historical sales analytics. Which stack is correct?',
-      options: [
-        'RDS + ElastiCache + DocumentDB',
-        'Aurora + DynamoDB + Redshift',
-        'DynamoDB + DocumentDB + ElastiCache',
-        'Redshift + ElastiCache + RDS'
-      ],
+      id: 2, category: 'Networking',
+      question: 'Server A has IP 192.168.1.10 and Server B has IP 192.168.2.10. Both are on the same physical network. Can Server A reach Server B directly, or does it require an intermediate device?',
+      options: ['Yes - they are on the same physical network, so the switch routes them directly', 'No - they are in different subnets, so a router hop is required', 'Yes - both IPs are in the 192.168.x.x range, so they share the same subnet', 'No - different subnets cannot communicate even with a router'],
       correct: 1,
-      explanation: 'Aurora handles complex product catalogue queries (relational SQL). DynamoDB provides fast key-value reads/writes for cart data. Redshift is the data warehouse for heavy historical sales analytics.'
+      explanation: '192.168.1.x and 192.168.2.x are different subnets. Devices in different subnets require a router hop — switches only handle same-subnet traffic. Physical proximity doesn\'t matter; the IP subnet boundary does.'
     },
     {
-      id: 3, category: 'Stack Design',
-      question: 'A social media app needs: user profiles and followers (relational), news feed caching (sub-ms), and activity logs at massive scale (NoSQL). Which combination works?',
-      options: [
-        'Aurora + Redshift + DocumentDB',
-        'DynamoDB + ElastiCache + RDS',
-        'RDS + ElastiCache + DynamoDB',
-        'DocumentDB + Aurora + Redshift'
-      ],
+      id: 3, category: 'Firewalls',
+      question: 'A firewall is configured with stateful inspection. A user initiates a web request to a server. Which best describes what stateful inspection adds over a simple packet filter?',
+      options: ['It blocks all inbound traffic regardless of whether a request was made', 'It only checks the destination IP of each packet in isolation', 'It tracks the session state, so return traffic from the server is automatically allowed because the session was initiated by the user', 'It encrypts all traffic passing through the network perimeter'],
       correct: 2,
-      explanation: 'RDS stores relational user profiles and follower relationships. ElastiCache caches the news feed for sub-ms reads. DynamoDB handles massive-scale NoSQL activity logs with high write throughput.'
-    },
-    {
-      id: 4, category: 'Stack Design',
-      question: 'A healthcare portal needs: patient records with ACID transactions, doctor notes in free-form JSON, and analytics on treatment outcomes. Which stack fits?',
-      options: [
-        'DynamoDB + ElastiCache + Aurora',
-        'RDS + DocumentDB + Redshift',
-        'Aurora + ElastiCache + DynamoDB',
-        'DocumentDB + Redshift + ElastiCache'
-      ],
-      correct: 1,
-      explanation: 'RDS provides ACID-compliant storage for patient records. DocumentDB stores free-form JSON doctor notes with flexible schema. Redshift runs analytical queries on treatment outcome data at scale.'
-    },
-    {
-      id: 5, category: 'Stack Design',
-      question: 'A real-time multiplayer game needs: leaderboard with fast sorted lookups, player session cache (sub-ms), and game stats history (analytics). Which combination is best?',
-      options: [
-        'RDS + DocumentDB + Aurora',
-        'Aurora + ElastiCache + RDS',
-        'DynamoDB + ElastiCache + Redshift',
-        'Redshift + DocumentDB + DynamoDB'
-      ],
-      correct: 2,
-      explanation: 'DynamoDB handles leaderboard data with fast sorted lookups at any scale. ElastiCache (Redis) provides sub-ms player session caching. Redshift powers game stats analytics and historical reporting.'
-    },
+      explanation: 'Stateful inspection tracks active sessions - when you initiate a request, the firewall remembers the session and automatically allows the server\'s response back in. A basic packet filter checks each packet in isolation without any session context.'
+    }
   ],
 
   security: [
-    {id: 1, category: 'Challenge',
-      question: 'A startup chose DynamoDB to store user orders. Orders have complex joins with products, discounts, and user history. DynamoDB is NoSQL — it doesn\'t support JOINs. What should they have used instead?',
-      options: [
-        'ElastiCache — it\'s faster for complex queries',
-        'RDS or Aurora — relational data with JOINs needs SQL',
-        'Redshift — it handles joins at scale',
-        'DocumentDB — it supports flexible queries'
-      ],
-      correct: 1,
-      explanation: 'DynamoDB is a NoSQL key-value store — it does NOT support SQL JOINs. Orders with complex relationships across products, discounts, and users require a relational database like RDS or Aurora that supports full SQL operations.'
-    },
     {
-      id: 2, category: 'Challenge',
-      question: 'You chose ElastiCache to store user profile data permanently for quick access. ElastiCache is in-memory — data is lost on restart. Is it the right PRIMARY store for profiles?',
-      options: [
-        'Yes — ElastiCache with Redis persistence is reliable enough',
-        'No — use RDS for storage, ElastiCache only as a caching layer on top',
-        'Yes — just enable Multi-AZ and it becomes durable',
-        'No — use DynamoDB instead of ElastiCache entirely'
-      ],
-      correct: 1,
-      explanation: 'ElastiCache is designed as a CACHING layer, not a primary data store. In-memory data can be lost on restarts or failures. Use RDS (or another persistent DB) as the primary store, and ElastiCache on top for speed.'
-    },
-    {
-      id: 3, category: 'Challenge',
-      question: 'A company uses Redshift to handle real-time user login session storage. Redshift is a data warehouse built for analytics, not OLTP. What\'s wrong with this choice?',
-      options: [
-        'Nothing — Redshift can handle sessions if you tune it right',
-        'Redshift is too expensive for session data',
-        'Wrong tool — use RDS or DynamoDB for transactional session data',
-        'Redshift needs S3 integration to work with sessions'
-      ],
+      id: 1, category: 'Security Groups',
+      question: 'Users can open your company\'s website (HTTPS works) but cannot SSH into the EC2 server for maintenance. The EC2 security group is the only thing that changed recently. What is the most likely cause?',
+      options: ['Port 443 was accidentally blocked, preventing HTTPS traffic', 'The hypervisor on the host machine failed, bringing the VM down', 'Port 22 inbound rule was removed from the security group, blocking SSH', 'The subnet routing table lost its default gateway entry'],
       correct: 2,
-      explanation: 'Redshift is optimized for OLAP (analytical queries on large datasets), NOT for OLTP (real-time transactional workloads like login sessions). Use RDS or DynamoDB for fast, transactional session storage.'
+      explanation: 'SSH uses Port 22 and HTTPS uses Port 443. Since HTTPS still works, the VM is running fine -ruling out hypervisor failure. The security group change most likely removed the Port 22 inbound rule, blocking only SSH.'
     },
-  ],
+    {
+      id: 2, category: 'VPC Architecture',
+      question: 'A startup wants their database servers completely unreachable from the internet but still accessible by their application servers. Which combination of concepts achieves this?',
+      options: ['Put everything in one public subnet - firewalls will protect the database', 'Place app servers in a public subnet and database servers in a private subnet, connected via a router and block inbound internet traffic to the private subnet at the firewall', 'Use a Type 2 hypervisor on the database VM so it has a host OS layer protecting it', 'Assign the database server a MAC address that the switch won\'t forward to the internet gateway'],
+      correct: 1,
+      explanation: 'This is the classic public/private subnet pattern. App servers in a public subnet receive internet traffic; database servers in a private subnet are only reachable via the internal router. The firewall blocks all inbound internet traffic to the private subnet.'
+    },
+    {
+      id: 3, category: 'Troubleshooting',
+      question: 'Users can ping a server by IP address but cannot reach it by domain name (e.g., app.company.com). Using the OSI model, which layer should the engineer investigate first and why?',
+      options: ['Layer 1 (Physical) — the cable must be faulty since nothing works', 'Layer 3 (Network) — IP routing is broken, causing name resolution to fail', 'Layer 2 (Data Link) — the MAC address table needs to be flushed', 'Layer 7 (Application) — DNS is an application-layer protocol; name resolution is failing while IP routing is fine'],
+      correct: 3,
+      explanation: 'Ping works by IP, so Layers 1, 2, and 3 are all fine. The failure is specifically domain name resolution - DNS operates at Layer 7 (Application).'
+    }
+  ]
 };
 
 // ── Case Study Question Banks ────────────────────────────────
