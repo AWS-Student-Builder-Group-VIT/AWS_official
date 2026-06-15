@@ -98,6 +98,7 @@ function Dashboard({ token, onLogout }) {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [sortBy, setSortBy] = useState('date'); // date | score | name
+  const [viewMode, setViewMode] = useState('attempts'); // 'attempts' | 'leaderboard'
 
   const [quizStatus, setQuizStatus] = useState('inactive');
 
@@ -143,6 +144,12 @@ function Dashboard({ token, onLogout }) {
       }
       if (sortBy === 'name') return `${a.first_name}`.localeCompare(`${b.first_name}`);
       return new Date(b.attempted_at) - new Date(a.attempted_at);
+    });
+
+  const filteredLeaderboard = (stats?.leaderboard || [])
+    .filter(r => {
+      const q = search.toLowerCase();
+      return !q || r.email.toLowerCase().includes(q) || `${r.first_name} ${r.last_name}`.toLowerCase().includes(q);
     });
 
   return (
@@ -233,7 +240,7 @@ function Dashboard({ token, onLogout }) {
                   <div className="font-mono text-[10px] text-[#dbc2ad] truncate mb-2">{s.email}</div>
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-[10px] text-[#dbc2ad]">{s.attempts} attempts</span>
-                    <ScoreBadge pct={parseInt(s.avg_pct)} />
+                    <span className="font-mono text-sm font-bold text-[#FF9900]">{s.total_score} pts</span>
                   </div>
                 </div>
               ))}
@@ -243,6 +250,20 @@ function Dashboard({ token, onLogout }) {
 
         {/* Filters */}
         <div className="flex flex-col md:flex-row gap-3 mb-6">
+          <div className="flex bg-white/5 border border-white/10 p-1 shrink-0">
+            <button
+              onClick={() => setViewMode('attempts')}
+              className={`font-mono text-xs px-4 py-2 uppercase tracking-widest transition-colors ${viewMode === 'attempts' ? 'bg-[#FF9900] text-[#111] font-bold' : 'text-[#dbc2ad] hover:text-white'}`}
+            >
+              All Attempts
+            </button>
+            <button
+              onClick={() => setViewMode('leaderboard')}
+              className={`font-mono text-xs px-4 py-2 uppercase tracking-widest transition-colors ${viewMode === 'leaderboard' ? 'bg-[#FF9900] text-[#111] font-bold' : 'text-[#dbc2ad] hover:text-white'}`}
+            >
+              Leaderboard
+            </button>
+          </div>
           <input
             type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search by name or email..."
@@ -264,10 +285,10 @@ function Dashboard({ token, onLogout }) {
 
         {/* Scores table */}
         {loading ? (
-          <div className="text-center py-20 font-mono text-[#dbc2ad]">Loading scores...</div>
-        ) : filtered.length === 0 ? (
+          <div className="text-center py-20 font-mono text-[#dbc2ad]">Loading data...</div>
+        ) : (viewMode === 'attempts' && filtered.length === 0) || (viewMode === 'leaderboard' && filteredLeaderboard.length === 0) ? (
           <div className="text-center py-20 font-mono text-[#dbc2ad]">No records found.</div>
-        ) : (
+        ) : viewMode === 'attempts' ? (
           <div className="border border-white/10 overflow-hidden">
             {/* Header */}
             <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr_1.5fr] gap-0 bg-white/5 border-b border-white/10 px-4 py-3 hidden md:grid">
@@ -302,7 +323,36 @@ function Dashboard({ token, onLogout }) {
 
             {/* Footer */}
             <div className="px-4 py-3 bg-white/3 border-t border-white/8 font-mono text-[10px] text-[#dbc2ad]">
-              Showing {filtered.length} of {scores.length} records
+              Showing {filtered.length} of {scores.length} attempts
+            </div>
+          </div>
+        ) : (
+          <div className="border border-white/10 overflow-hidden">
+            {/* Header */}
+            <div className="grid grid-cols-[0.5fr_3fr_1fr_1fr] gap-0 bg-white/5 border-b border-white/10 px-4 py-3 hidden md:grid">
+              {['Rank', 'Student', 'Total Score', 'Attempts'].map(h => (
+                <span key={h} className="font-mono text-[10px] text-[#dbc2ad] uppercase tracking-widest">{h}</span>
+              ))}
+            </div>
+
+            {/* Rows */}
+            <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
+              {filteredLeaderboard.map((r, i) => (
+                  <div key={r.email} className="grid grid-cols-1 md:grid-cols-[0.5fr_3fr_1fr_1fr] gap-2 md:gap-0 px-4 py-3 hover:bg-white/3 transition-colors">
+                    <div className="font-mono text-sm font-bold text-[#FF9900] flex items-center">#{i + 1}</div>
+                    <div>
+                      <div className="font-mono text-sm text-white font-bold">{r.first_name} {r.last_name}</div>
+                      <div className="font-mono text-[10px] text-[#dbc2ad]">{r.email}</div>
+                    </div>
+                    <div className="font-mono text-xl font-bold text-[#a8e063] flex items-center">{r.total_score} pts</div>
+                    <div className="font-mono text-sm text-[#dbc2ad] flex items-center">{r.attempts}</div>
+                  </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 py-3 bg-white/3 border-t border-white/8 font-mono text-[10px] text-[#dbc2ad]">
+              Showing {filteredLeaderboard.length} of {stats?.leaderboard?.length || 0} students
             </div>
           </div>
         )}

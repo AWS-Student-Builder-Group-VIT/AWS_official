@@ -337,18 +337,26 @@ app.get('/api/admin/stats', adminMiddleware, async (req, res) => {
       pool.query('SELECT COUNT(*) as count FROM quiz_scores'),
       pool.query('SELECT ROUND(AVG(pct)) as avg FROM quiz_scores'),
       pool.query(`
+        WITH user_best AS (
+          SELECT user_id, quiz_id, MAX(COALESCE(composite_score, pct)) as best_score
+          FROM quiz_scores
+          GROUP BY user_id, quiz_id
+        )
         SELECT u.first_name, u.last_name, u.email,
-               ROUND(AVG(COALESCE(qs.composite_score, qs.pct))) as avg_pct, COUNT(*) as attempts
-        FROM quiz_scores qs JOIN users u ON qs.user_id = u.id
+               ROUND(SUM(ub.best_score)) as total_score,
+               (SELECT COUNT(*) FROM quiz_scores WHERE user_id = u.id) as attempts
+        FROM user_best ub
+        JOIN users u ON ub.user_id = u.id
         GROUP BY u.id, u.first_name, u.last_name, u.email
-        ORDER BY avg_pct DESC LIMIT 5
+        ORDER BY total_score DESC
       `),
     ]);
     res.json({
       totalStudents: parseInt(students.rows[0].count),
       totalAttempts: parseInt(attempts.rows[0].count),
       avgScore: parseInt(avg.rows[0].avg || 0),
-      topScorers: top.rows,
+      leaderboard: top.rows,
+      topScorers: top.rows.slice(0, 5),
     });
   } catch (error) {
     console.error('Admin stats error:', error);
