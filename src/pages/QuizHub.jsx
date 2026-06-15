@@ -31,7 +31,16 @@ export default function QuizHub() {
            if (attempt) {
              mergedMap[id].attempted = true;
              // Always enforce local score check over backend outdated logic
-             const scoreToUse = attempt.composite_score !== undefined && attempt.composite_score !== null ? parseFloat(attempt.composite_score) : attempt.pct;
+             let scoreToUse = attempt.composite_score !== undefined && attempt.composite_score !== null ? parseFloat(attempt.composite_score) : attempt.pct;
+             if (scoreToUse === 0 && attempt.score !== undefined) {
+               const totalQs = attempt.total || 4;
+               const rawScore = attempt.score || 0;
+               const tTaken = attempt.time_taken || 0;
+               const maxTime = totalQs * 60;
+               const acc = totalQs ? (rawScore / totalQs) * 100 * 0.7 : 0;
+               const tc = tTaken < maxTime ? (1 - (tTaken / maxTime)) * 100 * 0.3 : 0;
+               scoreToUse = parseFloat((acc + tc).toFixed(2));
+             }
              let requiredPct = 70;
              if (id === 'fundamentals') requiredPct = 50;
              if (id === 'advanced') requiredPct = 60;
