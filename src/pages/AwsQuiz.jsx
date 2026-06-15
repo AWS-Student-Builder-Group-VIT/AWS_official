@@ -67,14 +67,12 @@ export default function AwsQuiz() {
            const past = scores.find(s => s.quiz_id === id);
            if (past) {
              mergedMap[id].attempted = true;
-             if (Object.keys(roundMap || {}).length === 0) {
-               const scoreToUse = past.composite_score !== undefined && past.composite_score !== null ? parseFloat(past.composite_score) : past.pct;
-               let requiredPct = 70;
-               if (id === 'fundamentals') requiredPct = 50;
-               if (id === 'advanced') requiredPct = 60;
-               if (id === 'security') requiredPct = 70;
-               mergedMap[id].qualified = scoreToUse >= requiredPct;
-             }
+             const scoreToUse = past.composite_score !== undefined && past.composite_score !== null ? parseFloat(past.composite_score) : past.pct;
+             let requiredPct = 70;
+             if (id === 'fundamentals') requiredPct = 50;
+             if (id === 'advanced') requiredPct = 60;
+             if (id === 'security') requiredPct = 70;
+             mergedMap[id].qualified = scoreToUse >= requiredPct;
            }
         };
         ensureGate('fundamentals');
@@ -499,19 +497,33 @@ export default function AwsQuiz() {
             </div>
 
             {/* Qualification Status */}
-            {(roundStatusMap && roundStatusMap[quizId]) && (
-              <div className={`mb-4 px-4 py-3 font-mono text-xs flex flex-col items-center justify-center gap-1 transition-all text-center ${roundStatusMap[quizId].qualified ? 'border border-[#639922]/40 bg-[#639922]/10 text-[#a8e063]' : 'border border-[#FF9900]/40 bg-[#FF9900]/10 text-[#FF9900]'}`}>
-                <div className="flex items-center gap-2 font-bold text-sm">
-                  <span className="material-symbols-outlined">{roundStatusMap[quizId].qualified ? 'military_tech' : 'cancel'}</span>
-                  {roundStatusMap[quizId].qualified ? 'Qualified for Next Round!' : 'Disqualified'}
-                </div>
-                {roundStatusMap[quizId].rank && (
-                  <div className="text-[10px] text-white/70">
-                    Current Rank: #{roundStatusMap[quizId].rank} of {roundStatusMap[quizId].total} (Score &gt;= {quizId === 'fundamentals' ? '50' : quizId === 'advanced' ? '60' : '70'}% to qualify)
+            {(() => {
+              let requiredPct = 70;
+              if (quizId === 'fundamentals') requiredPct = 50;
+              if (quizId === 'advanced') requiredPct = 60;
+              if (quizId === 'security') requiredPct = 70;
+              
+              const isQualified = parseFloat(displayPct) >= requiredPct;
+              const rankInfo = roundStatusMap?.[quizId]?.rank;
+              const totalInfo = roundStatusMap?.[quizId]?.total;
+
+              // Don't show if we haven't attempted it yet (or just finishing and not saved)
+              if (!pastAttempt && !scoreSaved) return null;
+
+              return (
+                <div className={`mb-4 px-4 py-3 font-mono text-xs flex flex-col items-center justify-center gap-1 transition-all text-center ${isQualified ? 'border border-[#639922]/40 bg-[#639922]/10 text-[#a8e063]' : 'border border-[#FF9900]/40 bg-[#FF9900]/10 text-[#FF9900]'}`}>
+                  <div className="flex items-center gap-2 font-bold text-sm">
+                    <span className="material-symbols-outlined">{isQualified ? 'military_tech' : 'cancel'}</span>
+                    {isQualified ? 'Qualified for Next Round!' : 'Disqualified'}
                   </div>
-                )}
-              </div>
-            )}
+                  {rankInfo && (
+                    <div className="text-[10px] text-white/70">
+                      Current Rank: #{rankInfo} of {totalInfo} (Score &gt;= {requiredPct}% to qualify)
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* DB save indicator */}
             <div className={`mb-4 px-4 py-2.5 font-mono text-[11px] flex items-center gap-2 transition-all ${(scoreSaved || pastAttempt) ? 'border border-[#639922]/40 bg-[#639922]/10 text-[#a8e063]' : 'border border-white/8 bg-white/3 text-[#dbc2ad]'}`}>

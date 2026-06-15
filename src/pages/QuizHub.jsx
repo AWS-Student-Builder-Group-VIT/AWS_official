@@ -30,15 +30,13 @@ export default function QuizHub() {
            const attempt = myScores.find(s => s.quiz_id === id);
            if (attempt) {
              mergedMap[id].attempted = true;
-             // If backend returned nothing or is outdated, fallback to local score check
-             if (Object.keys(serverRoundMap).length === 0) {
-               const scoreToUse = attempt.composite_score !== undefined && attempt.composite_score !== null ? parseFloat(attempt.composite_score) : attempt.pct;
-               let requiredPct = 70;
-               if (id === 'fundamentals') requiredPct = 50;
-               if (id === 'advanced') requiredPct = 60;
-               if (id === 'security') requiredPct = 70;
-               mergedMap[id].qualified = scoreToUse >= requiredPct;
-             }
+             // Always enforce local score check over backend outdated logic
+             const scoreToUse = attempt.composite_score !== undefined && attempt.composite_score !== null ? parseFloat(attempt.composite_score) : attempt.pct;
+             let requiredPct = 70;
+             if (id === 'fundamentals') requiredPct = 50;
+             if (id === 'advanced') requiredPct = 60;
+             if (id === 'security') requiredPct = 70;
+             mergedMap[id].qualified = scoreToUse >= requiredPct;
            }
         };
 
@@ -203,78 +201,7 @@ export default function QuizHub() {
           </div>
         </div>
 
-        {/* ── Section: Case Studies ── */}
-        <div>
-          <div className="flex items-center gap-4 mb-2">
-            <div className="font-mono text-[10px] text-[#dbc2ad] uppercase tracking-[0.15em]">Case Studies</div>
-            <div className="flex-1 h-px bg-white/8" />
-            <div className="font-mono text-[10px] text-[#FF9900] uppercase tracking-widest">{CASE_STUDIES.length} Scenarios</div>
-          </div>
-          <p className="font-mono text-[11px] text-[#dbc2ad] mb-6 leading-relaxed">
-            Real-world architecture scenarios — read the business context, then answer scenario-specific questions.
-          </p>
 
-          <div className="flex flex-col gap-4">
-            {CASE_STUDIES.map((cs, i) => {
-              const isHovered = hoveredCase === cs.id;
-              return (
-                <div
-                  key={cs.id}
-                  onMouseEnter={() => setHoveredCase(cs.id)}
-                  onMouseLeave={() => setHoveredCase(null)}
-                  className="border bg-white/2 cursor-pointer transition-all duration-300"
-                  style={{
-                    borderColor: isHovered ? '#FF9900' : 'rgba(255,255,255,0.1)',
-                    boxShadow: isHovered ? '0 0 20px rgba(255,153,0,0.12)' : 'none',
-                  }}
-                  onClick={() => navigate(`/case-study/${cs.id}`)}
-                >
-                  <div className="p-5 flex flex-col md:flex-row md:items-center gap-4">
-                    {/* Number */}
-                    <div
-                      className="font-mono text-3xl font-bold flex-shrink-0 w-10 text-center transition-colors duration-300"
-                      style={{ color: isHovered ? '#FF9900' : 'rgba(255,255,255,0.12)' }}
-                    >
-                      {String(i + 1).padStart(2, '0')}
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h3 className="font-mono text-sm font-bold text-white">{cs.title}</h3>
-                        {cs.tags.map(t => (
-                          <span key={t} className="font-mono text-[9px] text-[#FF9900] border border-[#FF9900]/30 px-1.5 py-0.5 uppercase tracking-wider">
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                      <p className="font-mono text-[11px] text-[#dbc2ad] leading-relaxed">{cs.subtitle}</p>
-                    </div>
-
-                    {/* Meta + CTA */}
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      <div className="font-mono text-[10px] text-[#dbc2ad]">
-                        {cs.questions} questions · {cs.duration}
-                      </div>
-                      <button
-                        className="font-mono text-[11px] px-4 py-1.5 uppercase tracking-widest flex items-center gap-1.5 transition-all duration-200"
-                        style={{
-                          background: isHovered ? '#FF9900' : 'transparent',
-                          color: isHovered ? '#111' : '#FF9900',
-                          border: `1px solid ${isHovered ? '#FF9900' : 'rgba(255,153,0,0.4)'}`,
-                          fontWeight: isHovered ? 700 : 400,
-                        }}
-                      >
-                        Read Scenario
-                        <span className="material-symbols-outlined text-sm">article</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
 
         {/* Footer note */}
         <div className="mt-14 border-t border-white/5 pt-6 text-center">
