@@ -30,9 +30,14 @@ export default function QuizHub() {
            const attempt = myScores.find(s => s.quiz_id === id);
            if (attempt) {
              mergedMap[id].attempted = true;
-             // If backend returned nothing or is outdated, fallback to local 70% check
+             // If backend returned nothing or is outdated, fallback to local score check
              if (Object.keys(serverRoundMap).length === 0) {
-               mergedMap[id].qualified = attempt.pct >= 70;
+               const scoreToUse = attempt.composite_score !== undefined && attempt.composite_score !== null ? parseFloat(attempt.composite_score) : attempt.pct;
+               let requiredPct = 70;
+               if (id === 'fundamentals') requiredPct = 50;
+               if (id === 'advanced') requiredPct = 60;
+               if (id === 'security') requiredPct = 70;
+               mergedMap[id].qualified = scoreToUse >= requiredPct;
              }
            }
         };
@@ -77,7 +82,7 @@ export default function QuizHub() {
       {/* Navbar */}
       <nav className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-white/5 bg-[#0A0C10]/80 backdrop-blur-xl sticky top-0">
         <div className="flex items-center gap-3">
-          <span className="font-mono text-sm text-[#dbc2ad] tracking-widest uppercase">AWS Knowledge Hub</span>
+          <span className="font-mono text-sm text-[#dbc2ad] tracking-widest uppercase">AWS STUDENT BUILDER GROUP</span>
         </div>
         <button
           onClick={() => navigate('/')}
@@ -90,10 +95,7 @@ export default function QuizHub() {
       <div className="relative z-10 max-w-4xl mx-auto px-6 py-12">
 
         <div className="mb-14">
-          <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1 font-mono text-xs text-[#dbc2ad] uppercase tracking-widest mb-6">
-            <span className="w-2 h-2 rounded-full bg-[#FF9900] animate-pulse" />
-            Cloud Combat 1.0
-          </div>
+
           <h1 className="font-mono text-4xl md:text-5xl font-bold text-white tracking-widest leading-tight mb-4">
             QUALIFICATION<br /><span className="text-[#FF9900]">ROUNDS</span>
           </h1>

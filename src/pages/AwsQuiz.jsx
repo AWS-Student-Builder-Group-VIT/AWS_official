@@ -68,7 +68,12 @@ export default function AwsQuiz() {
            if (past) {
              mergedMap[id].attempted = true;
              if (Object.keys(roundMap || {}).length === 0) {
-               mergedMap[id].qualified = past.pct >= 70;
+               const scoreToUse = past.composite_score !== undefined && past.composite_score !== null ? parseFloat(past.composite_score) : past.pct;
+               let requiredPct = 70;
+               if (id === 'fundamentals') requiredPct = 50;
+               if (id === 'advanced') requiredPct = 60;
+               if (id === 'security') requiredPct = 70;
+               mergedMap[id].qualified = scoreToUse >= requiredPct;
              }
            }
         };
@@ -497,12 +502,12 @@ export default function AwsQuiz() {
             {(roundStatusMap && roundStatusMap[quizId]) && (
               <div className={`mb-4 px-4 py-3 font-mono text-xs flex flex-col items-center justify-center gap-1 transition-all text-center ${roundStatusMap[quizId].qualified ? 'border border-[#639922]/40 bg-[#639922]/10 text-[#a8e063]' : 'border border-[#FF9900]/40 bg-[#FF9900]/10 text-[#FF9900]'}`}>
                 <div className="flex items-center gap-2 font-bold text-sm">
-                  <span className="material-symbols-outlined">{roundStatusMap[quizId].qualified ? 'military_tech' : 'hourglass_empty'}</span>
-                  {roundStatusMap[quizId].qualified ? 'Qualified for Next Round!' : 'Awaiting Final Qualification Cutoff'}
+                  <span className="material-symbols-outlined">{roundStatusMap[quizId].qualified ? 'military_tech' : 'cancel'}</span>
+                  {roundStatusMap[quizId].qualified ? 'Qualified for Next Round!' : 'Disqualified'}
                 </div>
                 {roundStatusMap[quizId].rank && (
                   <div className="text-[10px] text-white/70">
-                    Current Rank: #{roundStatusMap[quizId].rank} of {roundStatusMap[quizId].total} (Top {quizId === 'fundamentals' ? '70%' : '40%'} qualify)
+                    Current Rank: #{roundStatusMap[quizId].rank} of {roundStatusMap[quizId].total} (Score &gt;= {quizId === 'fundamentals' ? '50' : quizId === 'advanced' ? '60' : '70'}% to qualify)
                   </div>
                 )}
               </div>
