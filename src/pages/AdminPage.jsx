@@ -85,9 +85,6 @@ function AdminLogin({ onLogin }) {
           </button>
         </form>
 
-        <div className="mt-4 border border-white/5 bg-white/2 p-3 font-mono text-[10px] text-[#dbc2ad]/60 text-center">
-          Temporary credentials: <span className="text-[#FF9900]">aws_admin</span> / <span className="text-[#FF9900]">CloudAdmin@2025</span>
-        </div>
       </div>
     </div>
   );
