@@ -131,7 +131,7 @@ export default function QuizHub() {
               const isQualified = roundStatusMap[quiz.id]?.qualified;
               
               if (hasAttempted) {
-                statusText = isQualified ? '✅ QUALIFIED' : '⏳ AWAITING RESULT';
+                statusText = isQualified ? '✅ QUALIFIED' : '❌ DISQUALIFIED';
               }
 
               return (
