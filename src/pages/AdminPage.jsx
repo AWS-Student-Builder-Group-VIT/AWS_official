@@ -109,6 +109,42 @@ function Dashboard({ token, onLogout }) {
       fetchAdminStats(token),
       fetchQuizStatus()
     ]);
+
+    // Local calculation fallback for deployed backends that haven't been updated
+    if (s && s.length > 0) {
+      const userMap = {};
+      s.forEach(r => {
+        if (!userMap[r.email]) {
+          userMap[r.email] = {
+            first_name: r.first_name,
+            last_name: r.last_name,
+            email: r.email,
+            attempts: 0,
+            bestScores: {},
+          };
+        }
+        userMap[r.email].attempts += 1;
+        
+        const currentScore = parseFloat(r.composite_score || r.pct || 0);
+        if (!userMap[r.email].bestScores[r.quiz_id] || currentScore > userMap[r.email].bestScores[r.quiz_id]) {
+           userMap[r.email].bestScores[r.quiz_id] = currentScore;
+        }
+      });
+      
+      const computedLeaderboard = Object.values(userMap).map(u => {
+        const total = Object.values(u.bestScores).reduce((sum, val) => sum + val, 0);
+        return {
+          ...u,
+          total_score: parseFloat(total.toFixed(2))
+        };
+      }).sort((a, b) => b.total_score - a.total_score);
+      
+      if (st) {
+        st.leaderboard = computedLeaderboard;
+        st.topScorers = computedLeaderboard.slice(0, 5);
+      }
+    }
+
     setScores(s);
     setStats(st);
     setQuizStatus(status);
