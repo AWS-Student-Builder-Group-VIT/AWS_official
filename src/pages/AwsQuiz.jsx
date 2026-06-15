@@ -67,7 +67,16 @@ export default function AwsQuiz() {
            const past = scores.find(s => s.quiz_id === id);
            if (past) {
              mergedMap[id].attempted = true;
-             const scoreToUse = past.composite_score !== undefined && past.composite_score !== null ? parseFloat(past.composite_score) : past.pct;
+             let scoreToUse = past.composite_score !== undefined && past.composite_score !== null ? parseFloat(past.composite_score) : past.pct;
+             if (scoreToUse === 0 && past.score !== undefined) {
+               const totalQs = past.total || 4;
+               const rawScore = past.score || 0;
+               const tTaken = past.time_taken || 0;
+               const maxTime = totalQs * 60;
+               const acc = totalQs ? (rawScore / totalQs) * 100 * 0.7 : 0;
+               const tc = tTaken < maxTime ? (1 - (tTaken / maxTime)) * 100 * 0.3 : 0;
+               scoreToUse = parseFloat((acc + tc).toFixed(2));
+             }
              let requiredPct = 70;
              if (id === 'fundamentals') requiredPct = 50;
              if (id === 'advanced') requiredPct = 60;
