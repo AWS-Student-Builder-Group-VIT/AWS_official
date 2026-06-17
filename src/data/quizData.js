@@ -7,32 +7,32 @@
 export const QUIZZES = [
   {
     id: 'fundamentals',
-    title: 'AWS 101: The Architecture SandBox - Round 1',
-    subtitle: 'Test your foundational knowledge on virtualisation, OSI model, and basic networking.',
+    title: 'AWS 102 : Cloud Combat 2.0 - Round 1',
+    subtitle: 'Test your foundational knowledge of IAM, S3, RDS, and Availability Zones.',
     category: 'Beginner',
     questions: 4,
     duration: '5 min',
-    topics: ['Virtualisation', 'OSI Model', 'Networking', 'Ports'],
+    topics: ['IAM', 'S3', 'Availability Zones', 'RDS'],
     color: '#FF9900',
   },
   {
     id: 'advanced',
-    title: 'AWS 101: The Architecture SandBox - Round 2',
-    subtitle: 'Intermediate networking and virtualisation concepts, including subnets and stateful firewalls.',
+    title: 'AWS 102 : Cloud Combat 2.0 - Round 2',
+    subtitle: 'Intermediate concepts including Serverless, S3 Lifecycle Policies, and CloudTrail.',
     category: 'Intermediate',
     questions: 3,
     duration: '5 min',
-    topics: ['Hypervisors', 'Subnets', 'Firewalls'],
+    topics: ['Serverless', 'S3 Lifecycle', 'CloudTrail'],
     color: '#00a8e0',
   },
   {
     id: 'security',
-    title: 'AWS 101: The Architecture SandBox - Round 3',
-    subtitle: 'Hard scenarios on security groups, VPC architecture, and troubleshooting.',
+    title: 'AWS 102 : Cloud Combat 2.0 - Round 3',
+    subtitle: 'Hard scenarios on Auto Scaling, IAM Roles for EC2, and Gen AI architecture.',
     category: 'Advanced',
     questions: 3,
     duration: '5 min',
-    topics: ['Security Groups', 'VPC', 'Troubleshooting', 'DNS'],
+    topics: ['Auto Scaling', 'IAM Roles', 'Gen AI'],
     color: '#a855f7',
   },
 ];
@@ -44,80 +44,80 @@ export const CASE_STUDIES = [];
 export const QUESTION_BANKS = {
   fundamentals: [
     {
-      id: 1, category: 'Virtualisation',
-      question: 'Before virtualisation, a single physical server typically ran one OS and one workload. What was the approximate CPU utilisation in that scenario?',
-      options: ['~10% used, 90% wasted', '~50% used, 50% wasted', '~90% used, 10% wasted', '~30% used, 70% wasted'],
-      correct: 0,
-      explanation: 'Before virtualisation, CPU utilisation was ~10% used with 90% wasted — the core inefficiency that virtualisation was designed to solve.'
-    },
-    {
-      id: 2, category: 'Hypervisors',
-      question: 'Which of the following correctly describes a Type 1 (bare-metal) hypervisor?',
-      options: ['Runs on top of an existing host OS - ideal for developer laptops', 'Installed directly on physical hardware with no host OS required', 'Used primarily by students running VirtualBox', 'Has higher performance overhead due to the host OS layer'],
+      id: 1, category: 'IAM',
+      question: 'What does IAM stand for in AWS?',
+      options: ['Internet Access Management', 'Identity and Access Management', 'Internal Application Monitor', 'Infrastructure and Access Model'],
       correct: 1,
-      explanation: 'Type 1 hypervisors (VMware ESXi, Hyper-V, Xen) install directly on hardware with no host OS, giving them direct hardware access and stronger security. AWS, Azure, and Google Cloud all use Type 1.'
+      explanation: 'IAM stands for Identity and Access Management. It enables you to manage access to AWS services and resources securely.'
     },
     {
-      id: 3, category: 'OSI Model',
-      question: 'In the OSI model, at which layer do switches primarily operate?',
-      options: ['Layer 1 — Physical', 'Layer 2 — Data Link', 'Layer 3 — Network', 'Layer 4 — Transport'],
-      correct: 1,
-      explanation: 'Switches operate at Layer 2 (Data Link), forwarding frames based on MAC addresses. Routers operate at Layer 3 (Network) using IP addresses.'
-    },
-    {
-      id: 4, category: 'Ports',
-      question: 'Which port number is associated with SSH (Secure Shell)?',
-      options: ['Port 80', 'Port 443', 'Port 22', 'Port 25'],
+      id: 2, category: 'Storage',
+      question: 'Which AWS service is used to store and retrieve any amount of data as objects in the cloud?',
+      options: ['EC2', 'RDS', 'S3', 'Lambda'],
       correct: 2,
-      explanation: 'Port 22 = SSH, Port 80 = HTTP, Port 443 = HTTPS.'
+      explanation: 'Amazon S3 (Simple Storage Service) is an object storage service that offers industry-leading scalability, data availability, security, and performance.'
+    },
+    {
+      id: 3, category: 'Global Infrastructure',
+      question: 'What are AWS Availability Zones?',
+      options: ['Different pricing tiers for AWS services', 'Isolated locations within an AWS Region containing one or more data centers', 'Global content delivery network endpoints', 'Virtual private networks within AWS'],
+      correct: 1,
+      explanation: 'Availability Zones are isolated locations within a region, consisting of one or more discrete data centers, with redundant power, networking, and connectivity.'
+    },
+    {
+      id: 4, category: 'Database',
+      question: 'Which AWS service would you use to run a relational database without managing the underlying server infrastructure?',
+      options: ['EC2', 'DynamoDB', 'S3', 'RDS'],
+      correct: 3,
+      explanation: 'Amazon RDS (Relational Database Service) makes it easy to set up, operate, and scale a relational database in the cloud, handling administrative tasks.'
     }
   ],
 
   advanced: [
     {
-      id: 1, category: 'Virtualisation',
-      question: 'A developer\'s laptop runs VirtualBox with three VMs - Ubuntu, Windows 10, and Kali Linux, all at the same time. What type of virtualisation setup is this, and what is the performance implication?',
-      options: ['Type 1 bare-metal - maximum performance, no overhead', 'Type 2 hosted - slight performance overhead due to the host OS layer', 'Type 2 hosted - eliminates the need for a host OS entirely', 'Type 1 bare-metal - used because the developer needs cloud-level performance'],
+      id: 1, category: 'Serverless',
+      question: 'A developer needs a backend function that runs only when triggered by an HTTP request and should not require managing any servers. Which combination of AWS services best fits this need?',
+      options: ['EC2 + RDS', 'Lambda + API Gateway', 'ECS + CloudWatch', 'S3 + CloudFront'],
       correct: 1,
-      explanation: 'VirtualBox is a Type 2 (hosted) hypervisor that runs on top of the laptop\'s existing OS, adding a performance overhead layer. Type 1 runs directly on hardware and is used by cloud providers, not dev machines.'
+      explanation: 'AWS Lambda is a serverless compute service, and API Gateway can route HTTP requests to trigger Lambda functions, requiring no server management.'
     },
     {
-      id: 2, category: 'Networking',
-      question: 'Server A has IP 192.168.1.10 and Server B has IP 192.168.2.10. Both are on the same physical network. Can Server A reach Server B directly, or does it require an intermediate device?',
-      options: ['Yes - they are on the same physical network, so the switch routes them directly', 'No - they are in different subnets, so a router hop is required', 'Yes - both IPs are in the 192.168.x.x range, so they share the same subnet', 'No - different subnets cannot communicate even with a router'],
-      correct: 1,
-      explanation: '192.168.1.x and 192.168.2.x are different subnets. Devices in different subnets require a router hop — switches only handle same-subnet traffic. Physical proximity doesn\'t matter; the IP subnet boundary does.'
-    },
-    {
-      id: 3, category: 'Firewalls',
-      question: 'A firewall is configured with stateful inspection. A user initiates a web request to a server. Which best describes what stateful inspection adds over a simple packet filter?',
-      options: ['It blocks all inbound traffic regardless of whether a request was made', 'It only checks the destination IP of each packet in isolation', 'It tracks the session state, so return traffic from the server is automatically allowed because the session was initiated by the user', 'It encrypts all traffic passing through the network perimeter'],
+      id: 2, category: 'Storage Optimization',
+      question: 'Your company stores important data in S3 that is accessed frequently for the first 30 days, rarely for the next 60 days, and almost never after that. Which approach best optimizes storage costs?',
+      options: ['Store everything in S3 Standard permanently', 'Manually move files to Glacier every month', 'Use S3 Lifecycle Policies to transition objects through storage classes automatically', 'Use EBS volumes instead of S3 for better cost control'],
       correct: 2,
-      explanation: 'Stateful inspection tracks active sessions - when you initiate a request, the firewall remembers the session and automatically allows the server\'s response back in. A basic packet filter checks each packet in isolation without any session context.'
+      explanation: 'S3 Lifecycle Policies allow you to automate the transition of objects to more cost-effective storage classes based on access patterns and age.'
+    },
+    {
+      id: 3, category: 'Auditing',
+      question: 'Which AWS service would you use to automatically track and log all API calls made in your AWS account for security and compliance auditing?',
+      options: ['CloudWatch', 'CloudTrail', 'AWS Config', 'Amazon GuardDuty'],
+      correct: 1,
+      explanation: 'AWS CloudTrail monitors and logs account activity across your AWS infrastructure, including actions taken through the AWS Management Console, SDKs, and command line tools.'
     }
   ],
 
   security: [
     {
-      id: 1, category: 'Security Groups',
-      question: 'Users can open your company\'s website (HTTPS works) but cannot SSH into the EC2 server for maintenance. The EC2 security group is the only thing that changed recently. What is the most likely cause?',
-      options: ['Port 443 was accidentally blocked, preventing HTTPS traffic', 'The hypervisor on the host machine failed, bringing the VM down', 'Port 22 inbound rule was removed from the security group, blocking SSH', 'The subnet routing table lost its default gateway entry'],
-      correct: 2,
-      explanation: 'SSH uses Port 22 and HTTPS uses Port 443. Since HTTPS still works, the VM is running fine -ruling out hypervisor failure. The security group change most likely removed the Port 22 inbound rule, blocking only SSH.'
-    },
-    {
-      id: 2, category: 'VPC Architecture',
-      question: 'A startup wants their database servers completely unreachable from the internet but still accessible by their application servers. Which combination of concepts achieves this?',
-      options: ['Put everything in one public subnet - firewalls will protect the database', 'Place app servers in a public subnet and database servers in a private subnet, connected via a router and block inbound internet traffic to the private subnet at the firewall', 'Use a Type 2 hypervisor on the database VM so it has a host OS layer protecting it', 'Assign the database server a MAC address that the switch won\'t forward to the internet gateway'],
+      id: 1, category: 'Auto Scaling',
+      question: 'A startup is building a food delivery app. During lunch and dinner hours, traffic spikes 5x compared to off-peak hours. They want to minimize costs while ensuring the app never goes down under load. Which architecture best addresses this?',
+      options: ['One large EC2 instance that handles peak load at all times', 'An Auto Scaling Group of EC2 instances behind an Elastic Load Balancer, scaling based on CPU or request metrics', 'Multiple S3 buckets distributed across regions', 'A single Lambda function with RDS handling all database queries'],
       correct: 1,
-      explanation: 'This is the classic public/private subnet pattern. App servers in a public subnet receive internet traffic; database servers in a private subnet are only reachable via the internal router. The firewall blocks all inbound internet traffic to the private subnet.'
+      explanation: 'An Auto Scaling Group automatically adjusts the number of EC2 instances to handle load spikes and scales down to minimize costs during off-peak hours, while ELB distributes incoming traffic.'
     },
     {
-      id: 3, category: 'Troubleshooting',
-      question: 'Users can ping a server by IP address but cannot reach it by domain name (e.g., app.company.com). Using the OSI model, which layer should the engineer investigate first and why?',
-      options: ['Layer 1 (Physical) — the cable must be faulty since nothing works', 'Layer 3 (Network) — IP routing is broken, causing name resolution to fail', 'Layer 2 (Data Link) — the MAC address table needs to be flushed', 'Layer 7 (Application) — DNS is an application-layer protocol; name resolution is failing while IP routing is fine'],
-      correct: 3,
-      explanation: 'Ping works by IP, so Layers 1, 2, and 3 are all fine. The failure is specifically domain name resolution - DNS operates at Layer 7 (Application).'
+      id: 2, category: 'IAM & Security',
+      question: 'A security audit reveals that several EC2 instances in your company are accessing an S3 bucket using hardcoded AWS access keys embedded in the application code. What is the most secure and AWS-recommended fix?',
+      options: ['Encrypt the hardcoded keys using KMS before embedding them', 'Store the keys in an environment variable on the EC2 instance', 'Assign an IAM Role to the EC2 instances with the necessary S3 permissions, eliminating the need for hardcoded keys', 'Create a separate IAM User per instance and rotate keys monthly'],
+      correct: 2,
+      explanation: 'Assigning an IAM Role to an EC2 instance provides temporary, automatically rotated credentials, eliminating the risk of hardcoded or exposed long-term access keys.'
+    },
+    {
+      id: 3, category: 'Generative AI',
+      question: 'Your team is building a generative AI chatbot on AWS. The chatbot needs to access a pre-trained foundation model, retrieve answers from your company\'s internal knowledge base, and log all interactions for monitoring. Which combination of AWS services best supports this architecture?',
+      options: ['SageMaker + EC2 + S3', 'Amazon Bedrock + Amazon Q + CloudWatch', 'Rekognition + Comprehend + CloudTrail', 'Lambda + DynamoDB + CodePipeline'],
+      correct: 1,
+      explanation: 'Amazon Bedrock provides access to foundation models, Amazon Q is an enterprise GenAI assistant for knowledge base retrieval, and CloudWatch logs interactions for monitoring.'
     }
   ]
 };
