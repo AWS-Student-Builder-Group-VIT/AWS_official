@@ -42,16 +42,16 @@ export default function QuizHub() {
                scoreToUse = parseFloat((acc + tc).toFixed(2));
              }
              let requiredPct = 70;
-             if (id === 'fundamentals') requiredPct = 50;
-             if (id === 'advanced') requiredPct = 60;
-             if (id === 'security') requiredPct = 70;
-             mergedMap[id].qualified = scoreToUse >= requiredPct;
+             if (id === 'db_round1') requiredPct = 50;
+             if (id === 'db_round2') requiredPct = 60;
+             if (id === 'db_round3') requiredPct = 70;
+             mergedMap[id].qualified = scoreToUse > requiredPct;
            }
         };
 
-        ensureGate('fundamentals');
-        ensureGate('advanced');
-        ensureGate('security');
+        ensureGate('db_round1');
+        ensureGate('db_round2');
+        ensureGate('db_round3');
         
         setRoundStatusMap(mergedMap);
       });
@@ -127,12 +127,12 @@ export default function QuizHub() {
               let lockMessage = '';
               let statusText = '';
               
-              if (quiz.id === 'advanced') {
-                isLocked = !(roundStatusMap?.fundamentals?.qualified);
-                lockMessage = 'Qualify from Round 1 to unlock';
-              } else if (quiz.id === 'security') {
-                isLocked = !(roundStatusMap?.advanced?.qualified);
-                lockMessage = 'Qualify from Round 2 to unlock';
+              if (quiz.id === 'db_round2') {
+                isLocked = !(roundStatusMap?.db_round1?.qualified);
+                lockMessage = 'Qualify from Round 1 (>50%) to unlock';
+              } else if (quiz.id === 'db_round3') {
+                isLocked = !(roundStatusMap?.db_round2?.qualified);
+                lockMessage = 'Qualify from Round 2 (>60%) to unlock';
               }
               
               const isHovered = hoveredQuiz === quiz.id && !isLocked;

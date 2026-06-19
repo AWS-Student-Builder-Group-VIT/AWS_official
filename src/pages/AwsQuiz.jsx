@@ -78,25 +78,25 @@ export default function AwsQuiz() {
                scoreToUse = parseFloat((acc + tc).toFixed(2));
              }
              let requiredPct = 70;
-             if (id === 'fundamentals') requiredPct = 50;
-             if (id === 'advanced') requiredPct = 60;
-             if (id === 'security') requiredPct = 70;
-             mergedMap[id].qualified = scoreToUse >= requiredPct;
+             if (id === 'db_round1') requiredPct = 50;
+             if (id === 'db_round2') requiredPct = 60;
+             if (id === 'db_round3') requiredPct = 70;
+             mergedMap[id].qualified = scoreToUse > requiredPct;
            }
         };
-        ensureGate('fundamentals');
-        ensureGate('advanced');
-        ensureGate('security');
+        ensureGate('db_round1');
+        ensureGate('db_round2');
+        ensureGate('db_round3');
         
         setRoundStatusMap(mergedMap);
         setScoresLoading(false);
         
         // Qualification Check
-        if (quizId === 'advanced' && !(mergedMap.fundamentals.qualified)) {
-          alert("You must qualify from Round 1 to unlock this round.");
+        if (quizId === 'db_round2' && !(mergedMap.db_round1?.qualified)) {
+          alert("You must qualify from Round 1 (>50%) to unlock this round.");
           navigate('/quiz');
-        } else if (quizId === 'security' && !(mergedMap.advanced.qualified)) {
-          alert("You must qualify from Round 2 to unlock this round.");
+        } else if (quizId === 'db_round3' && !(mergedMap.db_round2?.qualified)) {
+          alert("You must qualify from Round 2 (>60%) to unlock this round.");
           navigate('/quiz');
         }
       }).catch(() => setScoresLoading(false));
@@ -200,6 +200,32 @@ export default function AwsQuiz() {
   }
 
   function handleNext() {
+    const isCurrentCorrect = answers[answers.length - 1];
+
+    if (quizMeta.elimination && !isCurrentCorrect) {
+      // Elimination triggered on wrong answer
+      const totalTime = totalTimeSpent;
+      const finalScore = score;
+      
+      submitScore({
+        quizId: quizMeta.id,
+        quizTitle: quizMeta.title,
+        quizType: 'quiz',
+        score: finalScore,
+        total: questions.length,
+        timeTaken: totalTime,
+      }).then(res => {
+        setScoreSaved(res.ok);
+        if (res.ok) {
+          setSavedCompositeScore(res.data?.score?.composite_score);
+          setSavedTimeTaken(res.data?.score?.time_taken);
+          fetchRoundStatus().then(setRoundStatusMap);
+        }
+      });
+      setScreen(SCREEN.RESULTS);
+      return;
+    }
+
     if (currentIdx + 1 >= questions.length) {
       // Save score before showing results
       const totalTime = totalTimeSpent;
@@ -508,11 +534,11 @@ export default function AwsQuiz() {
             {/* Qualification Status */}
             {(() => {
               let requiredPct = 70;
-              if (quizId === 'fundamentals') requiredPct = 50;
-              if (quizId === 'advanced') requiredPct = 60;
-              if (quizId === 'security') requiredPct = 70;
+              if (quizId === 'db_round1') requiredPct = 50;
+              if (quizId === 'db_round2') requiredPct = 60;
+              if (quizId === 'db_round3') requiredPct = 70;
               
-              const isQualified = parseFloat(displayPct) >= requiredPct;
+              const isQualified = parseFloat(displayPct) > requiredPct;
               const rankInfo = roundStatusMap?.[quizId]?.rank;
               const totalInfo = roundStatusMap?.[quizId]?.total;
 
