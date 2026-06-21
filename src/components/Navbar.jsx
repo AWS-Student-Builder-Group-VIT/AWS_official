@@ -94,9 +94,6 @@ export default function Navbar() {
           {displayedText}
           <span className="animate-pulse">_</span>
         </span>
-        <span className="md:hidden block truncate">
-          {fullText}
-        </span>
       </div>
 
       {/* Desktop Nav Links */}
