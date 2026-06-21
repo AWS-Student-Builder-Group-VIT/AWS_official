@@ -4,7 +4,6 @@ import AwsStudentBuilderLoader from './components/AwsStudentBuilderLoader';
 import MobilePreloader from './components/MobilePreloader';
 import Hero from './components/Hero';
 import Marquee from './components/Marquee';
-import About from './components/About';
 import CoreProtocols from './components/CoreProtocols';
 import WhyJoinUs from './components/WhyJoinUs';
 import TheBuilders from './components/TheBuilders';
@@ -23,7 +22,7 @@ import awsIcon from './assets/aws_icon.jpeg';
 import AdminPage from './pages/AdminPage';
 import AccountPage from './pages/AccountPage';
 import LoginPage from './pages/LoginPage';
-import { checkSessionValidity } from './utils/auth';
+import { checkSessionValidity, getUser, logout } from './utils/auth';
 
 /**
  * Detect mobile viewport (≤768px).
@@ -38,27 +37,13 @@ function useIsMobile() {
   return isMobile;
 }
 
-const MENU_ITEMS = [
-  { label: 'Home',         ariaLabel: 'Go to home section',    link: '#home' },
-  { label: 'About',        ariaLabel: 'Learn about us',         link: '#about' },
-  { label: 'Events',       ariaLabel: 'View our events',        link: '#features' },
-  { label: 'Why Us',       ariaLabel: 'Why join us',            link: '#why-join-us' },
-  { label: 'Builders',     ariaLabel: 'Meet the builders',      link: '#builders' },
-  { label: 'Blog',         ariaLabel: 'Read our blog',          link: '#blog' },
-];
 
-const SOCIAL_ITEMS = [
-  { label: 'GitHub',    link: 'https://github.com/AWS-Student-Builder-Group-VIT' },
-  { label: 'LinkedIn',  link: 'https://www.linkedin.com/company/aws-student-builder-group-vit' },
-  { label: 'Instagram', link: 'https://www.instagram.com/aws.sbg.vit' },
-];
 
 function HomePage() {
   return (
     <main>
       <Hero />
       <Marquee />
-      <About />
       <CoreProtocols />
       <WhyJoinUs />
       <TheBuilders />
@@ -81,6 +66,36 @@ export default function App() {
   const [showIntro, setShowIntro] = useState(false); // GridScan intro stage
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const isMobile = useIsMobile();
+  const [user, setUser] = useState(() => getUser());
+
+  useEffect(() => {
+    const handleAuthChange = () => setUser(getUser());
+    window.addEventListener('auth-success', handleAuthChange);
+    window.addEventListener('auth-change', handleAuthChange);
+    return () => {
+      window.removeEventListener('auth-success', handleAuthChange);
+      window.removeEventListener('auth-change', handleAuthChange);
+    };
+  }, []);
+
+  const menuItems = [
+    { label: 'Home',         ariaLabel: 'Go to home section',    link: '#home' },
+    { label: 'About',        ariaLabel: 'Learn about us',         link: '#about' },
+    { label: 'Events',       ariaLabel: 'View our events',        link: '#features' },
+    { label: 'Why Us',       ariaLabel: 'Why join us',            link: '#why-join-us' },
+    { label: 'Builders',     ariaLabel: 'Meet the builders',      link: '#builders' },
+    { label: 'Blog',         ariaLabel: 'Read our blog',          link: '#blog' },
+    user 
+      ? { label: 'Account',      ariaLabel: 'Manage your account',    link: '/account' }
+      : { label: 'Join',         ariaLabel: 'Join the club',          onClick: () => window.dispatchEvent(new Event('open-login-modal')) },
+  ];
+
+  const socialItems = [
+    { label: 'GitHub',    link: 'https://github.com/AWS-Student-Builder-Group-VIT' },
+    { label: 'LinkedIn',  link: 'https://www.linkedin.com/company/aws-student-builder-group-vit' },
+    { label: 'Instagram', link: 'https://www.instagram.com/aws.sbg.vit' },
+    ...(user ? [{ label: 'Logout', onClick: () => { logout(); window.dispatchEvent(new Event('auth-change')); } }] : [])
+  ];
 
   // Check session validity on app mount (24h expiry)
   useEffect(() => {
@@ -173,8 +188,8 @@ export default function App() {
           isFixed
           position="right"
           colors={['#1c1a24', '#FF9900']}
-          items={MENU_ITEMS}
-          socialItems={SOCIAL_ITEMS}
+          items={menuItems}
+          socialItems={socialItems}
           displaySocials={true}
           displayItemNumbering={true}
           logoUrl={awsIcon}

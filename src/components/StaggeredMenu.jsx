@@ -330,10 +330,16 @@ export const StaggeredMenu = ({
               <h3 className="sm-socials-title">Connect</h3>
               <ul className="sm-socials-list" role="list">
                 {socialItems.map((s, i) => (
-                  <li key={s.label + i} className="sm-socials-item">
-                    <a href={s.link} target="_blank" rel="noopener noreferrer" className="sm-socials-link">
-                      {s.label}
-                    </a>
+                  <li key={s.label + i} className="sm-socials-item" style={s.onClick ? { flexBasis: '100%', marginTop: '0.5rem' } : {}}>
+                    {s.onClick ? (
+                      <button className="sm-toggle" onClick={(e) => { e.preventDefault(); s.onClick(); }} style={{ color: '#FF9900', borderColor: '#FF9900' }}>
+                        {s.label}
+                      </button>
+                    ) : (
+                      <a href={s.link} target="_blank" rel="noopener noreferrer" className="sm-socials-link">
+                        {s.label}
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>

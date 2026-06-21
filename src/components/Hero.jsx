@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import InteractiveHeroGrid from './InteractiveHeroGrid';
 import { getUser } from '../utils/auth';
 import ScrollFloat from './ScrollFloat';
+import hqSvg from '../assets/aws_club_hq.svg';
 
 export default function Hero() {
   const [welcomeMsg, setWelcomeMsg] = useState(null);
@@ -99,74 +100,61 @@ export default function Hero() {
       <InteractiveHeroGrid />
 
       {/* Layer 20: The Content Wrapper */}
-      <div className="relative z-20 w-full mt-32 md:mt-48 flex flex-col items-start text-left pointer-events-auto">
-        {welcomeMsg && (
-          <div className="mb-4 inline-flex items-center gap-2 bg-[#FF9900]/10 border border-[#FF9900]/30 px-4 py-2 text-[#FF9900] font-mono text-sm uppercase tracking-widest shadow-[0_0_15px_rgba(255,153,0,0.2)] animate-pulse">
-            <span className="material-symbols-outlined text-sm">terminal</span>
-            {displayedMsg}<span className="animate-pulse">_</span>
+      <div className="relative z-20 w-full mt-32 md:mt-48 grid grid-cols-1 md:grid-cols-2 gap-8 items-center text-left pointer-events-auto">
+        {/* Left Column */}
+        <div className="flex flex-col items-start">
+          {welcomeMsg && (
+            <div className="mb-4 inline-flex items-center gap-2 bg-[#FF9900]/10 border border-[#FF9900]/30 px-4 py-2 text-[#FF9900] font-mono text-sm uppercase tracking-widest shadow-[0_0_15px_rgba(255,153,0,0.2)] animate-pulse">
+              <span className="material-symbols-outlined text-sm">terminal</span>
+              {displayedMsg}<span className="animate-pulse">_</span>
+            </div>
+          )}
+
+          {/* Headline */}
+          <div className="mb-18 flex flex-col items-start gap-16">
+            <ScrollFloat
+              animationDuration={1}
+              ease='back.inOut(2)'
+              scrollStart='top bottom'
+              scrollEnd='bottom center'
+              stagger={0.03}
+              containerClassName="!m-0"
+              textClassName="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight font-bold !text-left"
+            >
+              BUILD.
+            </ScrollFloat>
+            <ScrollFloat
+              animationDuration={1}
+              ease='back.inOut(2)'
+              scrollStart='top bottom'
+              scrollEnd='bottom center'
+              stagger={0.03}
+              containerClassName="!m-0"
+              textClassName="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight font-bold !text-left"
+            >
+              LEARN.
+            </ScrollFloat>
+            <ScrollFloat
+              animationDuration={1}
+              ease='back.inOut(2)'
+              scrollStart='top bottom'
+              scrollEnd='bottom center'
+              stagger={0.03}
+              containerClassName="!m-0"
+              textClassName="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight font-bold !text-left"
+            >
+              DEPLOY.
+            </ScrollFloat>
           </div>
-        )}
-
-
-        {/* Headline */}
-        <div className="mb-18 flex flex-col items-start gap-16">
-          <ScrollFloat
-            animationDuration={1}
-            ease='back.inOut(2)'
-            scrollStart='top bottom'
-            scrollEnd='bottom center'
-            stagger={0.03}
-            containerClassName="!m-0"
-            textClassName="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight font-bold !text-left"
-          >
-            BUILD.
-          </ScrollFloat>
-          <ScrollFloat
-            animationDuration={1}
-            ease='back.inOut(2)'
-            scrollStart='top bottom'
-            scrollEnd='bottom center'
-            stagger={0.03}
-            containerClassName="!m-0"
-            textClassName="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight font-bold !text-left"
-          >
-            LEARN.
-          </ScrollFloat>
-          <ScrollFloat
-            animationDuration={1}
-            ease='back.inOut(2)'
-            scrollStart='top bottom'
-            scrollEnd='bottom center'
-            stagger={0.03}
-            containerClassName="!m-0"
-            textClassName="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight font-bold !text-left"
-          >
-            DEPLOY.
-          </ScrollFloat>
         </div>
 
-        {/* Description + CTAs */}
-        <div className="flex flex-col md:flex-row gap-8 items-start w-full">
-          <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl border-l-2 border-primary-container pl-6 py-2">
-            We are the architects of tomorrow. Formerly AWS STUDENT BUILDER GROUP @ VIT, now reborn with the same passion and bigger goals. Join a technical elite shaping the cloud infrastructure.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 mt-4 md:mt-0 md:ml-auto">
-            <a
-              className="bg-primary-container text-background font-headline-md text-label-md px-8 py-4 hover:bg-primary transition-all flex items-center justify-center gap-2 uppercase tracking-widest cursor-pointer"
-              href="#join"
-              onClick={(e) => { e.preventDefault(); window.dispatchEvent(new Event('open-login-modal')); }}
-            >
-              INITIATE SEQUENCE
-              <span className="material-symbols-outlined">terminal</span>
-            </a>
-            <a
-              className="bg-transparent border border-white/20 text-on-surface font-headline-md text-label-md px-8 py-4 hover:border-white/50 transition-all flex items-center justify-center gap-2 uppercase tracking-widest"
-              href="https://github.com/AWS-Student-Builder-Group-VIT"
-            >
-              GITHUB
-              <span className="material-symbols-outlined">architecture</span>
-            </a>
-          </div>
+        {/* Right Column — HQ Illustration */}
+        <div className="relative h-full min-h-[500px] flex items-center justify-center p-4 overflow-hidden group">
+          <img
+            src={hqSvg}
+            alt="AWS Club HQ"
+            className="w-full h-full object-contain opacity-80 group-hover:opacity-100 transition-opacity duration-700 -translate-y-12 scale-[1.3]"
+          />
         </div>
       </div>
     </section>
