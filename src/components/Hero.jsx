@@ -100,7 +100,7 @@ export default function Hero() {
         {/* Left Column */}
         <div className="flex flex-col items-start">
           {welcomeMsg && (
-            <div className="hidden md:inline-flex mb-4 items-center gap-2 bg-[#FF9900]/10 border border-[#FF9900]/30 px-4 py-2 text-[#FF9900] font-mono text-sm uppercase tracking-widest shadow-[0_0_15px_rgba(255,153,0,0.2)] animate-pulse">
+            <div className="mb-4 inline-flex items-center gap-2 bg-[#FF9900]/10 border border-[#FF9900]/30 px-4 py-2 text-[#FF9900] font-mono text-sm uppercase tracking-widest shadow-[0_0_15px_rgba(255,153,0,0.2)] animate-pulse">
               <span className="material-symbols-outlined text-sm">terminal</span>
               {displayedMsg}<span className="animate-pulse">_</span>
             </div>
@@ -115,7 +115,7 @@ export default function Hero() {
               scrollEnd='bottom center'
               stagger={0.03}
               containerClassName="!m-0"
-              textClassName="font-headline-xl text-[72px] md:text-[80px] text-white tracking-widest leading-tight font-bold !text-left drop-shadow-[0_0_25px_rgba(255,153,0,0.8)]"
+              textClassName="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight font-bold !text-left"
             >
               BUILD.
             </ScrollFloat>
@@ -126,7 +126,7 @@ export default function Hero() {
               scrollEnd='bottom center'
               stagger={0.03}
               containerClassName="!m-0"
-              textClassName="font-headline-xl text-[72px] md:text-[80px] text-white tracking-widest leading-tight font-bold !text-left drop-shadow-[0_0_25px_rgba(255,153,0,0.8)]"
+              textClassName="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight font-bold !text-left"
             >
               LEARN.
             </ScrollFloat>
@@ -137,7 +137,7 @@ export default function Hero() {
               scrollEnd='bottom center'
               stagger={0.03}
               containerClassName="!m-0"
-              textClassName="font-headline-xl text-[72px] md:text-[80px] text-white tracking-widest leading-tight font-bold !text-left drop-shadow-[0_0_25px_rgba(255,153,0,0.8)]"
+              textClassName="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight font-bold !text-left"
             >
               DEPLOY.
             </ScrollFloat>
@@ -145,7 +145,7 @@ export default function Hero() {
         </div>
 
         {/* Right Column — HQ Illustration */}
-        <div className="relative h-full min-h-[500px] hidden md:flex items-center justify-center p-4 overflow-hidden group">
+        <div className="relative h-full min-h-[500px] flex items-center justify-center p-4 overflow-hidden group">
           <img
             src={hqSvg}
             alt="AWS Club HQ"

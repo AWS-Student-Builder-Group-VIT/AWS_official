@@ -185,14 +185,6 @@
   z-index: 10;
   pointer-events: auto;
   opacity: 1;
-  /* Hide scrollbar for IE, Edge and Firefox */
-  -ms-overflow-style: none;  
-  scrollbar-width: none;  
-}
-
-/* Hide scrollbar for Chrome, Safari and Opera */
-.staggered-menu-panel::-webkit-scrollbar {
-  display: none;
 }
 
 [data-position='left'] .staggered-menu-panel {
