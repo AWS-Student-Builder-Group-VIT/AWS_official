@@ -10,7 +10,7 @@ import { GridScan } from './GridScan';
  *   onDone          — called after fade-out completes
  *   displayDuration — total seconds to show before fading (default 6)
  */
-export default function GridScanIntro({ onDone, displayDuration = 6 }) {
+export default function GridScanIntro({ onDone, onFadeStart, displayDuration = 6 }) {
   const [phase, setPhase] = useState('entering'); // entering | visible | fading | done
   const timerRef = useRef(null);
   const [displayedText, setDisplayedText] = useState('');
@@ -35,9 +35,12 @@ export default function GridScanIntro({ onDone, displayDuration = 6 }) {
 
   useEffect(() => {
     if (phase !== 'visible') return;
-    timerRef.current = setTimeout(() => setPhase('fading'), displayDuration * 1000);
+    timerRef.current = setTimeout(() => {
+      setPhase('fading');
+      if (typeof onFadeStart === 'function') onFadeStart();
+    }, displayDuration * 1000);
     return () => clearTimeout(timerRef.current);
-  }, [phase, displayDuration]);
+  }, [phase, displayDuration, onFadeStart]);
 
   const handleTransitionEnd = (e) => {
     // Only act on the opacity transition of the root element

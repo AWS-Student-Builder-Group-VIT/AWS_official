@@ -64,6 +64,7 @@ export default function App() {
     return !sessionStorage.getItem('preloader-shown');
   });
   const [showIntro, setShowIntro] = useState(false); // GridScan intro stage
+  const [introFading, setIntroFading] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const isMobile = useIsMobile();
   const [user, setUser] = useState(() => getUser());
@@ -147,6 +148,7 @@ export default function App() {
       sessionStorage.setItem('preloader-shown', '1');
       setIsLoading(false);
       setShowIntro(true); // ← launch GridScan intro
+      setIntroFading(false);
     };
 
     if (resourcesReady) {
@@ -179,7 +181,7 @@ export default function App() {
           ? <MobilePreloader onDone={handlePreloaderDone} />
           : <AwsStudentBuilderLoader onDone={handlePreloaderDone} />
       )}
-      {showIntro && <GridScanIntro onDone={handleIntroDone} displayDuration={5} />}
+      {showIntro && <GridScanIntro onDone={handleIntroDone} onFadeStart={() => setIntroFading(true)} displayDuration={5} />}
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
 
       {/* StaggeredMenu — fixed overlay, shown only on the homepage */}
@@ -201,7 +203,15 @@ export default function App() {
         />
       )}
 
-      <div className="bg-background text-on-surface bg-grid-pattern min-h-screen relative overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container font-body-md">
+      <div 
+        className="bg-background text-on-surface bg-grid-pattern min-h-screen relative overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container font-body-md"
+        style={{
+          transform: (showIntro && !introFading) ? 'scale(0.95)' : 'scale(1)',
+          opacity: (showIntro && !introFading) ? 0 : 1,
+          transition: 'transform 1.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          transformOrigin: 'center center',
+        }}
+      >
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />

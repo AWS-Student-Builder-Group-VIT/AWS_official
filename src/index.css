@@ -204,6 +204,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  background-color: var(--color-background);
 }
 
 body::-webkit-scrollbar {
