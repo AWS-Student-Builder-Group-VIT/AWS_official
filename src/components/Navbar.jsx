@@ -125,16 +125,7 @@ export default function Navbar() {
         />
       </div>
 
-      {/* Desktop Quiz CTA */}
-      {user && (
-        <button
-          onClick={() => navigate('/quiz')}
-          className="hidden md:inline-flex border border-[#FF9900]/40 text-[#FF9900] font-headline-md text-label-md px-4 py-2 hover:bg-[#FF9900]/10 transition-colors items-center gap-2 uppercase tracking-widest mr-4"
-        >
-          QUIZ
-          <span className="material-symbols-outlined text-sm">quiz</span>
-        </button>
-      )}
+
 
       {/* Desktop CTA / User Dropdown */}
       {!user ? (
@@ -214,15 +205,7 @@ export default function Navbar() {
             </a>
           ))}
           <div className="mt-4 pt-4 border-t border-white/10 w-full flex flex-col gap-3">
-            {user && (
-              <button
-                onClick={() => { setMobileOpen(false); navigate('/quiz'); }}
-                className="text-left font-label-md text-[#FF9900] text-label-md flex items-center gap-2"
-              >
-                <span className="material-symbols-outlined text-sm">quiz</span>
-                QUIZ
-              </button>
-            )}
+
             {!user ? (
               <a
                 className="bg-primary-container text-background font-headline-md text-label-md px-6 py-2 hover:bg-primary transition-colors items-center gap-2 uppercase tracking-widest inline-flex animate-attention group cursor-pointer w-max"

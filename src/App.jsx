@@ -17,9 +17,7 @@ import BlogLambda from './pages/BlogLambda';
 import BlogPredictiveAnalytics from './pages/BlogPredictiveAnalytics';
 import BlogGoogleMaps from './pages/BlogGoogleMaps';
 import LoginModal from './components/LoginModal';
-import AwsQuiz from './pages/AwsQuiz';
-import QuizHub from './pages/QuizHub';
-import CaseStudyQuiz from './pages/CaseStudyQuiz';
+
 import AdminPage from './pages/AdminPage';
 import AccountPage from './pages/AccountPage';
 import LoginPage from './pages/LoginPage';
@@ -145,15 +143,13 @@ export default function App() {
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
       <div className="bg-background text-on-surface bg-grid-pattern min-h-screen relative overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container font-body-md">
         <Routes>
-          {/* <Route path="/" element={<HomePage />} /> */}
-          <Route path="/" element={<LoginPage />} />
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
           <Route path="/blog/aws-bedrock" element={<BlogBedrock />} />
           <Route path="/blog/aws-lambda" element={<BlogLambda />} />
           <Route path="/blog/predictive-analytics" element={<BlogPredictiveAnalytics />} />
           <Route path="/blog/google-maps-traffic" element={<BlogGoogleMaps />} />
-          <Route path="/quiz" element={<QuizHub />} />
-          <Route path="/quiz/:quizId" element={<AwsQuiz />} />
-          <Route path="/case-study/:caseId" element={<CaseStudyQuiz />} />
+
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/account" element={<AccountPage />} />
         </Routes>

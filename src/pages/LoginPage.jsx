@@ -43,7 +43,7 @@ export default function LoginPage() {
       setMsg({ text: '✓ Sign in successful! Redirecting...', type: 'success' });
       window.dispatchEvent(new CustomEvent('auth-success', { detail: { type: 'login', user: data.user } }));
       window.dispatchEvent(new Event('auth-change'));
-      setTimeout(() => { navigate('/quiz'); }, 1000);
+      setTimeout(() => { navigate('/'); }, 1000);
     } catch (err) {
       setMsg({ text: 'Network error. Please try again later.', type: 'error' });
     } finally {
@@ -82,7 +82,7 @@ export default function LoginPage() {
       setMsg({ text: '✓ Account created! Welcome to the network.', type: 'success' });
       window.dispatchEvent(new CustomEvent('auth-success', { detail: { type: 'register', user: data.user } }));
       window.dispatchEvent(new Event('auth-change'));
-      setTimeout(() => { navigate('/quiz'); }, 1000);
+      setTimeout(() => { navigate('/'); }, 1000);
     } catch (err) {
       setMsg({ text: 'Network error. Please try again later.', type: 'error' });
     } finally {
