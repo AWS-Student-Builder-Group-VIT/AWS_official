@@ -135,25 +135,6 @@ export default function GridScanIntro({ onDone, displayDuration = 6 }) {
 
       </div>
 
-      {/* Corner accent dots */}
-      {['top-left','top-right','bottom-left','bottom-right'].map((pos) => (
-        <div
-          key={pos}
-          style={{
-            position: 'absolute',
-            width: '6px',
-            height: '6px',
-            borderRadius: '50%',
-            background: '#FF9900',
-            boxShadow: '0 0 10px #FF9900, 0 0 20px rgba(255,153,0,0.4)',
-            opacity: 0.7,
-            ...(pos === 'top-left'     && { top: '24px',    left:  '24px'  }),
-            ...(pos === 'top-right'    && { top: '24px',    right: '24px'  }),
-            ...(pos === 'bottom-left'  && { bottom: '24px', left:  '24px'  }),
-            ...(pos === 'bottom-right' && { bottom: '24px', right: '24px'  }),
-          }}
-        />
-      ))}
     </div>
   );
 }
