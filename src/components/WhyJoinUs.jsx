@@ -242,7 +242,6 @@ export default function WhyJoinUs() {
     startX.current = e.pageX - scrollRef.current.offsetLeft;
     scrollLeftPos.current = scrollRef.current.scrollLeft;
     scrollRef.current.style.cursor = 'grabbing';
-    scrollRef.current.style.scrollBehavior = 'auto';
   };
   const onMouseMove = useCallback((e) => {
     if (!isDragging.current) return;
@@ -252,7 +251,7 @@ export default function WhyJoinUs() {
   }, []);
   const onMouseUp = useCallback(() => {
     isDragging.current = false;
-    if (scrollRef.current) { scrollRef.current.style.cursor = 'grab'; scrollRef.current.style.scrollBehavior = 'smooth'; }
+    if (scrollRef.current) { scrollRef.current.style.cursor = 'grab'; }
   }, []);
 
   useEffect(() => {
@@ -747,7 +746,7 @@ export default function WhyJoinUs() {
 
           {/* Carousel */}
           <div className="wj-scroll-wrapper">
-            <div className="wj-scroll-track flex gap-4 items-start overflow-x-auto cursor-grab pb-1" style={{ scrollBehavior:'smooth', WebkitOverflowScrolling:'touch' }} ref={scrollRef} onMouseDown={onMouseDown}>
+            <div className="wj-scroll-track flex gap-4 items-start overflow-x-auto cursor-grab pb-1" style={{ WebkitOverflowScrolling:'touch' }} ref={scrollRef} onMouseDown={onMouseDown}>
               {/* Card 1 — Special interactive workshop card */}
               <WorkshopCard expanded={activeCard === 1} onToggle={() => setActiveCard(activeCard === 1 ? null : 1)} />
               {/* Card 2 — Special interactive credits card */}
