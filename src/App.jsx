@@ -17,6 +17,7 @@ import BlogLambda from './pages/BlogLambda';
 import BlogPredictiveAnalytics from './pages/BlogPredictiveAnalytics';
 import BlogGoogleMaps from './pages/BlogGoogleMaps';
 import LoginModal from './components/LoginModal';
+import GridScanIntro from './components/GridScanIntro';
 
 import AdminPage from './pages/AdminPage';
 import AccountPage from './pages/AccountPage';
@@ -61,6 +62,7 @@ export default function App() {
     if (typeof window === 'undefined') return true;
     return !sessionStorage.getItem('preloader-shown');
   });
+  const [showIntro, setShowIntro] = useState(false); // GridScan intro stage
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const isMobile = useIsMobile();
 
@@ -109,28 +111,34 @@ export default function App() {
 
   // Desktop: no fixed timer — animation signals completion via onDone
 
-  // Shared dismissal logic for both desktop and mobile
   const handlePreloaderDone = () => {
-    if (resourcesReady) {
+    const finish = () => {
       sessionStorage.setItem('preloader-shown', '1');
       setIsLoading(false);
+      setShowIntro(true); // ← launch GridScan intro
+    };
+
+    if (resourcesReady) {
+      finish();
     } else {
-      // Animation finished but resources aren't ready — poll until they are
       const check = setInterval(() => {
         if (document.readyState === 'complete') {
-          const finish = () => {
+          const done = () => {
             clearInterval(check);
-            sessionStorage.setItem('preloader-shown', '1');
-            setIsLoading(false);
+            finish();
           };
           if (document.fonts && document.fonts.ready) {
-            document.fonts.ready.then(finish);
+            document.fonts.ready.then(done);
           } else {
-            finish();
+            done();
           }
         }
       }, 100);
     }
+  };
+
+  const handleIntroDone = () => {
+    setShowIntro(false);
   };
 
   return (
@@ -140,6 +148,7 @@ export default function App() {
           ? <MobilePreloader onDone={handlePreloaderDone} />
           : <AwsStudentBuilderLoader onDone={handlePreloaderDone} />
       )}
+      {showIntro && <GridScanIntro onDone={handleIntroDone} displayDuration={5} />}
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
       <div className="bg-background text-on-surface bg-grid-pattern min-h-screen relative overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container font-body-md">
         <Routes>

@@ -105,11 +105,7 @@ export default function Hero() {
             {displayedMsg}<span className="animate-pulse">_</span>
           </div>
         )}
-        {/* Status Badge */}
-        <div className="mb-6 inline-flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1 text-on-surface-variant font-label-sm text-label-sm uppercase tracking-widest">
-          <span className="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
-          System Online
-        </div>
+
 
         {/* Headline */}
         <h1 className="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight mb-8 font-bold flex flex-col">

@@ -206,14 +206,7 @@ export default function AwsStudentBuilderLoader({ onDone }) {
         </div>
       </div>
 
-      {/* 4. Bottom UI Decorative Elements */}
-      <div className="bottom-ui">
-        <div className="initiating-text">INITIATING SEQUENCE...</div>
-        <div className="status-badge">
-          <div className="status-dot"></div>
-          <div className="status-text">SYSTEM ONLINE</div>
-        </div>
-      </div>
+
     </div>
   );
 }
