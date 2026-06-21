@@ -115,7 +115,7 @@ export default function Hero() {
               scrollEnd='bottom center'
               stagger={0.03}
               containerClassName="!m-0"
-              textClassName="font-headline-xl text-[90px] md:text-[120px] text-white tracking-widest leading-none font-bold !text-left drop-shadow-[0_0_35px_rgba(255,153,0,1)]"
+              textClassName="font-headline-xl text-[72px] md:text-[80px] text-white tracking-widest leading-tight font-bold !text-left drop-shadow-[0_0_25px_rgba(255,153,0,0.8)]"
             >
               BUILD.
             </ScrollFloat>
@@ -126,7 +126,7 @@ export default function Hero() {
               scrollEnd='bottom center'
               stagger={0.03}
               containerClassName="!m-0"
-              textClassName="font-headline-xl text-[90px] md:text-[120px] text-white tracking-widest leading-none font-bold !text-left drop-shadow-[0_0_35px_rgba(255,153,0,1)]"
+              textClassName="font-headline-xl text-[72px] md:text-[80px] text-white tracking-widest leading-tight font-bold !text-left drop-shadow-[0_0_25px_rgba(255,153,0,0.8)]"
             >
               LEARN.
             </ScrollFloat>
@@ -137,7 +137,7 @@ export default function Hero() {
               scrollEnd='bottom center'
               stagger={0.03}
               containerClassName="!m-0"
-              textClassName="font-headline-xl text-[90px] md:text-[120px] text-white tracking-widest leading-none font-bold !text-left drop-shadow-[0_0_35px_rgba(255,153,0,1)]"
+              textClassName="font-headline-xl text-[72px] md:text-[80px] text-white tracking-widest leading-tight font-bold !text-left drop-shadow-[0_0_25px_rgba(255,153,0,0.8)]"
             >
               DEPLOY.
             </ScrollFloat>
