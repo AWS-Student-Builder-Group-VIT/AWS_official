@@ -2,6 +2,34 @@ import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import './StaggeredMenu.css';
 
+const TypingText = ({ text, typingSpeed = 60, deletingSpeed = 40, pauseTime = 2000 }) => {
+  const [displayed, setDisplayed] = React.useState('');
+  const [isDeleting, setIsDeleting] = React.useState(false);
+
+  React.useEffect(() => {
+    let timer;
+    if (isDeleting) {
+      timer = setTimeout(() => {
+        setDisplayed(text.substring(0, displayed.length - 1));
+      }, deletingSpeed);
+    } else {
+      timer = setTimeout(() => {
+        setDisplayed(text.substring(0, displayed.length + 1));
+      }, typingSpeed);
+    }
+
+    if (!isDeleting && displayed === text) {
+      timer = setTimeout(() => setIsDeleting(true), pauseTime);
+    } else if (isDeleting && displayed === '') {
+      setIsDeleting(false);
+    }
+
+    return () => clearTimeout(timer);
+  }, [displayed, isDeleting, text, typingSpeed, deletingSpeed, pauseTime]);
+
+  return <>{displayed}<span style={{ animation: 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite' }}>_</span></>;
+};
+
 export const StaggeredMenu = ({
   position = 'right',
   colors = ['#1a1a20', '#FF9900'],
@@ -273,7 +301,7 @@ export const StaggeredMenu = ({
         {/* Logo */}
         <a className="sm-logo" href="/" aria-label="AWS Student Builder Group Home">
           {logoUrl && <img src={logoUrl} alt="AWS SBG" className="sm-logo-img" draggable={false} />}
-          {logoText && <span className="sm-logo-text">{logoText}</span>}
+          <span className="sm-logo-text"><TypingText text="AWS STUDENT BUILDER GROUP @ VIT VELLORE" /></span>
         </a>
 
         {/* Toggle button */}

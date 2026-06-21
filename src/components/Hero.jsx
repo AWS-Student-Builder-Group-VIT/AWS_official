@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import InteractiveHeroGrid from './InteractiveHeroGrid';
 import { getUser } from '../utils/auth';
 import ScrollFloat from './ScrollFloat';
 import hqSvg from '../assets/aws_club_hq.svg';
@@ -95,9 +94,6 @@ export default function Hero() {
         transition={levitateTransition(3)}
         className="absolute top-[160px] right-[20%] w-[80px] h-[80px] bg-[#FF9900] z-0 hidden md:block"
       ></motion.div>
-
-      {/* Layer 10: The Interactive Hover Area */}
-      <InteractiveHeroGrid />
 
       {/* Layer 20: The Content Wrapper */}
       <div className="relative z-20 w-full mt-32 md:mt-48 grid grid-cols-1 md:grid-cols-2 gap-8 items-center text-left pointer-events-auto">
