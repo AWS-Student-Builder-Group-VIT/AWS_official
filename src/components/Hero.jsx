@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import InteractiveHeroGrid from './InteractiveHeroGrid';
 import { getUser } from '../utils/auth';
+import ScrollFloat from './ScrollFloat';
 
 export default function Hero() {
   const [welcomeMsg, setWelcomeMsg] = useState(null);
@@ -108,11 +109,41 @@ export default function Hero() {
 
 
         {/* Headline */}
-        <h1 className="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight mb-8 font-bold flex flex-col">
-          <span>BUILD.</span>
-          <span>LEARN.</span>
-          <span>DEPLOY.</span>
-        </h1>
+        <div className="mb-18 flex flex-col items-start gap-16">
+          <ScrollFloat
+            animationDuration={1}
+            ease='back.inOut(2)'
+            scrollStart='top bottom'
+            scrollEnd='bottom center'
+            stagger={0.03}
+            containerClassName="!m-0"
+            textClassName="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight font-bold !text-left"
+          >
+            BUILD.
+          </ScrollFloat>
+          <ScrollFloat
+            animationDuration={1}
+            ease='back.inOut(2)'
+            scrollStart='top bottom'
+            scrollEnd='bottom center'
+            stagger={0.03}
+            containerClassName="!m-0"
+            textClassName="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight font-bold !text-left"
+          >
+            LEARN.
+          </ScrollFloat>
+          <ScrollFloat
+            animationDuration={1}
+            ease='back.inOut(2)'
+            scrollStart='top bottom'
+            scrollEnd='bottom center'
+            stagger={0.03}
+            containerClassName="!m-0"
+            textClassName="font-headline-xl text-[40px] md:text-[64px] text-white tracking-widest leading-tight font-bold !text-left"
+          >
+            DEPLOY.
+          </ScrollFloat>
+        </div>
 
         {/* Description + CTAs */}
         <div className="flex flex-col md:flex-row gap-8 items-start w-full">
