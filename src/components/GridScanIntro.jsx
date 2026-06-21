@@ -13,11 +13,25 @@ import { GridScan } from './GridScan';
 export default function GridScanIntro({ onDone, displayDuration = 6 }) {
   const [phase, setPhase] = useState('entering'); // entering | visible | fading | done
   const timerRef = useRef(null);
+  const [displayedText, setDisplayedText] = useState('');
+  const fullText = "Beyond the Localhost.";
 
   useEffect(() => {
     const enter = setTimeout(() => setPhase('visible'), 80);
     return () => clearTimeout(enter);
   }, []);
+
+  useEffect(() => {
+    if (phase === 'visible') {
+      let i = 0;
+      const interval = setInterval(() => {
+        setDisplayedText(fullText.substring(0, i + 1));
+        i++;
+        if (i >= fullText.length) clearInterval(interval);
+      }, 70);
+      return () => clearInterval(interval);
+    }
+  }, [phase]);
 
   useEffect(() => {
     if (phase !== 'visible') return;
@@ -106,45 +120,19 @@ export default function GridScanIntro({ onDone, displayDuration = 6 }) {
             textShadow: '0 0 60px rgba(255, 153, 0, 0.3), 0 4px 12px rgba(0,0,0,0.9)',
           }}
         >
-          We{' '}
+          {displayedText}
           <span
+            className="animate-pulse"
             style={{
               color: '#FF9900',
               textShadow: '0 0 30px rgba(255,153,0,0.7), 0 0 60px rgba(255,153,0,0.3)',
             }}
           >
-            ARE
-          </span>{' '}
-          the best
+            _
+          </span>
         </h1>
 
-        {/* Animated orange underline */}
-        <div
-          style={{
-            width: phase === 'entering' ? '0px' : '140px',
-            height: '2px',
-            background: 'linear-gradient(90deg, transparent, #FF9900, transparent)',
-            transition: 'width 1.2s ease 0.8s',
-            borderRadius: '2px',
-            boxShadow: '0 0 12px rgba(255,153,0,0.6)',
-          }}
-        />
 
-        {/* Subtitle */}
-        <p
-          style={{
-            fontFamily: "'Space Mono', monospace",
-            fontSize: 'clamp(0.6rem, 1.4vw, 0.8rem)',
-            color: 'rgba(255,255,255,0.3)',
-            letterSpacing: '0.3em',
-            textTransform: 'uppercase',
-            margin: '8px 0 0 0',
-            opacity: phase === 'entering' ? 0 : 1,
-            transition: 'opacity 1.2s ease 1s',
-          }}
-        >
-          AWS Student Builder Group · VIT
-        </p>
       </div>
 
       {/* Corner accent dots */}
