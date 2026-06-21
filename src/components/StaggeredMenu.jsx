@@ -301,7 +301,7 @@ export const StaggeredMenu = ({
         {/* Logo */}
         <a className="sm-logo" href="/" aria-label="AWS Student Builder Group Home">
           {logoUrl && <img src={logoUrl} alt="AWS SBG" className="sm-logo-img" draggable={false} />}
-          <span className="sm-logo-text"><TypingText text="AWS STUDENT BUILDER GROUP @ VIT VELLORE" /></span>
+          <span className="sm-logo-text hidden lg:block"><TypingText text="AWS STUDENT BUILDER GROUP @ VIT VELLORE" /></span>
         </a>
 
         {/* Toggle button */}
