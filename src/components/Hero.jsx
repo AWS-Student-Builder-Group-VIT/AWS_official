@@ -145,7 +145,7 @@ export default function Hero() {
         </div>
 
         {/* Right Column — HQ Illustration */}
-        <div className="relative h-full min-h-[500px] flex items-center justify-center p-4 overflow-hidden group">
+        <div className="hidden md:flex relative h-full min-h-[500px] items-center justify-center p-4 overflow-hidden group">
           <img
             src={hqSvg}
             alt="AWS Club HQ"

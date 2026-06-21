@@ -90,9 +90,12 @@ export default function Navbar() {
       {/* Logo */}
       <div className="font-headline-md text-headline-md text-on-surface tracking-tighter uppercase flex items-center gap-2 min-w-0 overflow-hidden mr-2 flex-1">
         <img src={awsIcon} alt="AWS Club Logo" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
-        <span className="block truncate md:min-w-[28ch]">
+        <span className="hidden md:block truncate md:min-w-[28ch]">
           {displayedText}
           <span className="animate-pulse">_</span>
+        </span>
+        <span className="md:hidden block truncate">
+          {fullText}
         </span>
       </div>
 
