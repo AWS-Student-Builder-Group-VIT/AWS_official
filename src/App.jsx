@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import AwsStudentBuilderLoader from './components/AwsStudentBuilderLoader';
 import MobilePreloader from './components/MobilePreloader';
-import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Marquee from './components/Marquee';
 import About from './components/About';
@@ -18,6 +17,8 @@ import BlogPredictiveAnalytics from './pages/BlogPredictiveAnalytics';
 import BlogGoogleMaps from './pages/BlogGoogleMaps';
 import LoginModal from './components/LoginModal';
 import GridScanIntro from './components/GridScanIntro';
+import StaggeredMenu from './components/StaggeredMenu';
+import awsIcon from './assets/aws_icon.jpeg';
 
 import AdminPage from './pages/AdminPage';
 import AccountPage from './pages/AccountPage';
@@ -37,26 +38,41 @@ function useIsMobile() {
   return isMobile;
 }
 
+const MENU_ITEMS = [
+  { label: 'Home',         ariaLabel: 'Go to home section',    link: '#home' },
+  { label: 'About',        ariaLabel: 'Learn about us',         link: '#about' },
+  { label: 'Events',       ariaLabel: 'View our events',        link: '#features' },
+  { label: 'Why Us',       ariaLabel: 'Why join us',            link: '#why-join-us' },
+  { label: 'Builders',     ariaLabel: 'Meet the builders',      link: '#builders' },
+  { label: 'Blog',         ariaLabel: 'Read our blog',          link: '#blog' },
+];
+
+const SOCIAL_ITEMS = [
+  { label: 'GitHub',    link: 'https://github.com/AWS-Student-Builder-Group-VIT' },
+  { label: 'LinkedIn',  link: 'https://www.linkedin.com/company/aws-student-builder-group-vit' },
+  { label: 'Instagram', link: 'https://www.instagram.com/aws.sbg.vit' },
+];
+
 function HomePage() {
   return (
-    <>
-      <Navbar />
-      <main className="pt-20">
-        <Hero />
-        <Marquee />
-        <About />
-        <CoreProtocols />
-        <WhyJoinUs />
-        <TheBuilders />
-        <Callout />
-        <Blog />
-        <Footer />
-      </main>
-    </>
+    <main>
+      <Hero />
+      <Marquee />
+      <About />
+      <CoreProtocols />
+      <WhyJoinUs />
+      <TheBuilders />
+      <Callout />
+      <Blog />
+      <Footer />
+    </main>
   );
 }
 
 export default function App() {
+  const location = useLocation();
+  const isHomePage = location.pathname === '/';
+
   // Skip preloader if already shown this session
   const [isLoading, setIsLoading] = useState(() => {
     if (typeof window === 'undefined') return true;
@@ -150,6 +166,26 @@ export default function App() {
       )}
       {showIntro && <GridScanIntro onDone={handleIntroDone} displayDuration={5} />}
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
+
+      {/* StaggeredMenu — fixed overlay, shown only on the homepage */}
+      {isHomePage && (
+        <StaggeredMenu
+          isFixed
+          position="right"
+          colors={['#1c1a24', '#FF9900']}
+          items={MENU_ITEMS}
+          socialItems={SOCIAL_ITEMS}
+          displaySocials={true}
+          displayItemNumbering={true}
+          logoUrl={awsIcon}
+          menuButtonColor="#ffffff"
+          openMenuButtonColor="#FF9900"
+          accentColor="#FF9900"
+          changeMenuColorOnOpen={true}
+          closeOnClickAway={true}
+        />
+      )}
+
       <div className="bg-background text-on-surface bg-grid-pattern min-h-screen relative overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container font-body-md">
         <Routes>
           <Route path="/" element={<HomePage />} />

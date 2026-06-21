@@ -1,0 +1,358 @@
+/* ── StaggeredMenu — AWS Student Builder Group Theme ──────────────────── */
+
+.staggered-menu-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  z-index: 9990;
+  pointer-events: none;
+}
+
+.staggered-menu-wrapper.fixed-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9990;
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.staggered-menu-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25em 2em;
+  background: transparent;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.staggered-menu-header > * {
+  pointer-events: auto;
+}
+
+/* ── Logo ─────────────────────────────────────────────────────────────── */
+.sm-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  text-decoration: none;
+}
+
+.sm-logo-img {
+  display: block;
+  height: 32px;
+  width: 32px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.sm-logo-text {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+/* ── Toggle Button ─────────────────────────────────────────────────────── */
+.sm-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.15);
+  cursor: pointer;
+  color: #ffffff;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 0.55em 1em;
+  line-height: 1;
+  overflow: visible;
+  transition: border-color 0.25s ease, background 0.25s ease;
+}
+
+.sm-toggle:hover {
+  border-color: #FF9900;
+  background: rgba(255, 153, 0, 0.06);
+}
+
+.sm-toggle:focus-visible {
+  outline: 2px solid #FF9900;
+  outline-offset: 4px;
+}
+
+.sm-toggle-textWrap {
+  position: relative;
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sm-toggle-textInner {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.sm-toggle-line {
+  display: block;
+  height: 1em;
+  line-height: 1;
+}
+
+/* ── Icon (plus/X) ─────────────────────────────────────────────────────── */
+.sm-icon {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
+}
+
+.sm-icon-line {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 1.5px;
+  background: currentColor;
+  border-radius: 1px;
+  transform: translate(-50%, -50%);
+  will-change: transform;
+}
+
+.sm-line {
+  display: none !important;
+}
+
+/* ── Pre-layers (staggered slide-in underlays) ──────────────────────────── */
+.sm-prelayers {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: clamp(280px, 42vw, 460px);
+  pointer-events: none;
+  z-index: 5;
+  opacity: 1;
+}
+
+[data-position='left'] .sm-prelayers {
+  right: auto;
+  left: 0;
+}
+
+.sm-prelayer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 100%;
+  opacity: 1;
+}
+
+/* ── Panel ─────────────────────────────────────────────────────────────── */
+.staggered-menu-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: clamp(280px, 42vw, 460px);
+  height: 100%;
+  background: #0f1014;
+  border-left: 1px solid rgba(255, 153, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  padding: 6em 2.5em 2.5em 2.5em;
+  overflow-y: auto;
+  z-index: 10;
+  pointer-events: auto;
+  opacity: 1;
+}
+
+[data-position='left'] .staggered-menu-panel {
+  right: auto;
+  left: 0;
+  border-left: none;
+  border-right: 1px solid rgba(255, 153, 0, 0.15);
+}
+
+.sm-panel-inner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Nav Items ─────────────────────────────────────────────────────────── */
+.sm-panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.sm-panel-itemWrap {
+  position: relative;
+  overflow: hidden;
+  line-height: 1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sm-panel-itemWrap:first-child {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sm-panel-item {
+  position: relative;
+  color: #ffffff;
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem);
+  cursor: pointer;
+  line-height: 1;
+  letter-spacing: -1px;
+  text-transform: uppercase;
+  display: inline-block;
+  text-decoration: none;
+  padding: 0.35em 2em 0.35em 0;
+  transition: color 0.2s ease;
+}
+
+.sm-panel-item:hover {
+  color: #FF9900;
+}
+
+.sm-panel-itemLabel {
+  display: inline-block;
+  will-change: transform;
+  transform-origin: 50% 100%;
+}
+
+/* ── Numbering ─────────────────────────────────────────────────────────── */
+.sm-panel-list[data-numbering] {
+  counter-reset: smItem;
+}
+
+.sm-panel-list[data-numbering] .sm-panel-item::after {
+  counter-increment: smItem;
+  content: counter(smItem, decimal-leading-zero);
+  position: absolute;
+  top: 0.35em;
+  right: 0.3em;
+  font-size: 0.7rem;
+  font-family: 'Space Mono', monospace;
+  font-weight: 400;
+  color: #FF9900;
+  letter-spacing: 0;
+  pointer-events: none;
+  user-select: none;
+  opacity: var(--sm-num-opacity, 0);
+}
+
+/* ── Socials ─────────────────────────────────────────────────────────── */
+.sm-socials {
+  margin-top: auto;
+  padding-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-top: 1px solid rgba(255, 153, 0, 0.15);
+}
+
+.sm-socials-title {
+  margin: 0;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: #FF9900;
+}
+
+.sm-socials-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.sm-socials-link {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+  position: relative;
+  display: inline-block;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.sm-socials-link:hover {
+  color: #FF9900;
+}
+
+.sm-socials-link:focus-visible {
+  outline: 2px solid #FF9900;
+  outline-offset: 3px;
+}
+
+.sm-socials-list:hover .sm-socials-link:not(:hover) {
+  opacity: 0.4;
+}
+
+/* ── Bottom footer inside panel ────────────────────────────────────────── */
+.sm-panel-footer {
+  margin-top: 1.5rem;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .staggered-menu-panel {
+    width: 100%;
+    left: 0;
+    right: 0;
+    border-left: none;
+    border-top: 1px solid rgba(255, 153, 0, 0.15);
+  }
+
+  .sm-prelayers {
+    width: 100%;
+    left: 0;
+    right: 0;
+  }
+
+  .sm-panel-item {
+    font-size: clamp(1.8rem, 8vw, 2.5rem);
+  }
+}
