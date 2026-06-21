@@ -185,6 +185,13 @@
   z-index: 10;
   pointer-events: auto;
   opacity: 1;
+  /* Hide scrollbar */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.staggered-menu-panel::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
 }
 
 [data-position='left'] .staggered-menu-panel {
