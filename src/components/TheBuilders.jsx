@@ -262,7 +262,7 @@ export default function TheBuilders() {
 
         /* — Popup — */
         .tb-overlay {
-          position: fixed;
+          position: absolute;
           inset: 0;
           background: rgba(0,0,0,0.7);
           backdrop-filter: blur(6px);
