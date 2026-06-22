@@ -8,67 +8,74 @@ import './EventTimeline.css';
 
 const timelineData = [
   {
-    day: 'Day 1',
-    title: 'Cloud Genesis 101',
-    time: '7:00 – 9:00 pm',
-    icon: 'cloud',
+    day: '15th June',
+    title: 'AWS 101 : The Architecture SandBox',
+    time: '6:00pm to 8:00pm',
+    icon: 'dns',
     points: [
-      'Intro & welcome',
-      'Computing evolution & on-premise infra',
-      'What is cloud computing?',
-      'Deployment & service models',
-      'Why AWS — history & global infrastructure',
+      'POC: Pihu Gupta | Guest Speaker: Dr. Kakelli Anil Kumar | Venue: Google Meet',
+      'Bridge the gap between software development and cloud computing.',
+      'Dive deeper into virtualization under the hood to see how hypervisors partition bare-metal servers.',
+      'Explore networking essentials: routers, switches, subnets, and gateways.',
+      'Demonstration of traffic routing and firewall rule enforcement using a live visual simulation tool.',
+      'Equips students with practical systems knowledge for modern software development roles.'
     ],
     quiz: {
-      label: 'Cloud Combat 1.0',
+      label: 'Cloud Combat 1.0 (Live quiz)',
       rounds: [
-        'Round 1 — Basic · 5 qns · 5 pts · Top 70% advance',
-        'Round 2 — Intermediate · 5 qns · 10 pts · Top 40% advance',
-        'Round 3 — Advanced · 3 qns · 15 pts · Live winner reveal',
+        'Round 1: Basic — 5 qns · 5 pts each · Top 70% advance',
+        'Round 2: Intermediate — 5 qns · 10 pts each · Top 40% advance',
+        'Round 3: Advanced — 3 qns · 15 pts each',
       ],
     },
   },
   {
-    day: 'Day 2',
-    title: 'Cloud Forge 102',
-    time: '7:00 – 10:00 pm',
-    icon: 'dns',
+    day: '17th June',
+    title: 'AWS 102 : Cloud Genesis',
+    time: '6:00pm to 8:00pm',
+    icon: 'cloud',
     points: [
-      'AWS compute services overview',
-      'EC2 fundamentals & use cases',
-      'AMI, key pairs, security groups & IPs',
-      'Launch an EC2 instance (live demo)',
-      'EC2 vs Lambda — why go serverless',
-      'AWS core architecture & event sources',
-      'Lambda limitations & use cases',
-      'Cloud Combat 2.0 — AWS Escape Room',
+      'POC: Jaanya Bagdi | Guest Speaker: Mr Chandra Mohan B | Venue: Google Meet',
+      'Introduction to foundational concepts of cloud computing and their relevance in modern tech.',
+      'Key cloud concepts, role of cloud platforms in enabling scalable digital services.',
+      'Insights into AWS services, industry applications, and emerging trends.',
+      'Establish a strong conceptual foundation for more advanced topics in cloud and distributed systems.'
+    ],
+    quiz: {
+      label: 'Cloud Combat 2.0 (Live quiz)',
+      rounds: [
+        'Round 1: Basic — 5 qns · 5 pts each · Top 70% advance',
+        'Round 2: Intermediate — 5 qns · 10 pts each · Top 40% advance',
+        'Round 3: Advanced — 3 qns · 15 pts each',
+      ],
+    },
+  },
+  {
+    day: '18th June',
+    title: 'AWS 103 : The AI Cloud Stack',
+    time: '6:00pm to 9:00pm',
+    icon: 'smart_toy',
+    points: [
+      'POC: Abhishek Kumar | Hosts: Abhishek Kumar & Jaanya Bagdi | Venue: Google Meet',
+      'Explore how AWS services can be leveraged to build, deploy, and scale modern AI applications.',
+      'Core AWS services used in ML workflows, model deployment strategies, and real-world AI system architecture.',
+      'Introduce Generative AI concepts, prompt engineering, and large language models.',
+      'Segment 1 (6:10 – 7:30 PM): ML on AWS (S3, SageMaker, EC2, Project Showcase: Fake News Detection).',
+      'Segment 2 (7:30 – 8:50 PM): Generative AI on AWS (LLMs, Prompt Engineering, Live App Demo).'
     ],
   },
   {
-    day: 'Day 3',
-    title: 'Data Nexus 103',
-    time: '7:00 – 9:00 pm',
+    day: '19th June',
+    title: 'AWS 104 : Data Nexus',
+    time: '6:00pm to 8:00pm',
     icon: 'database',
     points: [
-      'Database fundamentals & why they matter',
-      'Structured vs unstructured data',
-      'AWS DB services — SQL & NoSQL overview',
-      'RDS — managed relational DB, multi-AZ, replicas',
-      'DynamoDB — serverless NoSQL, key-value, scaling',
-      'RDS vs DynamoDB comparison',
-      'Cloud Combat 3.0 — Case Study Activity',
-    ],
-  },
-  {
-    day: 'Day 4',
-    title: 'Guest Lecture',
-    time: 'Special Session',
-    icon: 'campaign',
-    points: [
-      'Industry expert speaker session',
-      'Real-world AWS use cases & insights',
-      'Career perspectives in cloud',
-      'Open Q&A & networking',
+      'POC: Arshi Saxena | Host: Vidhi Jain | Venue: Google Meet',
+      'Introduction to the fundamentals of modern database systems and their role in cloud-based applications.',
+      'Explore different data storage approaches and relational vs non-relational databases.',
+      'Learn how managed database services simplify deployment, scaling, and maintenance.',
+      'Gain insight into database architecture, cloud-native data management, and integration workflows.',
+      'Additional: Cloud Combat 3.0 - Case Study Activity'
     ],
   },
 ];
@@ -174,7 +181,7 @@ export default function EventTimeline() {
         transition={{ duration: 0.6, delay: 0.2 }}
       >
         <p>
-          4 days · 3 technical sessions · Cloud Combat series · <strong>aws week</strong>
+          4 days · 4 technical sessions · Cloud Combat series · <strong>aws week</strong>
         </p>
       </motion.div>
     </div>
