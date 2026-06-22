@@ -23,6 +23,7 @@ import AdminPage from './pages/AdminPage';
 import AccountPage from './pages/AccountPage';
 import LoginPage from './pages/LoginPage';
 import { checkSessionValidity, getUser, logout } from './utils/auth';
+import { preloadAllImages } from './utils/preloadAssets';
 
 /**
  * Detect mobile viewport (≤768px).
@@ -105,11 +106,17 @@ export default function App() {
 
   // Track whether all page resources (images, fonts, DOM) are ready
   const [resourcesReady, setResourcesReady] = useState(false);
+  const [preloaderAnimationDone, setPreloaderAnimationDone] = useState(false);
 
   useEffect(() => {
     const handleOpenModal = () => setIsLoginModalOpen(true);
     window.addEventListener('open-login-modal', handleOpenModal);
     return () => window.removeEventListener('open-login-modal', handleOpenModal);
+  }, []);
+
+  // Start preloading images immediately in the background
+  useEffect(() => {
+    preloadAllImages().catch(() => {});
   }, []);
 
   // Wait for all resources: window load + fonts
@@ -142,32 +149,17 @@ export default function App() {
   }, [isLoading]);
 
   // Desktop: no fixed timer — animation signals completion via onDone
-
-  const handlePreloaderDone = () => {
-    const finish = () => {
+  useEffect(() => {
+    if (isLoading && preloaderAnimationDone && resourcesReady) {
       sessionStorage.setItem('preloader-shown', '1');
       setIsLoading(false);
       setShowIntro(true); // ← launch GridScan intro
       setIntroFading(false);
-    };
-
-    if (resourcesReady) {
-      finish();
-    } else {
-      const check = setInterval(() => {
-        if (document.readyState === 'complete') {
-          const done = () => {
-            clearInterval(check);
-            finish();
-          };
-          if (document.fonts && document.fonts.ready) {
-            document.fonts.ready.then(done);
-          } else {
-            done();
-          }
-        }
-      }, 100);
     }
+  }, [isLoading, preloaderAnimationDone, resourcesReady]);
+
+  const handlePreloaderDone = () => {
+    setPreloaderAnimationDone(true);
   };
 
   const handleIntroDone = () => {
