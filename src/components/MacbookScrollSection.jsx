@@ -151,7 +151,7 @@ const SectionTitle = () => (
 export default function MacbookScrollSection() {
   return (
     <section
-      className="relative w-full overflow-hidden"
+      className="relative w-full overflow-hidden hidden md:block"
       style={{ background: "#0A0C10" }}
     >
       {/* Grid pattern overlay */}
