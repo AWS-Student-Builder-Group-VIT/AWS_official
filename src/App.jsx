@@ -17,6 +17,7 @@ import BlogGoogleMaps from './pages/BlogGoogleMaps';
 import LoginModal from './components/LoginModal';
 import GridScanIntro from './components/GridScanIntro';
 import StaggeredMenu from './components/StaggeredMenu';
+import MacbookScrollSection from './components/MacbookScrollSection';
 import awsIcon from './assets/aws_icon.jpeg';
 
 import AdminPage from './pages/AdminPage';
@@ -44,6 +45,8 @@ function HomePage() {
     <main>
       <Hero />
       <Marquee />
+      {/* MacbookScroll — storytelling bridge between Hero and Events */}
+      <MacbookScrollSection />
       <CoreProtocols />
       <WhyJoinUs />
       <TheBuilders />
@@ -80,20 +83,20 @@ export default function App() {
   }, []);
 
   const menuItems = [
-    { label: 'Home',         ariaLabel: 'Go to home section',    link: '#home' },
-    { label: 'About',        ariaLabel: 'Learn about us',         link: '#about' },
-    { label: 'Events',       ariaLabel: 'View our events',        link: '#features' },
-    { label: 'Why Us',       ariaLabel: 'Why join us',            link: '#why-join-us' },
-    { label: 'Builders',     ariaLabel: 'Meet the builders',      link: '#builders' },
-    { label: 'Blog',         ariaLabel: 'Read our blog',          link: '#blog' },
-    user 
-      ? { label: 'Account',      ariaLabel: 'Manage your account',    link: '/account' }
-      : { label: 'Join',         ariaLabel: 'Join the club',          onClick: () => window.dispatchEvent(new Event('open-login-modal')) },
+    { label: 'Home', ariaLabel: 'Go to home section', link: '#home' },
+    { label: 'About', ariaLabel: 'Learn about us', link: '#about' },
+    { label: 'Events', ariaLabel: 'View our events', link: '#features' },
+    { label: 'Why Us', ariaLabel: 'Why join us', link: '#why-join-us' },
+    { label: 'Builders', ariaLabel: 'Meet the builders', link: '#builders' },
+    { label: 'Blog', ariaLabel: 'Read our blog', link: '#blog' },
+    user
+      ? { label: 'Account', ariaLabel: 'Manage your account', link: '/account' }
+      : { label: 'Join', ariaLabel: 'Join the club', onClick: () => window.dispatchEvent(new Event('open-login-modal')) },
   ];
 
   const socialItems = [
-    { label: 'GitHub',    link: 'https://github.com/AWS-Student-Builder-Group-VIT' },
-    { label: 'LinkedIn',  link: 'https://www.linkedin.com/company/aws-student-builder-group-vit' },
+    { label: 'GitHub', link: 'https://github.com/AWS-Student-Builder-Group-VIT' },
+    { label: 'LinkedIn', link: 'https://www.linkedin.com/company/aws-student-builder-group-vit' },
     { label: 'Instagram', link: 'https://www.instagram.com/aws.sbg.vit' },
     ...(user ? [{ label: 'Logout', onClick: () => { logout(); window.dispatchEvent(new Event('auth-change')); } }] : [])
   ];
@@ -203,7 +206,7 @@ export default function App() {
         />
       )}
 
-      <div 
+      <div
         className="bg-background text-on-surface bg-grid-pattern min-h-screen relative selection:bg-primary-container selection:text-on-primary-container font-body-md"
         style={{
           transform: (showIntro && !introFading) ? 'scale(0.96)' : 'scale(1)',
