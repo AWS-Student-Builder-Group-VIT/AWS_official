@@ -1,4 +1,5 @@
 import BlogPostLayout from '../components/BlogPostLayout';
+import { Highlighter } from '../components/Highlighter';
 
 export default function BlogBedrock() {
   return (
@@ -11,8 +12,11 @@ export default function BlogBedrock() {
         seconds — has gone from a research curiosity to a business imperative in less than three years.
       </p>
       <p>
-        But here is the uncomfortable truth that rarely makes it into the breathless headlines: building
-        production-ready AI applications is brutally difficult. The foundation models themselves —
+        But here is the uncomfortable truth that rarely makes it into the breathless headlines:{' '}
+        <Highlighter action="highlight" color="rgba(255, 80, 80, 0.38)">
+          building production-ready AI applications is brutally difficult.
+        </Highlighter>{' '}
+        The foundation models themselves —
         massive neural networks with hundreds of billions of parameters — require enormous computational
         resources to train and deploy. Managing model infrastructure at scale demands specialized
         engineering expertise that most organizations simply do not have.
@@ -26,16 +30,21 @@ export default function BlogBedrock() {
       <h2>What Is AWS Bedrock?</h2>
       <div className="section-label"></div>
       <p>
-        Amazon Bedrock is a fully managed service that makes high-performing foundation models (FMs) from
-        leading AI companies and Amazon available through a unified API. Think of it as the AWS
+        Amazon Bedrock is a{' '}
+        <Highlighter action="highlight" color="rgba(100, 200, 255, 0.35)">
+          fully managed service that makes high-performing foundation models from leading AI companies available through a unified API.
+        </Highlighter>{' '}
+        Think of it as the AWS
         equivalent of a curated AI marketplace, combined with enterprise-grade infrastructure, security,
         and customization tools — all without requiring you to manage a single server or GPU instance.
       </p>
       <p>
         The key word here is <strong>managed</strong>. You do not provision compute, you do not manage model
         weights, you do not worry about scaling inference endpoints. You choose a model, send it a prompt
-        via API, and get a response. Bedrock handles everything underneath — from load balancing across
-        GPU clusters to encrypting your data in transit and at rest.
+        via API, and get a response.{' '}
+        <Highlighter action="underline" color="#FF9800">
+          Bedrock handles everything underneath — from load balancing across GPU clusters to encrypting your data in transit and at rest.
+        </Highlighter>
       </p>
 
       <div className="quote-block">
@@ -49,9 +58,10 @@ export default function BlogBedrock() {
       <p>
         As of early 2026, Bedrock offers access to over 25 foundation models from providers including
         Anthropic (Claude 3.5 Sonnet, Claude 3 Opus), Meta (Llama 3, Llama 3.1), Mistral AI, Stability AI,
-        Cohere, AI21 Labs, and Amazon's own Titan family of models. This multi-model approach is
-        architecturally significant: it allows enterprises to benchmark, compare, and switch between
-        models without rewriting their application code.
+        Cohere, AI21 Labs, and Amazon's own Titan family of models.{' '}
+        <Highlighter action="highlight" color="rgba(80, 220, 120, 0.35)">
+          This multi-model approach allows enterprises to benchmark, compare, and switch between models without rewriting their application code.
+        </Highlighter>
       </p>
 
       <h2>Core Capabilities: The Building Blocks</h2>
@@ -63,8 +73,10 @@ export default function BlogBedrock() {
 
       <h3>1. Knowledge Bases (RAG-as-a-Service)</h3>
       <p>
-        Retrieval-Augmented Generation (RAG) is the most important architectural pattern in enterprise AI
-        today. It solves the fundamental problem of foundation model hallucination by grounding model
+        <Highlighter action="highlight" color="rgba(255, 214, 10, 0.45)">
+          Retrieval-Augmented Generation (RAG) is the most important architectural pattern in enterprise AI today.
+        </Highlighter>{' '}
+        It solves the fundamental problem of foundation model hallucination by grounding model
         responses in your organization's actual data. Bedrock Knowledge Bases automates the entire RAG
         pipeline — document ingestion from S3, automatic chunking and embedding, vector storage, and
         retrieval-augmented inference.
@@ -74,13 +86,19 @@ export default function BlogBedrock() {
       <p>
         Bedrock Agents transform foundation models from passive responders into active problem-solvers.
         An Agent can break down a complex user request into a multi-step plan, execute API calls to
-        external systems, query knowledge bases, and synthesize results — all autonomously.
+        external systems, query knowledge bases, and synthesize results —{' '}
+        <Highlighter action="underline" color="#FF9800">
+          all autonomously.
+        </Highlighter>
       </p>
 
       <h3>3. Guardrails</h3>
       <p>
-        In regulated industries — healthcare, finance, legal — deploying AI without safety controls is
-        not just risky, it is often illegal. Bedrock Guardrails provide configurable content filtering,
+        In regulated industries — healthcare, finance, legal —{' '}
+        <Highlighter action="highlight" color="rgba(255, 120, 60, 0.38)">
+          deploying AI without safety controls is not just risky, it is often illegal.
+        </Highlighter>{' '}
+        Bedrock Guardrails provide configurable content filtering,
         PII detection and masking, topic-based blocking, and output validation. You define your
         organization's safety policies, and Guardrails enforces them at inference time.
       </p>
@@ -121,9 +139,11 @@ export default function BlogBedrock() {
       </table>
 
       <p>
-        The takeaway is nuanced. If your organization is already deeply invested in the AWS ecosystem,
-        Bedrock's native integrations, enterprise security model, and breadth of model choices give it
-        a decisive edge. Azure OpenAI makes more sense if you live in Microsoft 365, and Vertex AI
+        The takeaway is nuanced. If your organization is already deeply invested in the AWS ecosystem,{' '}
+        <Highlighter action="highlight" color="rgba(100, 200, 255, 0.35)">
+          Bedrock's native integrations, enterprise security model, and breadth of model choices give it a decisive edge.
+        </Highlighter>{' '}
+        Azure OpenAI makes more sense if you live in Microsoft 365, and Vertex AI
         shines when Google's proprietary models like Gemini are central to your strategy.
       </p>
 
@@ -161,8 +181,10 @@ export default function BlogBedrock() {
       <h3>Step 1: Enable Bedrock Model Access</h3>
       <p>
         In the AWS Console, navigate to Amazon Bedrock and request access to the models you intend
-        to use. Approval is typically instant for most models and free — you only pay for tokens
-        consumed during inference.
+        to use.{' '}
+        <Highlighter action="underline" color="#00C896">
+          Approval is typically instant for most models and free — you only pay for tokens consumed during inference.
+        </Highlighter>
       </p>
 
       <h3>Step 2: Create a Knowledge Base</h3>
@@ -195,9 +217,11 @@ export default function BlogBedrock() {
       <h2>Understanding Bedrock Pricing</h2>
       <div className="section-label"></div>
       <p>
-        Bedrock follows a consumption-based pricing model with no upfront costs and no minimum
-        commitments. You pay only for what you use, billed by the number of input and output tokens
-        processed.
+        Bedrock follows a consumption-based pricing model with{' '}
+        <Highlighter action="highlight" color="rgba(180, 120, 255, 0.38)">
+          no upfront costs and no minimum commitments.
+        </Highlighter>{' '}
+        You pay only for what you use, billed by the number of input and output tokens processed.
       </p>
 
       <table className="blog-table">
@@ -239,9 +263,10 @@ export default function BlogBedrock() {
       <div className="section-label"></div>
       <p>
         The organizations that will win the next decade are not necessarily those with the best AI
-        models — those models are increasingly commoditized. The winners will be those who build the
-        best AI infrastructure: the pipelines, guardrails, agents, and knowledge systems that take a
-        raw model and transform it into a reliable, scalable, enterprise-grade capability.
+        models — those models are increasingly commoditized.{' '}
+        <Highlighter action="highlight" color="rgba(255, 214, 10, 0.45)">
+          The winners will be those who build the best AI infrastructure: the pipelines, guardrails, agents, and knowledge systems that take a raw model and transform it into a reliable, scalable, enterprise-grade capability.
+        </Highlighter>
       </p>
       <p>
         Amazon Bedrock is a serious bet on that thesis. By abstracting away the complexity of foundation
@@ -250,8 +275,10 @@ export default function BlogBedrock() {
         complex workflows, and to every developer in between.
       </p>
       <p>
-        The rise of AWS Bedrock is not just a product story. It is a signal of how the industry is
-        maturing: from the era of model experimentation to the era of AI infrastructure.
+        The rise of AWS Bedrock is not just a product story.{' '}
+        <Highlighter action="underline" color="#FF9800">
+          It is a signal of how the industry is maturing: from the era of model experimentation to the era of AI infrastructure.
+        </Highlighter>
       </p>
     </BlogPostLayout>
   );

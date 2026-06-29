@@ -1,4 +1,5 @@
 import BlogPostLayout from '../components/BlogPostLayout';
+import { Highlighter } from '../components/Highlighter';
 
 export default function BlogPredictiveAnalytics() {
   return (
@@ -8,13 +9,16 @@ export default function BlogPredictiveAnalytics() {
         The moment was so subtle you probably did not notice it happening. You opened your favorite
         grocery delivery app, and sitting right there at the top — as if reading your mind — was a
         gentle suggestion: "Running low on milk? Reorder now." You had not searched for it. You had
-        not mentioned it to anyone. You had not even opened the refrigerator yet. But the app somehow
-        knew.
+        not mentioned it to anyone. You had not even opened the refrigerator yet.{' '}
+        <Highlighter action="highlight" color="rgba(100, 200, 255, 0.35)">
+          But the app somehow knew.
+        </Highlighter>
       </p>
       <p>
-        Welcome to the world of <strong>predictive analytics at Amazon scale</strong> — where machine
-        learning models trained on petabytes of behavioral data, powered by AWS cloud infrastructure,
-        are quietly anticipating your needs before you become consciously aware of them.
+        Welcome to the world of <strong>predictive analytics at Amazon scale</strong> — where{' '}
+        <Highlighter action="underline" color="#FF9800">
+          machine learning models trained on petabytes of behavioral data, powered by AWS cloud infrastructure, are quietly anticipating your needs before you become consciously aware of them.
+        </Highlighter>
       </p>
 
       <h2>The Data Engine: What Amazon Actually Collects</h2>
@@ -22,8 +26,10 @@ export default function BlogPredictiveAnalytics() {
       <p>
         To understand how Amazon predicts your grocery needs, you first need to appreciate the sheer
         volume and variety of data that flows through its systems every second. This is not a simple
-        database lookup. It is one of the most sophisticated real-time data processing pipelines ever
-        built.
+        database lookup.{' '}
+        <Highlighter action="highlight" color="rgba(255, 214, 10, 0.45)">
+          It is one of the most sophisticated real-time data processing pipelines ever built.
+        </Highlighter>
       </p>
       <p>
         Every interaction you have with Amazon generates a data signal. Every product page you view,
@@ -51,14 +57,18 @@ export default function BlogPredictiveAnalytics() {
       <div className="section-label"></div>
       <p>
         The transformation from raw behavioral data to actionable predictions happens through a
-        sophisticated ML pipeline built on AWS services. At the core sits <strong>Amazon SageMaker</strong>,
-        AWS's fully managed machine learning platform.
+        sophisticated ML pipeline built on AWS services. At the core sits{' '}
+        <Highlighter action="highlight" color="rgba(80, 220, 120, 0.35)">
+          <strong>Amazon SageMaker</strong>, AWS's fully managed machine learning platform.
+        </Highlighter>
       </p>
       <p>
         SageMaker handles the heavy lifting: data preprocessing with <strong>AWS Glue</strong>, feature
         engineering, model training using distributed GPU clusters, hyperparameter tuning, model
-        evaluation, and deployment to production endpoints that can handle millions of inference
-        requests per second.
+        evaluation, and deployment to production endpoints that can handle{' '}
+        <Highlighter action="underline" color="#FF5252">
+          millions of inference requests per second.
+        </Highlighter>
       </p>
 
       <h3>The Full ML Pipeline: From Data to Decision</h3>
@@ -89,13 +99,16 @@ export default function BlogPredictiveAnalytics() {
       <div className="section-label"></div>
       <p>
         Perhaps the most audacious application of this entire system is what Amazon calls
-        <strong> anticipatory shipping</strong> — a concept so counterintuitive it sounds like science
-        fiction until you understand the math behind it.
+        <strong> anticipatory shipping</strong> — a concept so counterintuitive{' '}
+        <Highlighter action="highlight" color="rgba(255, 120, 60, 0.38)">
+          it sounds like science fiction until you understand the math behind it.
+        </Highlighter>
       </p>
       <p>
-        The idea is simple in theory: if the model is confident enough that a specific customer in a
-        specific zip code is going to order a specific product within the next 24 to 48 hours, why
-        not ship the product to the nearest distribution hub <em>before</em> they order?
+        The idea is simple in theory:{' '}
+        <Highlighter action="highlight" color="rgba(100, 200, 255, 0.35)">
+          if the model is confident enough that a specific customer in a specific zip code is going to order a specific product within the next 24 to 48 hours, why not ship the product to the nearest distribution hub <em>before</em> they order?
+        </Highlighter>
       </p>
       <p>
         Amazon holds a patent on this concept, filed under the phrase "method and system for
@@ -106,9 +119,9 @@ export default function BlogPredictiveAnalytics() {
 
       <div className="callout-box">
         <p><strong>🔍 By the Numbers: The Scale of AWS-Powered Prediction</strong></p>
-        <p>Amazon processes over <strong>1.6 million orders per day</strong> globally.</p>
+        <p>Amazon processes over <Highlighter action="highlight" color="rgba(255, 214, 10, 0.45)"><strong>1.6 million orders per day</strong></Highlighter> globally.</p>
         <p>SageMaker trains <strong>hundreds of thousands of models per month</strong> across Amazon's internal teams.</p>
-        <p>Amazon Forecast reduces forecasting errors by an average of <strong>50%</strong> compared to traditional methods.</p>
+        <p>Amazon Forecast reduces forecasting errors by an average of <Highlighter action="underline" color="#00C896"><strong>50%</strong></Highlighter> compared to traditional methods.</p>
         <p>AWS processes more than <strong>100 trillion events per day</strong> across its global infrastructure.</p>
       </div>
 
@@ -152,11 +165,11 @@ export default function BlogPredictiveAnalytics() {
         strict access controls.
       </p>
       <p>
-        But technical controls are only part of the answer. The deeper question is one of transparency
-        and trust. The technology itself is neutral — it can be used to genuinely serve customers
-        better, or it can be used in ways that feel intrusive and manipulative. The line between
-        helpful anticipation and unsettling surveillance is drawn not by the algorithm, but by the
-        values of the organization deploying it.
+        But technical controls are only part of the answer.{' '}
+        <Highlighter action="highlight" color="rgba(180, 120, 255, 0.38)">
+          The deeper question is one of transparency and trust. The technology itself is neutral — it can be used to genuinely serve customers better, or it can be used in ways that feel intrusive and manipulative.
+        </Highlighter>{' '}
+        The line between helpful anticipation and unsettling surveillance is drawn not by the algorithm, but by the values of the organization deploying it.
       </p>
 
       <h2>What This Means for the Future of Commerce</h2>
@@ -165,13 +178,17 @@ export default function BlogPredictiveAnalytics() {
         We are standing at an inflection point. The convergence of real-time data streaming,
         cloud-scale machine learning, and increasingly sophisticated behavioral models is moving us
         from a world of <strong>reactive commerce</strong> — where businesses respond to what customers
-        order — to a world of <strong>proactive commerce</strong>, where businesses anticipate what
-        customers need before the need becomes conscious.
+        order — to a world of{' '}
+        <Highlighter action="highlight" color="rgba(255, 214, 10, 0.45)">
+          <strong>proactive commerce</strong>, where businesses anticipate what customers need before the need becomes conscious.
+        </Highlighter>
       </p>
       <p>
-        For developers and engineers, it means that the tools to build these systems are now accessible
-        to anyone with an AWS account and a dataset. SageMaker, Forecast, Kinesis, and Glue are
-        available to a two-person startup as readily as they are to a Fortune 500 enterprise.
+        For developers and engineers, it means that{' '}
+        <Highlighter action="underline" color="#FF9800">
+          the tools to build these systems are now accessible to anyone with an AWS account and a dataset.
+        </Highlighter>{' '}
+        SageMaker, Forecast, Kinesis, and Glue are available to a two-person startup as readily as they are to a Fortune 500 enterprise.
       </p>
 
       <h2>Conclusion: The Quiet Revolution in Your Refrigerator</h2>
@@ -187,14 +204,16 @@ export default function BlogPredictiveAnalytics() {
       <p>
         It did not happen by accident. It happened because Amazon spent two decades building, and then
         productizing, one of the most sophisticated demand forecasting systems ever created — and then
-        made it available to the entire world through AWS. The refrigerator did not get smarter. The
-        cloud did.
+        made it available to the entire world through AWS.{' '}
+        <Highlighter action="highlight" color="rgba(100, 200, 255, 0.35)">
+          The refrigerator did not get smarter. The cloud did.
+        </Highlighter>
       </p>
       <p>
-        And that is perhaps the most important insight of all: the future of intelligence is not in the
-        devices around us. It is in the invisible, elastic, always-on cloud infrastructure that
-        processes the world's data at a scale our intuition cannot easily grasp — and turns that data
-        into decisions that feel, from the outside, almost like magic.
+        And that is perhaps the most important insight of all:{' '}
+        <Highlighter action="underline" color="#7C4DFF">
+          the future of intelligence is not in the devices around us. It is in the invisible, elastic, always-on cloud infrastructure that processes the world's data at a scale our intuition cannot easily grasp — and turns that data into decisions that feel, from the outside, almost like magic.
+        </Highlighter>
       </p>
     </BlogPostLayout>
   );

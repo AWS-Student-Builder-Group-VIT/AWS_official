@@ -1,4 +1,5 @@
 import BlogPostLayout from '../components/BlogPostLayout';
+import { Highlighter } from '../components/Highlighter';
 
 export default function BlogGoogleMaps() {
   return (
@@ -31,8 +32,10 @@ export default function BlogGoogleMaps() {
         app. Type destination. Blue line appears. Follow blue line. Reach destination. Simple.
       </p>
       <p>
-        Except behind that innocent-looking blue line exists one of the largest real-time data
-        processing systems humans interact with daily.
+        Except{' '}
+        <Highlighter action="highlight" color="rgba(100, 200, 255, 0.35)">
+          behind that innocent-looking blue line exists one of the largest real-time data processing systems humans interact with daily.
+        </Highlighter>
       </p>
       <p>
         Which brings us to the actual question: How does Google Maps somehow know traffic exists
@@ -43,8 +46,10 @@ export default function BlogGoogleMaps() {
         To understand this, we first need to understand what Google Maps actually sees.
       </p>
       <p>
-        Spoiler: It does not see roads. <strong>It sees data.</strong> An absolutely terrifying amount
-        of data.
+        Spoiler: It does not see roads. <strong>It sees data.</strong>{' '}
+        <Highlighter action="underline" color="#FF5252">
+          An absolutely terrifying amount of data.
+        </Highlighter>
       </p>
 
       <h2>Data Collection: Your Phone Is Quietly Working for Google</h2>
@@ -55,7 +60,10 @@ export default function BlogGoogleMaps() {
         Device signals.
       </p>
       <p>
-        Individually, these things are meaningless. But together? They become incredibly powerful.
+        Individually, these things are meaningless. But together?{' '}
+        <Highlighter action="highlight" color="rgba(255, 214, 10, 0.45)">
+          They become incredibly powerful.
+        </Highlighter>
       </p>
       <p>
         Imagine one car slowing down on a highway. Google cannot immediately assume traffic. Maybe
@@ -63,7 +71,10 @@ export default function BlogGoogleMaps() {
         their charger. Maybe they are simply fighting demons internally.
       </p>
       <p>
-        One car slowing down means nothing. Now imagine <strong>2,000 cars slowing down together.</strong>
+        One car slowing down means nothing. Now imagine{' '}
+        <Highlighter action="highlight" color="rgba(255, 120, 60, 0.38)">
+          <strong>2,000 cars slowing down together.</strong>
+        </Highlighter>
       </p>
       <p>
         That becomes interesting. Google Maps begins identifying patterns. A road that normally moves
@@ -75,7 +86,11 @@ export default function BlogGoogleMaps() {
           <strong>This process is called crowdsourced traffic intelligence.</strong> Which is basically a
           fancy way of saying: "Millions of users unknowingly help Google Maps understand roads."
         </p>
-        <p>Every smartphone becomes a tiny traffic sensor. Not intentionally. Collectively.</p>
+        <p>
+          <Highlighter action="underline" color="#FF9800">
+            Every smartphone becomes a tiny traffic sensor. Not intentionally. Collectively.
+          </Highlighter>
+        </p>
       </div>
 
       <h2>How GPS Actually Helps</h2>
@@ -87,7 +102,10 @@ export default function BlogGoogleMaps() {
       <p>
         GPS primarily tells Google <em>where</em> devices are located. Not <em>why</em> movement changes.
         Suppose two roads both show slow-moving cars. Road A has heavy traffic. Road B is near a
-        parking lot where people are slowly entering. GPS alone cannot immediately differentiate.
+        parking lot where people are slowly entering.{' '}
+        <Highlighter action="highlight" color="rgba(80, 220, 120, 0.35)">
+          GPS alone cannot immediately differentiate.
+        </Highlighter>
       </p>
       <p>This is where context becomes important. Google combines GPS information with:</p>
       <ul>
@@ -115,8 +133,10 @@ export default function BlogGoogleMaps() {
         matches cause unusual congestion around specific stadium areas.
       </p>
       <p>
-        These patterns are then used to <strong>predict</strong> future traffic conditions — not just
-        report current ones.
+        These patterns are then used to{' '}
+        <Highlighter action="highlight" color="rgba(100, 200, 255, 0.35)">
+          <strong>predict</strong> future traffic conditions — not just report current ones.
+        </Highlighter>
       </p>
 
       <div className="quote-block">
@@ -129,16 +149,19 @@ export default function BlogGoogleMaps() {
       <p>
         Google reportedly uses a combination of graph neural networks and historical pattern matching
         to achieve these predictions. The model treats the entire road network as a connected graph,
-        where each road segment is a node and intersections are edges. Traffic flow becomes a signal
-        propagating through this graph, and the model learns how congestion in one area ripples
-        through neighboring roads over time.
+        where each road segment is a node and intersections are edges.{' '}
+        <Highlighter action="underline" color="#00C896">
+          Traffic flow becomes a signal propagating through this graph, and the model learns how congestion in one area ripples through neighboring roads over time.
+        </Highlighter>
       </p>
 
       <h2>The ETA Problem: Harder Than It Looks</h2>
       <div className="section-label"></div>
       <p>
-        Estimated Time of Arrival sounds like a simple calculation: distance divided by speed. But
-        in practice, ETAs are one of the hardest prediction problems in transportation technology.
+        Estimated Time of Arrival sounds like a simple calculation: distance divided by speed. But{' '}
+        <Highlighter action="highlight" color="rgba(255, 214, 10, 0.45)">
+          in practice, ETAs are one of the hardest prediction problems in transportation technology.
+        </Highlighter>
       </p>
       <p>
         A truly accurate ETA needs to account for: current traffic on every road segment of the route,
@@ -147,9 +170,11 @@ export default function BlogGoogleMaps() {
       </p>
       <p>
         Google DeepMind published research showing they improved ETA accuracy by combining real-time
-        data with graph neural networks, achieving predictions that are accurate within a few percent
-        for most urban routes. That level of precision requires processing millions of data points
-        per second across the entire road network.
+        data with graph neural networks,{' '}
+        <Highlighter action="underline" color="#FF9800">
+          achieving predictions that are accurate within a few percent for most urban routes.
+        </Highlighter>{' '}
+        That level of precision requires processing millions of data points per second across the entire road network.
       </p>
 
       <h2>When Predictions Fail</h2>
@@ -190,7 +215,9 @@ export default function BlogGoogleMaps() {
         enormous computing systems. Everything scales dynamically depending on usage.
       </p>
       <p>
-        Without cloud infrastructure, systems like Google Maps would collapse almost immediately.
+        <Highlighter action="highlight" color="rgba(255, 120, 60, 0.38)">
+          Without cloud infrastructure, systems like Google Maps would collapse almost immediately.
+        </Highlighter>{' '}
         The algorithm feels intelligent. But infrastructure is what makes that intelligence possible.
       </p>
 
@@ -202,7 +229,10 @@ export default function BlogGoogleMaps() {
       </p>
       <p>
         Google states that location information is anonymized and aggregated before being used for
-        traffic predictions. Which means systems care more about patterns than individual identities.
+        traffic predictions.{' '}
+        <Highlighter action="underline" color="#7C4DFF">
+          Which means systems care more about patterns than individual identities.
+        </Highlighter>
       </p>
       <p>
         Still, large-scale data collection always creates important conversations around privacy and
@@ -214,9 +244,10 @@ export default function BlogGoogleMaps() {
       <div className="section-label"></div>
       <p>
         The interesting thing about Google Maps is not navigation itself. It is what navigation
-        represents. Modern technology increasingly works through pattern recognition. Apps become
-        intelligent not because engineers manually define every possible situation. Systems learn
-        from data. Patterns emerge. Predictions improve.
+        represents.{' '}
+        <Highlighter action="highlight" color="rgba(180, 120, 255, 0.38)">
+          Modern technology increasingly works through pattern recognition. Apps become intelligent not because engineers manually define every possible situation. Systems learn from data. Patterns emerge. Predictions improve.
+        </Highlighter>
       </p>
       <p>
         Something as simple as <strong>"Leave now to reach on time"</strong> is actually powered by:
@@ -244,9 +275,10 @@ export default function BlogGoogleMaps() {
       </div>
       <p>
         maybe trust it. Not because algorithms are magical. Not because technology is perfect. But
-        because behind that tiny notification exists years of engineering, billions of data points,
-        machine learning systems, cloud infrastructure, and millions of tiny movement signals quietly
-        working together.
+        because{' '}
+        <Highlighter action="highlight" color="rgba(100, 200, 255, 0.35)">
+          behind that tiny notification exists years of engineering, billions of data points, machine learning systems, cloud infrastructure, and millions of tiny movement signals quietly working together.
+        </Highlighter>
       </p>
       <p>
         And unlike your friend saying <em>"Bro trust me, I know a shortcut"</em> — Google usually has

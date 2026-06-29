@@ -1,4 +1,5 @@
 import BlogPostLayout from '../components/BlogPostLayout';
+import { Highlighter } from '../components/Highlighter';
 import img1 from '../assets/blog-images/lambda/image1.png';
 import img2 from '../assets/blog-images/lambda/image2.png';
 import img3 from '../assets/blog-images/lambda/image3.png';
@@ -20,8 +21,10 @@ export default function BlogLambda() {
         That is exactly what AWS Lambda does, but for your code.
       </p>
       <p>
-        AWS Lambda is a service from Amazon Web Services (AWS) that lets you run your code without
-        setting up or managing any servers. You just write your code, upload it, and Lambda takes care
+        <Highlighter action="highlight" color="rgba(100, 200, 255, 0.35)">
+          AWS Lambda is a service from Amazon Web Services that lets you run your code without setting up or managing any servers.
+        </Highlighter>{' '}
+        You just write your code, upload it, and Lambda takes care
         of everything else. It runs when it needs to, and you only pay for the time it actually runs.
       </p>
 
@@ -36,7 +39,7 @@ export default function BlogLambda() {
         computer that runs 24/7, waiting for someone to use your app. Here is the issue with that:
       </p>
       <ul>
-        <li>You pay for the server even when nobody is using your app.</li>
+        <li><Highlighter action="underline" color="#FF5252">You pay for the server even when nobody is using your app.</Highlighter></li>
         <li>You have to set it up, maintain it, update it, and fix it when it breaks.</li>
         <li>If your app suddenly gets a lot of users, your server might crash.</li>
       </ul>
@@ -50,14 +53,17 @@ export default function BlogLambda() {
       <img src={img2} alt="How AWS Lambda Works" className="blog-img" />
       <p>
         Think of Lambda like a light switch. When you flip the switch, the light turns on. When you
-        flip it off, the light turns off. You are not paying for electricity when the light is off.
+        flip it off, the light turns off.{' '}
+        <Highlighter action="highlight" color="rgba(80, 220, 120, 0.35)">
+          You are not paying for electricity when the light is off.
+        </Highlighter>
       </p>
       <p><strong>Lambda works the same way:</strong></p>
       <ul>
         <li>Something triggers your code (a button click, a file upload, a timer, etc.)</li>
         <li>Lambda wakes up and runs your code.</li>
         <li>Once the job is done, Lambda goes back to sleep.</li>
-        <li>You are charged only for the time your code was actually running.</li>
+        <li><Highlighter action="underline" color="#FF9800">You are charged only for the time your code was actually running.</Highlighter></li>
       </ul>
 
       <div className="callout-box">
@@ -83,8 +89,10 @@ export default function BlogLambda() {
         <li>Lambda goes back to sleep, and you are charged only for those few milliseconds.</li>
       </ol>
       <p>
-        You did not set up a single server. You did not worry about what happens if 10,000 users
-        upload photos at the same time. Lambda scales automatically to handle all of them.
+        You did not set up a single server.{' '}
+        <Highlighter action="highlight" color="rgba(255, 214, 10, 0.45)">
+          You did not worry about what happens if 10,000 users upload photos at the same time. Lambda scales automatically to handle all of them.
+        </Highlighter>
       </p>
 
       <h2>What Can Trigger a Lambda Function?</h2>
@@ -118,12 +126,15 @@ export default function BlogLambda() {
         This is where Lambda really shines. AWS gives you a very generous free tier:
       </p>
       <ul>
-        <li><strong>1 million</strong> free function calls every single month.</li>
+        <li><Highlighter action="highlight" color="rgba(100, 200, 255, 0.35)"><strong>1 million</strong> free function calls every single month.</Highlighter></li>
         <li><strong>400,000 GB-seconds</strong> of compute time for free every month.</li>
       </ul>
       <p>
-        For most small apps and side projects, you will likely never pay a single rupee (or dollar)
-        for Lambda. And even after the free tier, the pricing is extremely low — you pay only for the
+        For most small apps and side projects,{' '}
+        <Highlighter action="underline" color="#00C896">
+          you will likely never pay a single rupee (or dollar) for Lambda.
+        </Highlighter>{' '}
+        And even after the free tier, the pricing is extremely low — you pay only for the
         milliseconds your code runs.
       </p>
 
@@ -132,7 +143,7 @@ export default function BlogLambda() {
       <img src={img5} alt="Benefits of AWS Lambda" className="blog-img" />
       <ul>
         <li><strong>No server management:</strong> AWS handles everything behind the scenes. You just focus on your code.</li>
-        <li><strong>Automatic scaling:</strong> Whether you have 1 user or 1 million users, Lambda scales instantly.</li>
+        <li><strong>Automatic scaling:</strong> <Highlighter action="highlight" color="rgba(255, 214, 10, 0.45)">Whether you have 1 user or 1 million users, Lambda scales instantly.</Highlighter></li>
         <li><strong>Pay only for what you use:</strong> No idle costs. You only pay when your function actually runs.</li>
         <li><strong>Fast to get started:</strong> You can have a Lambda function running in minutes.</li>
         <li><strong>Works well with other AWS services:</strong> Lambda connects easily with S3, DynamoDB, API Gateway, and many more.</li>
@@ -143,7 +154,7 @@ export default function BlogLambda() {
       <img src={img6} alt="Lambda Limitations" className="blog-img" />
       <p>Lambda is great, but it is not always the right tool. Avoid it when:</p>
       <ul>
-        <li>Your task takes more than <strong>15 minutes</strong> to complete. Lambda has a maximum timeout of 15 minutes.</li>
+        <li><Highlighter action="underline" color="#FF5252">Your task takes more than <strong>15 minutes</strong> to complete. Lambda has a maximum timeout of 15 minutes.</Highlighter></li>
         <li>You need to run a constantly active app like a chat server.</li>
         <li>Your code needs a lot of memory or heavy computation for a long time.</li>
       </ul>
@@ -156,8 +167,10 @@ export default function BlogLambda() {
       <div className="section-label"></div>
       <img src={img7} alt="AWS Lambda Conclusion" className="blog-img" />
       <p>
-        AWS Lambda changed the way developers build and deploy software. Instead of worrying about
-        servers, infrastructure, and scaling, you can focus entirely on writing code that solves problems.
+        <Highlighter action="highlight" color="rgba(180, 120, 255, 0.38)">
+          AWS Lambda changed the way developers build and deploy software.
+        </Highlighter>{' '}
+        Instead of worrying about servers, infrastructure, and scaling, you can focus entirely on writing code that solves problems.
       </p>
       <p>
         If you are just getting started with cloud computing, Lambda is one of the best places to
@@ -166,8 +179,10 @@ export default function BlogLambda() {
       </p>
       <p>
         Give it a try. Sign in to your AWS account, head to the Lambda console, and write your first
-        function. You will be amazed at how quickly you can build something useful without ever
-        touching a server.
+        function.{' '}
+        <Highlighter action="underline" color="#FF9800">
+          You will be amazed at how quickly you can build something useful without ever touching a server.
+        </Highlighter>
       </p>
     </BlogPostLayout>
   );
