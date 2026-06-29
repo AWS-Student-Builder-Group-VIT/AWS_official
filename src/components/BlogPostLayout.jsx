@@ -17,6 +17,38 @@ export default function BlogPostLayout({ slug, children }) {
   const blog = BLOG_DATA.find((b) => b.slug === slug);
   const catColor = CAT_COLORS[blog?.categoryColor] || CAT_COLORS.orange;
 
+  /* ─── share / copy ─── */
+  const [copied, setCopied] = useState(false);
+
+  function handleShare() {
+    const url = window.location.href;
+    const text = [
+      `📌 ${blog.title}`,
+      `${blog.subtitle}`,
+      ``,
+      blog.description,
+      ``,
+      `🔗 Read here: ${url}`,
+    ].join('\n');
+
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    }).catch(() => {
+      // Fallback for browsers that block clipboard
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    });
+  }
+
   /* ─── reading progress ─── */
   const articleRef = useRef(null);
   const [progress, setProgress] = useState(0);
@@ -73,13 +105,54 @@ export default function BlogPostLayout({ slug, children }) {
             AWS × VIT
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="font-label-sm text-[10px] text-on-surface-variant border border-white/10 px-3 py-1.5 rounded cursor-pointer hover:bg-white/5 transition-colors flex items-center gap-1.5">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-            </svg>
-            Share
+        <div className="flex items-center gap-2 relative">
+          {/* Copied toast */}
+          <span
+            style={{
+              position: 'absolute',
+              right: '100%',
+              marginRight: 10,
+              whiteSpace: 'nowrap',
+              background: 'rgba(255,153,0,0.15)',
+              border: '1px solid rgba(255,153,0,0.35)',
+              color: '#FF9900',
+              fontSize: 10,
+              fontFamily: 'monospace',
+              letterSpacing: '0.08em',
+              padding: '3px 10px',
+              borderRadius: 4,
+              pointerEvents: 'none',
+              opacity: copied ? 1 : 0,
+              transform: copied ? 'translateY(0)' : 'translateY(4px)',
+              transition: 'opacity 0.2s ease, transform 0.2s ease',
+            }}
+          >
+            🔗 Link Copied!
+          </span>
+
+          <button
+            id="blog-share-btn"
+            onClick={handleShare}
+            className="font-label-sm text-[10px] border px-3 py-1.5 rounded cursor-pointer flex items-center gap-1.5 transition-all duration-200"
+            style={{
+              color: copied ? '#FF9900' : 'var(--color-on-surface-variant)',
+              borderColor: copied ? 'rgba(255,153,0,0.45)' : 'rgba(255,255,255,0.10)',
+              background: copied ? 'rgba(255,153,0,0.08)' : 'transparent',
+            }}
+          >
+            {copied ? (
+              /* Checkmark icon */
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              /* Share icon */
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+            )}
+            {copied ? 'Link Copied' : 'Share'}
           </button>
         </div>
       </nav>
