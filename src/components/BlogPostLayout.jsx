@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import BLOG_DATA from '../data/blogData';
+import { AnimatedCircularProgressBar } from './AnimatedCircularProgressBar';
 
 /* ───────── helper: category color map ───────── */
 const CAT_COLORS = {
@@ -143,7 +144,7 @@ export default function BlogPostLayout({ slug, children }) {
       </motion.header>
 
       {/* ═══ LAYOUT: article + sidebar ═══ */}
-      <div className="relative z-10 max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-0">
+      <div className="relative z-10 max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-0 items-start">
         {/* Article */}
         <motion.article
           ref={articleRef}
@@ -167,24 +168,26 @@ export default function BlogPostLayout({ slug, children }) {
           </div>
         </motion.article>
 
-        {/* Sidebar */}
-        <aside className="hidden lg:flex flex-col gap-5 p-5 sticky top-16 self-start">
-          {/* Reading Progress */}
-          <div className="border border-white/7 rounded-lg p-4" style={{ background: '#111827' }}>
-            <div className="font-label-sm text-[9px] text-primary-container tracking-widest uppercase mb-3">
-              Reading progress
+        {/* Sidebar — sticks right below the nav */}
+        <aside
+          className="hidden lg:flex flex-col gap-5 p-5"
+          style={{ position: 'sticky', top: '53px', alignSelf: 'start', maxHeight: 'calc(100vh - 53px)', overflowY: 'auto' }}
+        >
+          {/* Reading Progress — Circular */}
+          <div className="border border-white/7 rounded-lg p-4 flex flex-col items-center gap-3" style={{ background: '#111827' }}>
+            <div className="font-label-sm text-[9px] text-primary-container tracking-widest uppercase">
+              Reading Progress
             </div>
-            <div className="bg-white/6 rounded-full h-1 overflow-hidden">
-              <div
-                className="h-full bg-primary-container rounded-full transition-all duration-200"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <div className="flex justify-between font-label-sm text-[9px] text-on-surface-variant mt-2">
-              <span>{progress}%</span>
-              <span>
+            <AnimatedCircularProgressBar
+              value={progress}
+              max={100}
+              gaugePrimaryColor="#FF9900"
+              gaugeSecondaryColor="rgba(255,153,0,0.10)"
+            />
+            <div className="text-center">
+              <div className="font-label-sm text-[9px] text-on-surface-variant">
                 ~{Math.max(1, Math.round(parseInt(blog.readTime) * (1 - progress / 100)))} min left
-              </span>
+              </div>
             </div>
           </div>
 
