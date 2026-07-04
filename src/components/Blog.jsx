@@ -1,187 +1,199 @@
-import { useRef } from 'react';
-import { useInView, motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import BLOG_DATA from '../data/blogData';
+import awsIcon from '../assets/aws_icon.jpeg';
 
-/* ─── color map ─── */
-const CAT_COLORS = {
-  purple: { bg: 'rgba(168,85,247,0.08)', text: '#c084fc' },
-  blue:   { bg: 'rgba(100,180,255,0.08)', text: '#64b4ff' },
-  green:  { bg: 'rgba(52,211,153,0.08)',  text: '#34d399' },
-  orange: { bg: 'rgba(255,153,0,0.08)',   text: '#ff9900' },
-};
+const ArrowLeft = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="19" y1="12" x2="5" y2="12"></line>
+    <polyline points="12 19 5 12 12 5"></polyline>
+  </svg>
+);
 
-function ArrowIcon({ className = '' }) {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <line x1="5" y1="12" x2="19" y2="12" />
-      <polyline points="12 5 19 12 12 19" />
-    </svg>
-  );
-}
+const ArrowRight = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="5" y1="12" x2="19" y2="12"></line>
+    <polyline points="12 5 19 12 12 19"></polyline>
+  </svg>
+);
+
+const CursorIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 4l7.07 17 2.51-7.39L21 11.07z" />
+  </svg>
+);
 
 export default function Blog() {
-  const sectionRef = useRef(null);
-  const isInView = useInView(sectionRef, { once: true, margin: '-80px' });
+  const navigate = useNavigate();
+  const [activeIndex, setActiveIndex] = useState(2);
+  
+  // Duplicate the array to ensure smooth carousel wrapping since there are only 4 posts
+  const carouselItems = [...BLOG_DATA, ...BLOG_DATA].map((item, index) => ({
+    ...item,
+    uniqueId: `${item.slug}-${index}`
+  }));
 
-  /* split into featured + list */
-  const featuredPost = BLOG_DATA.find((b) => b.featured) || BLOG_DATA[0];
-  const listPosts = BLOG_DATA.filter((b) => b.slug !== featuredPost.slug);
+  const handleNext = () => {
+    setActiveIndex((prev) => (prev + 1) % carouselItems.length);
+  };
+
+  const handlePrev = () => {
+    setActiveIndex((prev) => (prev - 1 + carouselItems.length) % carouselItems.length);
+  };
 
   return (
-    <section
-      id="blog"
-      ref={sectionRef}
-      className="relative py-24 bg-background border-b border-white/10 overflow-hidden"
-    >
-      {/* Subtle grid background overlay */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(255,153,0,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,153,0,0.03) 1px, transparent 1px)',
-          backgroundSize: '36px 36px',
-        }}
-      />
+    <section id="blog" className="relative w-full py-24 bg-background border-b border-white/10 overflow-hidden font-sans">
+      <div className="relative w-full mt-12 mb-12">
+        
+        {/* Top Badge */}
+        <div className="absolute left-1/2 -translate-x-1/2 -top-[20px] border-2 border-primary-container px-6 py-2 shadow-[4px_4px_0px_0px_var(--color-primary-container)] z-20 flex items-center justify-center gap-3 whitespace-nowrap bg-background">
+          <img src={awsIcon} alt="AWS Club Icon" className="w-5 h-5 sm:w-6 sm:h-6 object-contain" />
+          <span className="text-primary-container font-bold text-[15px] sm:text-lg uppercase tracking-widest">Blogs</span>
+        </div>
 
-      <div className="relative z-10 w-full px-container-padding max-w-7xl mx-auto">
-        {/* ── Section Header ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6 }}
-          className="flex items-center justify-between mb-12"
+        {/* Full-width Container */}
+        <div 
+          className="relative w-full pt-24 pb-16 px-4 flex flex-col items-center"
+          style={{
+            minHeight: '600px'
+          }}
         >
-          <div className="flex items-center gap-4">
-            <span
-              className="font-label-sm text-[10px] text-primary-container tracking-widest uppercase px-3 py-1 rounded-sm border border-primary-container/20"
-              style={{ background: 'rgba(255,153,0,0.08)' }}
-            >
-              $ ls /blogs
-            </span>
-            <h2 className="font-headline-lg text-[40px] text-white uppercase tracking-widest">
-              Blogs
-            </h2>
-          </div>
-        </motion.div>
+          {/* Subtle Grid Paper Pattern */}
+          <div className="absolute inset-0 pointer-events-none bg-grid-pattern opacity-50" />
 
-        {/* ── Blog Grid ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6, delay: 0.15 }}
-          className="grid grid-cols-1 md:grid-cols-2 gap-5"
-        >
-          {/* Featured Card */}
-          <Link
-            to={`/blog/${featuredPost.slug}`}
-            className="relative rounded-lg overflow-hidden border border-primary-container/15 p-6 flex flex-col justify-between min-h-[320px] group no-underline"
-            style={{ background: '#111827' }}
-          >
-            {/* Decorative circle */}
-            <div className="absolute -bottom-6 -right-6 w-20 h-20 rounded-full border border-primary-container/10 group-hover:border-primary-container/25 transition-colors duration-500" />
+          {/* Carousel Wrapper */}
+          <div className="relative w-full max-w-[1000px] h-[450px] flex items-center justify-center perspective-[1000px]">
+            {carouselItems.map((card, index) => {
+              // Distance from active index
+              let distance = index - activeIndex;
+              // Normalize distance to handle wrapping
+              if (distance > carouselItems.length / 2) distance -= carouselItems.length;
+              if (distance < -carouselItems.length / 2) distance += carouselItems.length;
 
-            <div>
-              <span
-                className="inline-block font-label-sm text-[9px] text-primary-container tracking-widest uppercase px-2 py-1 rounded-sm border border-primary-container/18 mb-4"
-                style={{ background: 'rgba(255,153,0,0.08)' }}
-              >
-                ⚡ Featured
-              </span>
-              <h3 className="font-headline-lg text-[22px] text-white leading-tight tracking-wide mb-3">
-                {featuredPost.title}
-              </h3>
-              <p className="font-body-md text-[12px] text-on-surface-variant leading-relaxed">
-                {featuredPost.description}
-              </p>
-            </div>
+              const isActive = distance === 0;
+              const isVisible = Math.abs(distance) <= 2;
+              
+              if (!isVisible && Math.abs(distance) !== 3) return null;
 
-            <div className="flex items-center justify-between mt-6">
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center font-label-sm text-[9px] font-bold text-primary-container border border-primary-container/25"
-                  style={{ background: 'rgba(255,153,0,0.1)' }}
-                >
-                  {featuredPost.initials}
-                </div>
-                <div>
-                  <div className="font-body-md text-[11px] text-white font-medium">
-                    {featuredPost.author}
-                  </div>
-                  <div className="font-label-sm text-[10px] text-on-surface-variant">
-                    {featuredPost.readTime} · {featuredPost.category}
-                  </div>
-                </div>
-              </div>
-              <span className="bg-primary-container text-background font-label-sm text-[10px] font-bold tracking-wider uppercase px-4 py-2 rounded-sm group-hover:opacity-85 transition-opacity">
-                Read →
-              </span>
-            </div>
-          </Link>
+              // Alternating rotation for inactive cards
+              const rotationOffset = index % 2 === 0 ? 4 : -4;
 
-          {/* Blog List */}
-          <div className="flex flex-col justify-between h-full">
-            {listPosts.map((post, i) => {
-              const color = CAT_COLORS[post.categoryColor] || CAT_COLORS.orange;
               return (
                 <motion.div
-                  key={post.slug}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={isInView ? { opacity: 1, x: 0 } : {}}
-                  transition={{ duration: 0.4, delay: 0.2 + i * 0.08 }}
+                  key={card.uniqueId}
+                  initial={false}
+                  animate={{
+                    x: distance * 280, // Horizontal spread
+                    scale: isActive ? 1.05 : 0.95,
+                    rotate: isActive ? 0 : rotationOffset,
+                    zIndex: 50 - Math.abs(distance),
+                    opacity: Math.abs(distance) >= 3 ? 0 : 1,
+                  }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 300,
+                    damping: 30,
+                    mass: 1,
+                  }}
+                  className="absolute w-[300px] sm:w-[320px] h-[380px] sm:h-[400px] cursor-pointer"
+                  onClick={() => {
+                    if (isActive) {
+                      navigate(`/blog/${card.slug}`);
+                    } else {
+                      setActiveIndex(index);
+                    }
+                  }}
                 >
-                  <Link
-                    to={`/blog/${post.slug}`}
-                    className="group flex items-center justify-between gap-3 py-4 border-b border-white/15 last:border-b-0 cursor-pointer hover:pl-1 transition-all duration-200 no-underline"
+                  {/* Shadow Element (to emulate brutalist shadow with clip path) */}
+                  <div 
+                    className="absolute inset-0"
+                    style={{
+                      top: isActive ? '8px' : '6px',
+                      left: isActive ? '8px' : '6px',
+                      backgroundColor: isActive ? '#FF9900' : 'rgba(255,255,255,0.2)',
+                      clipPath: 'polygon(0 0, calc(100% - 40px) 0, 100% 40px, 100% 100%, 0 100%)',
+                      transition: 'top 0.4s ease, left 0.4s ease, background-color 0.4s ease'
+                    }}
+                  />
+
+                  {/* Card Neo-Brutalist Shape (Outer wrapper acts as border) */}
+                  <div 
+                    className="absolute inset-0 flex flex-col p-[2px]"
+                    style={{
+                      clipPath: 'polygon(0 0, calc(100% - 40px) 0, 100% 40px, 100% 100%, 0 100%)',
+                      backgroundColor: isActive ? '#FF9900' : 'rgba(255,255,255,0.2)',
+                      transition: 'background-color 0.4s ease'
+                    }}
                   >
-                    <div>
-                      <span
-                        className="blog-category-tag"
-                        style={{ background: color.bg, color: color.text }}
+                    {/* Inner wrapper is the actual card background */}
+                    <div
+                      className="w-full h-full flex flex-col relative"
+                      style={{
+                        clipPath: 'polygon(0 0, calc(100% - 39px) 0, 100% 39px, 100% 100%, 0 100%)',
+                        backgroundColor: isActive ? '#FF9900' : '#0A0C10',
+                        color: isActive ? '#000000' : '#FFFFFF',
+                        transition: 'background-color 0.4s ease, color 0.4s ease'
+                      }}
+                    >
+                    {/* Inner Content (Top Section) */}
+                    <div className="flex-1 p-6 flex flex-col pt-8">
+                      <span 
+                        className="text-[10px] font-bold tracking-widest uppercase mb-2 line-clamp-1"
+                        style={{ color: isActive ? 'rgba(0,0,0,0.8)' : '#FF9900', transition: 'color 0.4s ease' }}
                       >
-                        {post.category}
+                        {card.author} • {card.category}
                       </span>
-                      <div className="font-body-md text-[13px] text-white font-semibold leading-tight">
-                        {post.title}
-                      </div>
-                      <div className="font-label-sm text-[10.5px] text-on-surface-variant mt-0.5">
-                        {post.author}
+                      <h3 className="text-[22px] font-black mb-2 tracking-tight leading-tight line-clamp-2">
+                        {card.title}
+                      </h3>
+                      <h4 
+                        className="text-[12px] font-bold uppercase tracking-wider mb-3 line-clamp-1"
+                        style={{ color: isActive ? 'rgba(0,0,0,0.9)' : '#FFFFFF' }}
+                      >
+                        {card.subtitle}
+                      </h4>
+                      <p 
+                        className="text-[13px] leading-relaxed font-medium line-clamp-3" 
+                        style={{ color: isActive ? 'rgba(0,0,0,0.75)' : '#A1A1AA', transition: 'color 0.4s ease' }}
+                      >
+                        {card.description}
+                      </p>
+                    </div>
+
+                    {/* Card Footer (Action Area) - Always white with black text */}
+                    <div className="h-[60px] border-t-2 bg-white flex items-center justify-between px-6 flex-shrink-0" style={{ borderColor: isActive ? '#000000' : 'rgba(255,255,255,0.2)' }}>
+                      <span className="text-black font-bold text-[13px] tracking-widest uppercase">
+                        {isActive ? 'READ FULL POST' : 'VIEW BLOG'}
+                      </span>
+                      <div className="text-black">
+                        <CursorIcon />
                       </div>
                     </div>
-                    <div className="w-7 h-7 rounded-full border border-primary-container/22 flex items-center justify-center flex-shrink-0 group-hover:bg-primary-container group-hover:border-primary-container transition-all duration-200">
-                      <ArrowIcon className="text-primary-container group-hover:text-background w-3 h-3 transition-colors duration-200" />
-                    </div>
-                  </Link>
+                  </div>
+                  </div>
                 </motion.div>
               );
             })}
           </div>
-        </motion.div>
-      </div>
 
-      {/* CSS for category color tags */}
-      <style>{`
-        .blog-category-tag {
-          font-family: var(--font-label-sm);
-          font-size: 8.5px;
-          letter-spacing: 1px;
-          text-transform: uppercase;
-          padding: 2px 7px;
-          border-radius: 2px;
-          display: inline-block;
-          margin-bottom: 4px;
-        }
-      `}</style>
+          {/* Navigation Controls */}
+          <div className="mt-8 flex gap-4 z-20">
+            <button
+              onClick={(e) => { e.stopPropagation(); handlePrev(); }}
+              className="w-12 h-12 border-2 border-primary-container bg-background flex items-center justify-center text-primary-container hover:scale-95 active:scale-90 transition-transform cursor-pointer shadow-[2px_2px_0px_0px_var(--color-primary-container)]"
+            >
+              <ArrowLeft />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleNext(); }}
+              className="w-12 h-12 border-2 border-primary-container bg-background flex items-center justify-center text-primary-container hover:scale-95 active:scale-90 transition-transform cursor-pointer shadow-[2px_2px_0px_0px_var(--color-primary-container)]"
+            >
+              <ArrowRight />
+            </button>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
