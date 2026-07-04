@@ -1,16 +1,12 @@
-# React + Vite
+# AWS Student Builder Group @ VIT Vellore
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Welcome to the official web application for the **AWS Student Builder Group at VIT Vellore**. This platform serves as a central hub for our community of cloud architects and student builders mastering AWS infrastructure.
 
-Currently, two official plugins are available:
+## Community & Socials
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- [GitHub](https://github.com/AWS-Student-Builder-Group-VIT)
+- [LinkedIn](https://www.linkedin.com/company/aws-student-builder-group-vit)
+- [Instagram](https://www.instagram.com/aws.sbg.vit)
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+---
+*Build, Learn, Deploy.*
