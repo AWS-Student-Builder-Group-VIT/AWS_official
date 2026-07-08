@@ -84,7 +84,6 @@ export default function App() {
 
   const menuItems = [
     { label: 'Home', ariaLabel: 'Go to home section', link: '#home' },
-    { label: 'About', ariaLabel: 'Learn about us', link: '#about' },
     { label: 'Events', ariaLabel: 'View our events', link: '#features' },
     { label: 'Why Us', ariaLabel: 'Why join us', link: '#why-join-us' },
     { label: 'Builders', ariaLabel: 'Meet the builders', link: '#builders' },
