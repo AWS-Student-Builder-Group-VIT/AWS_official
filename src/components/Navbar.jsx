@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import awsIcon from '../assets/aws_icon.jpeg';
+import vitLogo from '../assets/id3Zck2kbe_logos.svg';
 import { getUser, logout } from '../utils/auth';
 
 const navLinks = [
@@ -16,8 +17,6 @@ export default function Navbar() {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('home');
-  const [displayedText, setDisplayedText] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0, opacity: 0 });
   const [user, setUser] = useState(getUser());
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -30,7 +29,6 @@ export default function Navbar() {
 
   const linkRefs = useRef([]);
   const navRef = useRef(null);
-  const fullText = 'AWS STUDENT BUILDER GROUP @ VIT';
 
   // Update indicator position whenever activeSection changes
   useEffect(() => {
@@ -46,26 +44,6 @@ export default function Navbar() {
       opacity: 1,
     });
   }, [activeSection]);
-
-  // Typewriter effect
-  useEffect(() => {
-    let timeout;
-    if (!isDeleting && displayedText === fullText) {
-      timeout = setTimeout(() => setIsDeleting(true), 2000);
-    } else if (isDeleting && displayedText === '') {
-      timeout = setTimeout(() => setIsDeleting(false), 500);
-    } else {
-      const delta = isDeleting ? 50 : 100;
-      timeout = setTimeout(() => {
-        setDisplayedText((prev) =>
-          isDeleting
-            ? fullText.slice(0, prev.length - 1)
-            : fullText.slice(0, prev.length + 1)
-        );
-      }, delta);
-    }
-    return () => clearTimeout(timeout);
-  }, [displayedText, isDeleting]);
 
   // Active section tracker via IntersectionObserver
   useEffect(() => {
@@ -89,11 +67,9 @@ export default function Navbar() {
     <nav className="bg-background/80 backdrop-blur-xl border-b border-white/5 fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-padding py-4 max-w-full">
       {/* Logo */}
       <div className="font-headline-md text-headline-md text-on-surface tracking-tighter uppercase flex items-center gap-2 min-w-0 overflow-hidden mr-2 flex-1">
-        <img src={awsIcon} alt="AWS Club Logo" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
-        <span className="hidden lg:block truncate lg:min-w-[28ch]">
-          {displayedText}
-          <span className="animate-pulse">_</span>
-        </span>
+        <img src={awsIcon} alt="AWS Club Logo" className="object-contain flex-shrink-0" style={{ width: '48px', height: '48px' }} />
+        <span className="text-[#FF9900] text-3xl font-light mx-4 pb-1">&times;</span>
+        <img src={vitLogo} alt="VIT Logo" className="object-contain flex-shrink-0" style={{ filter: 'brightness(0) invert(1)', width: '48px', height: '48px' }} />
       </div>
 
       {/* Desktop Nav Links */}

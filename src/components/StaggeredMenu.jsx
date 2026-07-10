@@ -1,34 +1,8 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import './StaggeredMenu.css';
+import vitLogo from '../assets/id3Zck2kbe_logos.svg';
 
-const TypingText = ({ text, typingSpeed = 60, deletingSpeed = 40, pauseTime = 2000 }) => {
-  const [displayed, setDisplayed] = React.useState('');
-  const [isDeleting, setIsDeleting] = React.useState(false);
-
-  React.useEffect(() => {
-    let timer;
-    if (isDeleting) {
-      timer = setTimeout(() => {
-        setDisplayed(text.substring(0, displayed.length - 1));
-      }, deletingSpeed);
-    } else {
-      timer = setTimeout(() => {
-        setDisplayed(text.substring(0, displayed.length + 1));
-      }, typingSpeed);
-    }
-
-    if (!isDeleting && displayed === text) {
-      timer = setTimeout(() => setIsDeleting(true), pauseTime);
-    } else if (isDeleting && displayed === '') {
-      setIsDeleting(false);
-    }
-
-    return () => clearTimeout(timer);
-  }, [displayed, isDeleting, text, typingSpeed, deletingSpeed, pauseTime]);
-
-  return <>{displayed}<span style={{ animation: 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite' }}>_</span></>;
-};
 
 export const StaggeredMenu = ({
   position = 'right',
@@ -299,9 +273,10 @@ export const StaggeredMenu = ({
       {/* Header row */}
       <header className="staggered-menu-header" aria-label="Navigation header">
         {/* Logo */}
-        <a className="sm-logo" href="/" aria-label="AWS Student Builder Group Home">
-          {logoUrl && <img src={logoUrl} alt="AWS SBG" className="sm-logo-img" draggable={false} />}
-          <span className="sm-logo-text hidden lg:block"><TypingText text="AWS STUDENT BUILDER GROUP @ VIT VELLORE" /></span>
+        <a className="sm-logo" href="/" aria-label="AWS Student Builder Group Home" style={{ display: 'flex', alignItems: 'center' }}>
+          {logoUrl && <img src={logoUrl} alt="AWS SBG" className="sm-logo-img flex-shrink-0" draggable={false} style={{ width: '48px', height: '48px', objectFit: 'contain' }} />}
+          <span className="text-[#FF9900] text-3xl font-light mx-4 pb-1">&times;</span>
+          <img src={vitLogo} alt="VIT Logo" className="object-contain flex-shrink-0" style={{ filter: 'brightness(0) invert(1)', width: '48px', height: '48px' }} />
         </a>
 
         {/* Toggle button */}
