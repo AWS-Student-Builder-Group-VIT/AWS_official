@@ -1,0 +1,517 @@
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&family=Poppins:wght@600&family=Inter:wght@400;500&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --aws:#FF9900;--navy:#0d1117;--blue:#00A8FF;--purple:#7C4DFF;
+  --glass:rgba(255,255,255,0.05);--glass-border:rgba(255,255,255,0.1);
+  --text:#e8eaed;--muted:#8b949e
+}
+body{background:#0d1117;color:var(--text);font-family:'Inter',sans-serif;overflow-x:hidden;line-height:1.6}
+h1,h2{font-family:'Montserrat',sans-serif;font-weight:800}
+h3,h4{font-family:'Poppins',sans-serif;font-weight:600}
+
+.section{padding:80px 24px;max-width:1100px;margin:0 auto}
+.section-label{font-size:12px;letter-spacing:3px;text-transform:uppercase;color:var(--aws);margin-bottom:12px;font-weight:500}
+.section-title{font-size:clamp(28px,4vw,42px);margin-bottom:16px;line-height:1.2}
+.section-sub{font-size:16px;color:var(--muted);max-width:580px}
+.glow-orange{color:var(--aws);text-shadow:0 0 30px rgba(255,153,0,0.4)}
+.glow-blue{color:var(--blue);text-shadow:0 0 30px rgba(0,168,255,0.4)}
+.glow-purple{color:var(--purple)}
+
+nav{position:sticky;top:0;z-index:100;background:rgba(13,17,23,0.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--glass-border);padding:14px 24px;display:flex;justify-content:space-between;align-items:center}
+.nav-logo{font-family:'Montserrat',sans-serif;font-weight:800;font-size:18px;color:var(--aws)}
+.nav-links{display:flex;gap:28px}
+.nav-links a{font-size:13px;color:var(--muted);text-decoration:none;transition:color .2s}
+.nav-links a:hover{color:var(--aws)}
+.btn-nav{background:var(--aws);color:#000;padding:8px 18px;border-radius:6px;font-size:13px;font-weight:600;border:none;cursor:pointer;font-family:'Poppins',sans-serif}
+
+.hero{min-height:90vh;display:flex;align-items:center;position:relative;padding:80px 24px;overflow:hidden;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(124,77,255,0.15) 0%,transparent 60%),radial-gradient(ellipse 60% 40% at 80% 50%,rgba(0,168,255,0.08) 0%,transparent 50%),#0d1117}
+.hero-content{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;width:100%}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,153,0,0.1);border:1px solid rgba(255,153,0,0.3);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;color:var(--aws);margin-bottom:24px}
+.hero-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--aws);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.hero-title{font-size:clamp(36px,6vw,64px);line-height:1.1;margin-bottom:16px}
+.hero-sub{font-size:clamp(18px,2.5vw,24px);color:var(--aws);font-family:'Poppins',sans-serif;font-weight:600;margin-bottom:20px}
+.hero-desc{font-size:16px;color:var(--muted);margin-bottom:36px;max-width:480px}
+.btn-primary{background:linear-gradient(135deg,var(--aws),#ff6b00);color:#000;padding:14px 28px;border-radius:8px;font-weight:700;border:none;cursor:pointer;font-size:15px;font-family:'Poppins',sans-serif;transition:transform .2s,box-shadow .2s}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(255,153,0,0.4)}
+.btn-secondary{background:transparent;color:var(--text);padding:14px 28px;border-radius:8px;font-weight:600;border:1px solid var(--glass-border);cursor:pointer;font-size:15px;font-family:'Poppins',sans-serif;transition:all .2s}
+.btn-secondary:hover{border-color:var(--aws);color:var(--aws)}
+.hero-btns{display:flex;gap:14px;flex-wrap:wrap}
+
+.mystery-box-svg{width:100%;max-width:340px;margin:0 auto;display:block;animation:float 3s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+
+.glass-card{background:var(--glass);border:1px solid var(--glass-border);border-radius:16px;padding:24px;backdrop-filter:blur(8px)}
+.card-grid{display:grid;gap:20px}
+.card-grid.cols-2{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card-grid.cols-3{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.card-grid.cols-4{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+
+.step-flow{display:flex;flex-wrap:wrap;gap:0;align-items:center;justify-content:center;margin-top:48px}
+.step-item{display:flex;flex-direction:column;align-items:center;gap:10px;width:120px}
+.step-num{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;font-family:'Poppins',sans-serif}
+.step-n1{background:rgba(255,153,0,0.2);border:1.5px solid var(--aws);color:var(--aws)}
+.step-n2{background:rgba(0,168,255,0.2);border:1.5px solid var(--blue);color:var(--blue)}
+.step-n3{background:rgba(124,77,255,0.2);border:1.5px solid var(--purple);color:var(--purple)}
+.step-label{font-size:12px;text-align:center;color:var(--muted);font-weight:500}
+.step-arrow{color:rgba(255,255,255,0.2);font-size:20px;width:30px;text-align:center;padding-top:14px}
+
+.rule-card{position:relative;background:linear-gradient(135deg,rgba(255,153,0,0.05),rgba(124,77,255,0.05));border:1px solid var(--glass-border);border-radius:14px;padding:28px 24px;overflow:hidden}
+.rule-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--aws),var(--purple))}
+.rule-icon{font-size:28px;margin-bottom:14px}
+.rule-badge{display:inline-block;background:rgba(255,80,80,0.15);border:1px solid rgba(255,80,80,0.3);color:#ff5050;padding:3px 10px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:1px;margin-bottom:12px}
+
+.points-dashboard{background:rgba(255,153,0,0.04);border:1px solid rgba(255,153,0,0.15);border-radius:16px;padding:32px;margin-top:40px}
+.pts-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px}
+.pts-total{font-size:48px;font-weight:800;color:var(--aws);font-family:'Montserrat',sans-serif;line-height:1}
+.pts-label{font-size:12px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+.pts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.pts-item{background:rgba(255,255,255,0.03);border:1px solid var(--glass-border);border-radius:10px;padding:16px;display:flex;align-items:center;gap:12px}
+.pts-item-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.pts-item-val{font-size:18px;font-weight:700;color:var(--aws);font-family:'Montserrat',sans-serif}
+.pts-item-name{font-size:11px;color:var(--muted)}
+.progress-bar{height:4px;background:rgba(255,255,255,0.08);border-radius:2px;margin-top:6px;overflow:hidden}
+.progress-fill{height:100%;border-radius:2px;transition:width 1s ease}
+
+.shop-card{background:linear-gradient(135deg,rgba(124,77,255,0.1),rgba(0,168,255,0.05));border:1px solid rgba(124,77,255,0.25);border-radius:14px;padding:24px;position:relative;transition:transform .2s,border-color .2s}
+.shop-card:hover{transform:translateY(-4px);border-color:rgba(124,77,255,0.5)}
+.shop-card .price{background:rgba(255,153,0,0.15);border:1px solid rgba(255,153,0,0.3);color:var(--aws);padding:4px 12px;border-radius:20px;font-size:13px;font-weight:700;display:inline-block;margin-bottom:14px}
+.shop-card h4{font-size:15px;margin-bottom:8px;color:var(--text)}
+.shop-card p{font-size:13px;color:var(--muted)}
+
+.mystery-reward{background:linear-gradient(135deg,rgba(255,153,0,0.1),rgba(255,200,0,0.05));border:1px solid rgba(255,153,0,0.3);border-radius:14px;padding:20px;position:relative}
+.mystery-twist{background:linear-gradient(135deg,rgba(255,50,50,0.08),rgba(200,0,200,0.05));border:1px solid rgba(255,50,50,0.2);border-radius:14px;padding:20px}
+.card-type-badge{font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:8px}
+.reward-badge{color:#ffcc00}
+.twist-badge{color:#ff4466}
+
+.chaos-card{background:linear-gradient(135deg,rgba(255,50,50,0.06),rgba(200,0,0,0.03));border:1px solid rgba(255,50,50,0.2);border-radius:12px;padding:20px;position:relative;overflow:hidden}
+.chaos-card::after{content:'⚠';position:absolute;top:-10px;right:-10px;font-size:60px;opacity:0.04;pointer-events:none}
+.chaos-status{display:flex;align-items:center;gap:6px;font-size:10px;color:#ff5050;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px}
+.chaos-dot{width:6px;height:6px;border-radius:50%;background:#ff5050;animation:pulse 1.5s infinite}
+.chaos-title{font-size:15px;font-weight:600;font-family:'Poppins',sans-serif;margin-bottom:6px}
+.chaos-desc{font-size:12px;color:var(--muted)}
+
+.wheel-container{display:flex;flex-direction:column;align-items:center;margin-top:40px;gap:32px}
+.wheel-wrap{position:relative;width:280px;height:280px}
+.wheel-svg{width:280px;height:280px;animation:none;transition:transform 3s cubic-bezier(0.17,0.67,0.12,0.99)}
+.wheel-spin-btn{background:linear-gradient(135deg,var(--aws),#ff6b00);color:#000;border:none;padding:14px 36px;border-radius:8px;font-weight:700;font-size:15px;cursor:pointer;font-family:'Poppins',sans-serif;transition:transform .15s}
+.wheel-spin-btn:active{transform:scale(0.97)}
+.wheel-token-info{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid var(--glass-border);border-radius:8px;padding:10px 18px;font-size:13px;color:var(--muted)}
+.wheel-pointer{position:absolute;top:-12px;left:50%;transform:translateX(-50%);font-size:24px;z-index:2;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))}
+
+.legendary-card{background:linear-gradient(135deg,#1a1400,#2a1a00);border:1px solid rgba(255,153,0,0.5);border-radius:16px;padding:28px;position:relative;overflow:hidden}
+.legendary-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent,rgba(255,153,0,0.05),transparent);pointer-events:none}
+.legendary-badge{background:linear-gradient(135deg,#ff9900,#ff6b00);color:#000;font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:700;padding:4px 10px;border-radius:4px;display:inline-block;margin-bottom:16px}
+.mythic-card{background:linear-gradient(135deg,#0f0020,#1a0035);border:1px solid rgba(124,77,255,0.5);border-radius:16px;padding:28px;position:relative;overflow:hidden}
+.mythic-badge{background:linear-gradient(135deg,#7C4DFF,#b24dff);color:#fff;font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:700;padding:4px 10px;border-radius:4px;display:inline-block;margin-bottom:16px}
+
+.penalty-card{background:linear-gradient(135deg,rgba(200,0,0,0.08),rgba(100,0,0,0.04));border:1px solid rgba(200,0,0,0.2);border-radius:12px;padding:20px;text-align:center}
+.penalty-icon{font-size:32px;margin-bottom:10px}
+.penalty-val{font-size:20px;font-weight:700;color:#ff4444;font-family:'Montserrat',sans-serif;margin-bottom:4px}
+.penalty-name{font-size:13px;color:var(--muted)}
+
+.arena{background:radial-gradient(ellipse at center,rgba(255,50,50,0.1) 0%,transparent 70%),rgba(255,255,255,0.02);border:1px solid rgba(255,50,50,0.15);border-radius:20px;padding:48px 32px;text-align:center;margin-top:40px}
+.arena-vs{font-size:48px;font-weight:900;font-family:'Montserrat',sans-serif;color:#ff4444;text-shadow:0 0 40px rgba(255,50,50,0.5)}
+.arena-desc{font-size:15px;color:var(--muted);max-width:480px;margin:0 auto;margin-top:16px}
+
+.finale{background:radial-gradient(ellipse at 50% 0%,rgba(124,77,255,0.2),transparent 60%),radial-gradient(ellipse at 50% 100%,rgba(255,153,0,0.15),transparent 60%),#0d1117;text-align:center;padding:100px 24px}
+.finale-pills{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin:32px 0}
+.finale-pill{background:var(--glass);border:1px solid var(--glass-border);border-radius:24px;padding:8px 18px;font-size:13px;font-weight:500;color:var(--muted)}
+.finale-tagline{font-size:clamp(16px,2.5vw,22px);color:var(--muted);max-width:600px;margin:0 auto 40px;font-style:italic}
+
+.divider{border:none;border-top:1px solid var(--glass-border);margin:0}
+.center{text-align:center}
+.mt-8{margin-top:8px}.mt-12{margin-top:12px}.mt-16{margin-top:16px}.mt-24{margin-top:24px}.mt-32{margin-top:32px}.mt-40{margin-top:40px}
+
+footer{padding:32px 24px;border-top:1px solid var(--glass-border);display:flex;justify-content:space-between;align-items:center;flex-wrap:gap;max-width:1100px;margin:0 auto;color:var(--muted);font-size:13px;flex-wrap:wrap;gap:12px}
+.footer-logo{font-family:'Montserrat',sans-serif;font-weight:800;font-size:16px;color:var(--aws)}
+</style>
+
+<h2 class="sr-only">Mystery Box Hackathon — AWS Cloud Club event landing page with hero, rules, points system, shop, chaos cards, spin wheel, and finale sections.</h2>
+
+<nav>
+  <span class="nav-logo">☁ AWS Cloud Club</span>
+  <div class="nav-links">
+    <a href="#">How It Works</a>
+    <a href="#">Points</a>
+    <a href="#">Chaos</a>
+    <a href="#">Prizes</a>
+  </div>
+  <button class="btn-nav">Register Now</button>
+</nav>
+
+<section style="background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(124,77,255,0.15),transparent 60%),radial-gradient(ellipse 60% 40% at 80% 50%,rgba(0,168,255,0.08),transparent 50%),#0d1117;padding:90px 24px 80px;overflow:hidden">
+  <div style="max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center">
+    <div>
+      <div class="hero-badge">🔴 LIVE EVENT · AWS CLOUD CLUB</div>
+      <h1 class="hero-title">Mystery Box <span class="glow-orange">Hackathon</span></h1>
+      <p class="hero-sub">Build. Adapt. Survive.</p>
+      <p class="hero-desc">A hackathon where coding skills, strategy, teamwork, and adaptability matter equally. Your topic arrives in a box. Your fate arrives in chaos.</p>
+      <div class="hero-btns">
+        <button class="btn-primary">Register Now →</button>
+        <button class="btn-secondary">Learn More</button>
+      </div>
+      <div style="display:flex;gap:32px;margin-top:40px;flex-wrap:wrap">
+        <div><div style="font-size:28px;font-weight:800;color:var(--aws);font-family:'Montserrat',sans-serif">24h</div><div style="font-size:12px;color:var(--muted)">Duration</div></div>
+        <div><div style="font-size:28px;font-weight:800;color:var(--blue);font-family:'Montserrat',sans-serif">∞</div><div style="font-size:12px;color:var(--muted)">Possibilities</div></div>
+        <div><div style="font-size:28px;font-weight:800;color:var(--purple);font-family:'Montserrat',sans-serif">7</div><div style="font-size:12px;color:var(--muted)">Chaos Events</div></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:center">
+      <svg viewBox="0 0 320 320" width="300" height="300" style="animation:float 3s ease-in-out infinite;overflow:visible">
+        <defs>
+          <radialGradient id="boxGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#FF9900" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="#FF9900" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <ellipse cx="160" cy="240" rx="90" ry="18" fill="url(#boxGlow)"/>
+        <rect x="80" y="130" width="160" height="110" rx="8" fill="#1a1200" stroke="#FF9900" stroke-width="1.5"/>
+        <rect x="76" y="118" width="168" height="30" rx="6" fill="#221800" stroke="#FF9900" stroke-width="1.5"/>
+        <rect x="148" y="118" width="24" height="122" rx="4" fill="#FF9900" opacity="0.6"/>
+        <text x="160" y="188" text-anchor="middle" font-size="48" font-family="Arial">❓</text>
+        <circle cx="80" cy="60" r="6" fill="#00A8FF" opacity="0.8"/>
+        <circle cx="240" cy="80" r="4" fill="#7C4DFF" opacity="0.8"/>
+        <circle cx="260" cy="40" r="5" fill="#FF9900" opacity="0.6"/>
+        <circle cx="60" cy="100" r="3" fill="#00A8FF" opacity="0.5"/>
+        <text x="55" y="72" font-size="11" fill="#00A8FF" opacity="0.7" font-family="monospace">const</text>
+        <text x="230" y="52" font-size="11" fill="#7C4DFF" opacity="0.7" font-family="monospace">await</text>
+        <text x="260" y="100" font-size="11" fill="#FF9900" opacity="0.6" font-family="monospace">S3{}</text>
+        <path d="M70,40 Q50,30 40,50 Q30,70 50,75 Q70,80 80,60 Z" fill="none" stroke="#00A8FF" stroke-width="1" opacity="0.4"/>
+        <path d="M250,130 Q270,120 280,140 Q290,160 270,165 Q250,170 240,150 Z" fill="none" stroke="#FF9900" stroke-width="1" opacity="0.4"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<div class="section">
+  <p class="section-label">The Journey</p>
+  <h2 class="section-title">How It <span class="glow-blue">Works</span></h2>
+  <p class="section-sub">Seven stages between registration and glory. Each one tests something different.</p>
+
+  <div class="step-flow">
+    <div class="step-item"><div class="step-num step-n1">1</div><div class="step-label">Team Registration</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step-item"><div class="step-num step-n2">2</div><div class="step-label">Topic Reveal</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step-item"><div class="step-num step-n3">3</div><div class="step-label">Build From Scratch</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step-item"><div class="step-num step-n1">4</div><div class="step-label">Earn Points</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step-item"><div class="step-num step-n2">5</div><div class="step-label">Unlock Advantages</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step-item"><div class="step-num step-n3">6</div><div class="step-label">Face Chaos Events</div></div>
+    <div class="step-arrow">→</div>
+    <div class="step-item"><div class="step-num step-n1">7</div><div class="step-label">Final Pitch</div></div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<div style="background:linear-gradient(135deg,rgba(255,153,0,0.03),rgba(124,77,255,0.03))">
+<div class="section">
+  <div class="center">
+    <p class="section-label">Core Rules</p>
+    <h2 class="section-title">Not Your <span class="glow-orange">Ordinary</span> Hackathon</h2>
+    <p class="section-sub" style="margin:0 auto 40px">No templates. No pre-built repos. Pure raw innovation under pressure.</p>
+  </div>
+  <div class="card-grid cols-2 mt-24">
+    <div class="rule-card"><div class="rule-badge">⚡ RULE</div><div class="rule-icon">🎯</div><h4 style="font-size:17px;margin-bottom:8px">Topics Assigned On The Spot</h4><p style="font-size:13px;color:var(--muted)">Zero preparation possible. Your problem statement is revealed only at kickoff. Pure skill, no shortcuts.</p></div>
+    <div class="rule-card"><div class="rule-badge">⚡ RULE</div><div class="rule-icon">🔒</div><h4 style="font-size:17px;margin-bottom:8px">No Pre-Built Projects</h4><p style="font-size:13px;color:var(--muted)">Everything is built during the event. Bringing existing code will get your team disqualified.</p></div>
+    <div class="rule-card"><div class="rule-badge">⚡ RULE</div><div class="rule-icon">⚡</div><h4 style="font-size:17px;margin-bottom:8px">Real-Time Innovation</h4><p style="font-size:13px;color:var(--muted)">Ideas born and executed live. Judges observe the build process, not just the outcome.</p></div>
+    <div class="rule-card"><div class="rule-badge">⚡ RULE</div><div class="rule-icon">🏗️</div><h4 style="font-size:17px;margin-bottom:8px">Build Everything During The Event</h4><p style="font-size:13px;color:var(--muted)">Architecture, design, code, deployment — all within the window. Clock is always ticking.</p></div>
+  </div>
+</div>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <p class="section-label">Gamification</p>
+  <h2 class="section-title">Earn Points. <span class="glow-orange">Unlock Power.</span></h2>
+  <p class="section-sub">Rack up points from six sources. Spend them strategically in the shop.</p>
+
+  <div class="points-dashboard">
+    <div class="pts-header">
+      <div><div class="pts-label">Your Score</div><div class="pts-total">0</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:12px;color:var(--muted)">Level</span>
+        <span style="background:rgba(255,153,0,0.2);border:1px solid rgba(255,153,0,0.4);color:var(--aws);padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600">Rookie</span>
+      </div>
+    </div>
+    <div class="pts-grid">
+      <div class="pts-item"><div class="pts-item-icon" style="background:rgba(255,153,0,0.15)">🧠</div><div><div class="pts-item-val">+50</div><div class="pts-item-name">AWS Quiz</div><div class="progress-bar"><div class="progress-fill" style="width:70%;background:var(--aws)"></div></div></div></div>
+      <div class="pts-item"><div class="pts-item-icon" style="background:rgba(0,168,255,0.15)">🧩</div><div><div class="pts-item-val">+40</div><div class="pts-item-name">Cloud Puzzle</div><div class="progress-bar"><div class="progress-fill" style="width:55%;background:var(--blue)"></div></div></div></div>
+      <div class="pts-item"><div class="pts-item-icon" style="background:rgba(124,77,255,0.15)">🐛</div><div><div class="pts-item-val">+60</div><div class="pts-item-name">Debug Challenge</div><div class="progress-bar"><div class="progress-fill" style="width:40%;background:var(--purple)"></div></div></div></div>
+      <div class="pts-item"><div class="pts-item-icon" style="background:rgba(0,200,100,0.15)">🗺️</div><div><div class="pts-item-val">+45</div><div class="pts-item-name">Treasure Hunt</div><div class="progress-bar"><div class="progress-fill" style="width:30%;background:#00c864)"></div></div></div></div>
+      <div class="pts-item"><div class="pts-item-icon" style="background:rgba(255,200,0,0.15)">⭐</div><div><div class="pts-item-val">+30</div><div class="pts-item-name">Bonus Tasks</div><div class="progress-bar"><div class="progress-fill" style="width:60%;background:#ffd700"></div></div></div></div>
+      <div class="pts-item"><div class="pts-item-icon" style="background:rgba(255,50,100,0.15)">⚡</div><div><div class="pts-item-val">+80</div><div class="pts-item-name">Fastest Solver</div><div class="progress-bar"><div class="progress-fill" style="width:20%;background:#ff3264"></div></div></div></div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<div style="background:linear-gradient(135deg,rgba(124,77,255,0.04),rgba(0,168,255,0.02))">
+<div class="section">
+  <p class="section-label">Point Shop</p>
+  <h2 class="section-title">Spend Smart. <span class="glow-purple">Win Smarter.</span></h2>
+  <p class="section-sub">Convert your earned points into competitive advantages. Every purchase is a strategic decision.</p>
+  <div class="card-grid cols-3 mt-32">
+    <div class="shop-card"><div class="price">150 pts</div><h4>Mentor Help</h4><p>30 minutes with an expert mentor for technical guidance on your build.</p></div>
+    <div class="shop-card"><div class="price">80 pts</div><h4>Hint Card</h4><p>Unlock a targeted hint for your current problem from the organizers.</p></div>
+    <div class="shop-card"><div class="price">100 pts</div><h4>Technical Review</h4><p>Get a quick code review and feedback from a senior developer.</p></div>
+    <div class="shop-card"><div class="price">120 pts</div><h4>Extra Pitch Time</h4><p>Buy 3 additional minutes for your final presentation to the judges.</p></div>
+    <div class="shop-card"><div class="price">200 pts</div><h4>Second Chance Token</h4><p>Save your team from elimination. One-time use per team only.</p></div>
+    <div class="shop-card"><div class="price">180 pts</div><h4>Reveal Judging Criteria</h4><p>Peek at what judges are scoring most heavily before your pitch.</p></div>
+    <div class="shop-card"><div class="price">250 pts</div><h4>Recruit a Friend</h4><p>Add a temporary external collaborator to your team for 2 hours.</p></div>
+  </div>
+</div>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <div class="center">
+    <p class="section-label">Mystery Box</p>
+    <h2 class="section-title">Expect The <span class="glow-orange">Unexpected</span></h2>
+    <p class="section-sub" style="margin:0 auto 40px">Each team opens a box at a critical moment. Inside is either a weapon or a bomb.</p>
+  </div>
+  <div style="display:flex;justify-content:center;margin:32px 0">
+    <svg viewBox="0 0 200 200" width="160" height="160" style="animation:float 2.5s ease-in-out infinite;overflow:visible">
+      <ellipse cx="100" cy="175" rx="60" ry="12" fill="rgba(255,153,0,0.15)"/>
+      <rect x="40" y="90" width="120" height="80" rx="6" fill="#1a1200" stroke="#FF9900" stroke-width="2"/>
+      <rect x="36" y="78" width="128" height="22" rx="5" fill="#221800" stroke="#FF9900" stroke-width="2"/>
+      <rect x="92" y="78" width="16" height="92" rx="3" fill="#FF9900" opacity="0.7"/>
+      <text x="100" y="143" text-anchor="middle" font-size="36">❓</text>
+      <circle cx="100" cy="50" r="28" fill="none" stroke="#FF9900" stroke-width="1" stroke-dasharray="4 3" opacity="0.5"/>
+      <circle cx="100" cy="50" r="38" fill="none" stroke="#FF9900" stroke-width="0.5" stroke-dasharray="2 6" opacity="0.3"/>
+    </svg>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+    <div>
+      <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#ffcc00;margin-bottom:14px;font-weight:600">🏆 Rewards</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="mystery-reward"><div class="card-type-badge reward-badge">✦ REWARD</div><div style="font-size:14px;font-weight:600">+100 Points</div></div>
+        <div class="mystery-reward"><div class="card-type-badge reward-badge">✦ REWARD</div><div style="font-size:14px;font-weight:600">Mentor Assistance</div></div>
+        <div class="mystery-reward"><div class="card-type-badge reward-badge">✦ REWARD</div><div style="font-size:14px;font-weight:600">Extra Review Time</div></div>
+        <div class="mystery-reward"><div class="card-type-badge reward-badge">✦ REWARD</div><div style="font-size:14px;font-weight:600">Hint Card</div></div>
+        <div class="mystery-reward"><div class="card-type-badge reward-badge">✦ REWARD</div><div style="font-size:14px;font-weight:600">Technical Support</div></div>
+      </div>
+    </div>
+    <div>
+      <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#ff4466;margin-bottom:14px;font-weight:600">💀 Twists</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="mystery-twist"><div class="card-type-badge twist-badge">⚡ TWIST</div><div style="font-size:14px;font-weight:600">Technology Restriction</div></div>
+        <div class="mystery-twist"><div class="card-type-badge twist-badge">⚡ TWIST</div><div style="font-size:14px;font-weight:600">Topic Modification</div></div>
+        <div class="mystery-twist"><div class="card-type-badge twist-badge">⚡ TWIST</div><div style="font-size:14px;font-weight:600">Additional Feature Req.</div></div>
+        <div class="mystery-twist"><div class="card-type-badge twist-badge">⚡ TWIST</div><div style="font-size:14px;font-weight:600">Surprise Client Request</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<div style="background:linear-gradient(135deg,rgba(255,0,0,0.04),rgba(200,0,0,0.02))">
+<div class="section">
+  <div class="center">
+    <p class="section-label" style="color:#ff5050">Chaos Mode</p>
+    <h2 class="section-title">Chaos Mode <span style="color:#ff4444">Activated</span></h2>
+    <p class="section-sub" style="margin:0 auto 40px">Real-world disruptions injected mid-build. Adapt or fall behind.</p>
+  </div>
+  <div class="card-grid cols-3">
+    <div class="chaos-card"><div class="chaos-status"><div class="chaos-dot"></div>INCOMING EVENT</div><div class="chaos-title">🌐 Market Shift</div><div class="chaos-desc">Your target user persona has changed completely. Rethink your value proposition.</div></div>
+    <div class="chaos-card"><div class="chaos-status"><div class="chaos-dot"></div>INCOMING EVENT</div><div class="chaos-title">💸 Investor Pitch</div><div class="chaos-desc">An investor arrives in 15 minutes. You must pitch your MVP immediately.</div></div>
+    <div class="chaos-card"><div class="chaos-status"><div class="chaos-dot"></div>INCOMING EVENT</div><div class="chaos-title">🔐 Security Alert</div><div class="chaos-desc">A critical vulnerability has been found in your stack. Patch it now.</div></div>
+    <div class="chaos-card"><div class="chaos-status"><div class="chaos-dot"></div>INCOMING EVENT</div><div class="chaos-title">✂️ Budget Cut</div><div class="chaos-desc">Your cloud budget has been slashed by 60%. Optimize your architecture.</div></div>
+    <div class="chaos-card"><div class="chaos-status"><div class="chaos-dot"></div>INCOMING EVENT</div><div class="chaos-title">📈 Viral Growth</div><div class="chaos-desc">Congrats — your app went viral. Now handle 100× the expected load.</div></div>
+    <div class="chaos-card"><div class="chaos-status"><div class="chaos-dot"></div>INCOMING EVENT</div><div class="chaos-title">🔄 Client Revision</div><div class="chaos-desc">The client changed their mind. Major feature redesign required. Today.</div></div>
+  </div>
+</div>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <div class="center">
+    <p class="section-label">Fortune</p>
+    <h2 class="section-title">Wheel of <span class="glow-orange">Fortune</span></h2>
+    <p class="section-sub" style="margin:0 auto 24px">Spend 1 Token. Spin the wheel. Fortune favors the bold — or punishes the reckless.</p>
+  </div>
+  <div class="wheel-container">
+    <div class="wheel-wrap">
+      <div class="wheel-pointer">▼</div>
+      <svg id="wheel" class="wheel-svg" viewBox="0 0 280 280">
+        <circle cx="140" cy="140" r="130" fill="#1a1200" stroke="#FF9900" stroke-width="2"/>
+        <g id="wheelSegs"></g>
+        <circle cx="140" cy="140" r="22" fill="#0d1117" stroke="#FF9900" stroke-width="2"/>
+        <text x="140" y="145" text-anchor="middle" font-size="14" fill="#FF9900" font-weight="700">SPIN</text>
+      </svg>
+    </div>
+    <button class="wheel-spin-btn" onclick="spinWheel()">🎰 Spin (1 Token)</button>
+    <div class="wheel-token-info">🪙 Earn tokens via quizzes, challenges, milestones & bonus tasks</div>
+    <div id="wheel-result" style="font-size:16px;font-weight:600;color:var(--aws);min-height:24px;font-family:'Poppins',sans-serif"></div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<div style="background:linear-gradient(135deg,rgba(255,153,0,0.04),rgba(124,77,255,0.04))">
+<div class="section">
+  <p class="section-label">Exclusive Rewards</p>
+  <h2 class="section-title">Legendary <span class="glow-orange">Rewards</span></h2>
+  <p class="section-sub">Only the wheel can unlock these. Mythic rarity. Game-changing power.</p>
+  <div class="card-grid cols-2 mt-32">
+    <div class="legendary-card">
+      <div class="legendary-badge">✦ LEGENDARY · RARE</div>
+      <div style="font-size:32px;margin-bottom:12px">🥇</div>
+      <h3 style="font-size:22px;color:var(--aws);margin-bottom:16px">Golden Mentor Pass</h3>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted)"><span style="color:var(--aws)">✓</span> 20 Minutes Dedicated Mentor Help</div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted)"><span style="color:var(--aws)">✓</span> Priority Mentor Access</div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted)"><span style="color:var(--aws)">✓</span> Technical Guidance</div>
+      </div>
+    </div>
+    <div class="mythic-card">
+      <div class="mythic-badge">✦ MYTHIC · ULTRA RARE</div>
+      <div style="font-size:32px;margin-bottom:12px">🃏</div>
+      <h3 style="font-size:22px;color:#b24dff;margin-bottom:16px">Wildcard Advantage</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Choose any one of the following advantages:</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:rgba(124,77,255,0.1);border:1px solid rgba(124,77,255,0.2);border-radius:8px;padding:10px;font-size:13px;color:var(--text)">Remove One Penalty</div>
+        <div style="background:rgba(124,77,255,0.1);border:1px solid rgba(124,77,255,0.2);border-radius:8px;padding:10px;font-size:13px;color:var(--text)">+100 Points</div>
+        <div style="background:rgba(124,77,255,0.1);border:1px solid rgba(124,77,255,0.2);border-radius:8px;padding:10px;font-size:13px;color:var(--text)">Additional Hint</div>
+        <div style="background:rgba(124,77,255,0.1);border:1px solid rgba(124,77,255,0.2);border-radius:8px;padding:10px;font-size:13px;color:var(--text)">Extra Pitch Time</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<hr class="divider">
+
+<div class="section">
+  <div class="center">
+    <p class="section-label" style="color:#ff4444">Consequences</p>
+    <h2 class="section-title">Every Decision Has <span style="color:#ff4444">Consequences</span></h2>
+    <p class="section-sub" style="margin:0 auto 40px">Bad choices hit hard. Stay sharp, spend wisely, and avoid these at all costs.</p>
+  </div>
+  <div class="card-grid cols-4 mt-16">
+    <div class="penalty-card"><div class="penalty-icon">💸</div><div class="penalty-val">−50 pts</div><div class="penalty-name">Point Loss</div></div>
+    <div class="penalty-card"><div class="penalty-icon">🃏</div><div class="penalty-val">−1</div><div class="penalty-name">Lose Hint</div></div>
+    <div class="penalty-card"><div class="penalty-icon">⚙️</div><div class="penalty-val">+1</div><div class="penalty-name">Extra Feature Required</div></div>
+    <div class="penalty-card"><div class="penalty-icon">⏱️</div><div class="penalty-val">−2 min</div><div class="penalty-name">Reduced Pitch Time</div></div>
+    <div class="penalty-card" style="grid-column:span 1"><div class="penalty-icon">🎯</div><div class="penalty-val">×1</div><div class="penalty-name">Surprise Judge Question</div></div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<div style="background:radial-gradient(ellipse at center,rgba(255,50,50,0.07),transparent 60%)">
+<div class="section">
+  <div class="center">
+    <p class="section-label" style="color:#ff5050">Second Chance</p>
+    <h2 class="section-title">Fight Your <span style="color:#ff4444">Way Back</span></h2>
+    <p class="section-sub" style="margin:0 auto 40px">Elimination isn't the end. Spend points or conquer a special challenge to re-enter the arena.</p>
+  </div>
+  <div class="arena">
+    <div class="arena-vs">⚔️ ARENA ⚔️</div>
+    <p class="arena-desc">Eliminated teams enter the Second Chance Arena. Beat the challenge. Spend the points. Return to the competition stronger than before.</p>
+    <div style="display:flex;gap:20px;justify-content:center;margin-top:28px;flex-wrap:wrap">
+      <div style="background:rgba(255,50,50,0.1);border:1px solid rgba(255,50,50,0.2);border-radius:10px;padding:16px 24px;text-align:center"><div style="font-size:22px;font-weight:800;color:#ff5050;font-family:'Montserrat',sans-serif">200 pts</div><div style="font-size:12px;color:var(--muted)">Re-entry via Points</div></div>
+      <div style="background:rgba(255,153,0,0.1);border:1px solid rgba(255,153,0,0.2);border-radius:10px;padding:16px 24px;text-align:center"><div style="font-size:22px;font-weight:800;color:var(--aws);font-family:'Montserrat',sans-serif">1 Challenge</div><div style="font-size:12px;color:var(--muted)">Re-entry via Skill</div></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<hr class="divider">
+
+<div class="finale">
+  <div style="font-size:64px;margin-bottom:16px">🏆</div>
+  <p class="section-label" style="text-align:center">Grand Finale</p>
+  <h2 style="font-size:clamp(28px,5vw,52px);margin-bottom:20px;text-align:center">The Stage Is Set. <span class="glow-orange">Are You Ready?</span></h2>
+  <div class="finale-pills">
+    <div class="finale-pill">🎁 Mystery Boxes</div>
+    <div class="finale-pill">⚡ Chaos Cards</div>
+    <div class="finale-pill">🛒 Point Shop</div>
+    <div class="finale-pill">🎰 Spin Wheel</div>
+    <div class="finale-pill">🎤 Final Presentation</div>
+  </div>
+  <p class="finale-tagline">"A hackathon where strategy matters as much as coding."</p>
+  <button class="btn-primary" style="font-size:17px;padding:16px 40px">Register Now →</button>
+</div>
+
+<footer>
+  <div class="footer-logo">☁ AWS Cloud Club</div>
+  <div>Mystery Box Hackathon — Build. Adapt. Survive.</div>
+  <div style="color:var(--muted)">© 2024 AWS Cloud Club</div>
+</footer>
+
+<script>
+const segs=[
+  {label:"Better Luck",color:"#2a1800",stroke:"#FF9900"},
+  {label:"Better Luck",color:"#1a0020",stroke:"#7C4DFF"},
+  {label:"Better Luck",color:"#001a2a",stroke:"#00A8FF"},
+  {label:"Better Luck",color:"#2a1800",stroke:"#FF9900"},
+  {label:"Better Luck",color:"#1a0020",stroke:"#7C4DFF"},
+  {label:"🥇 Golden Pass",color:"#1a1000",stroke:"#FFD700"},
+  {label:"🃏 Wildcard",color:"#0f0025",stroke:"#b24dff"}
+];
+const wheelEl=document.getElementById('wheel');
+const wheelSvg=document.getElementById('wheelSegs');
+const cx=140,cy=140,r=120;
+const total=segs.length;
+const step=360/total;
+function polarToCart(cx,cy,r,angle){
+  const rad=angle*Math.PI/180;
+  return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)};
+}
+segs.forEach((s,i)=>{
+  const startAngle=i*step-90;
+  const endAngle=(i+1)*step-90;
+  const p1=polarToCart(cx,cy,r,startAngle);
+  const p2=polarToCart(cx,cy,r,endAngle);
+  const mid=polarToCart(cx,cy,r*0.65,(startAngle+endAngle)/2);
+  const largeArc=step>180?1:0;
+  const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+  path.setAttribute("d",`M ${cx} ${cy} L ${p1.x} ${p1.y} A ${r} ${r} 0 ${largeArc} 1 ${p2.x} ${p2.y} Z`);
+  path.setAttribute("fill",s.color);
+  path.setAttribute("stroke",s.stroke);
+  path.setAttribute("stroke-width","1.5");
+  wheelSvg.appendChild(path);
+  const text=document.createElementNS("http://www.w3.org/2000/svg","text");
+  text.setAttribute("x",mid.x);text.setAttribute("y",mid.y);
+  text.setAttribute("text-anchor","middle");text.setAttribute("dominant-baseline","middle");
+  text.setAttribute("fill",s.stroke);text.setAttribute("font-size","9");
+  text.setAttribute("font-weight","600");text.setAttribute("font-family","Poppins,sans-serif");
+  text.textContent=s.label;
+  wheelSvg.appendChild(text);
+});
+let spinning=false,totalRotation=0;
+function spinWheel(){
+  if(spinning)return;
+  spinning=true;
+  document.getElementById('wheel-result').textContent='Spinning...';
+  const extra=360*8+Math.random()*360;
+  totalRotation+=extra;
+  const wheelEl2=document.getElementById('wheel');
+  wheelEl2.style.transition='transform 3s cubic-bezier(0.17,0.67,0.12,0.99)';
+  wheelEl2.style.transform=`rotate(${totalRotation}deg)`;
+  setTimeout(()=>{
+    const norm=((totalRotation%360)+360)%360;
+    const ptr=(360-norm+90)%360;
+    const idx=Math.floor(ptr/step)%total;
+    const result=segs[idx];
+    document.getElementById('wheel-result').textContent=
+      result.label.includes('Luck')?'😅 Better luck next time!':`🎉 You won: ${result.label}!`;
+    spinning=false;
+  },3100);
+}
+</script>
