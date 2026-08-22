@@ -516,16 +516,18 @@ export default function MysteryBoxHackathon() {
             {STEPS.map((s, i) => {
               const c = stepColors[s.color];
               return (
-                <div key={i} className="flex items-center">
+                <div key={i} className="flex items-start">
                   <div className="flex flex-col items-center gap-2.5 w-[120px]">
-                    <div className="w-11 h-11 rounded-full flex items-center justify-center text-[15px] font-bold font-headline-md"
+                    <div className="w-11 h-11 rounded-[12px] flex items-center justify-center text-[15px] font-bold font-headline-md"
                          style={{ background: c.bg, border: `1.5px solid ${c.border}`, color: c.text }}>
                       {s.num}
                     </div>
                     <span className="text-[12px] text-center text-on-surface-variant font-medium font-label-sm">{s.label}</span>
                   </div>
                   {i < STEPS.length - 1 && (
-                    <span className="text-white/20 text-xl w-[30px] text-center pt-3.5">→</span>
+                    <div className="h-11 flex items-center justify-center w-[30px]">
+                      <span className="text-on-surface-variant/30 text-xl font-bold">→</span>
+                    </div>
                   )}
                 </div>
               );
