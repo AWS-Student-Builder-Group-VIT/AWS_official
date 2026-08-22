@@ -129,6 +129,73 @@ function SectionSub({ children, center = false }) {
   );
 }
 
+function TypeWriter({ words = ['Hackathon', 'Hack It'], typingDelay = 120, erasingDelay = 80, pauseTime = 2000 }) {
+  const [displayed, setDisplayed] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [loopNum, setLoopNum] = useState(0);
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: '-40px' });
+
+  useEffect(() => {
+    if (!isInView) return;
+
+    let timeout;
+    const currentWord = words[loopNum % words.length];
+    const nextWord = words[(loopNum + 1) % words.length];
+
+    // Find the common prefix to know when to stop backspacing
+    let commonPrefixLength = 0;
+    while (
+      commonPrefixLength < currentWord.length &&
+      commonPrefixLength < nextWord.length &&
+      currentWord[commonPrefixLength].toLowerCase() === nextWord[commonPrefixLength].toLowerCase()
+    ) {
+      commonPrefixLength++;
+    }
+
+    if (isDeleting) {
+      // Backspacing
+      if (displayed.length > commonPrefixLength) {
+        // Human-like erasing variance (faster than typing)
+        const currentErasingDelay = erasingDelay - 20 + Math.random() * 40;
+        timeout = setTimeout(() => {
+          setDisplayed(currentWord.substring(0, displayed.length - 1));
+        }, currentErasingDelay);
+      } else {
+        setIsDeleting(false);
+        setLoopNum(loopNum + 1);
+      }
+    } else {
+      // Typing
+      if (displayed.length < currentWord.length) {
+        // Human-like typing variance (slower with natural pauses)
+        let currentTypingDelay = typingDelay - 40 + Math.random() * 80;
+        // Occasional longer pause simulating thinking
+        if (Math.random() < 0.1) currentTypingDelay += 150;
+        
+        timeout = setTimeout(() => {
+          setDisplayed(currentWord.substring(0, displayed.length + 1));
+        }, currentTypingDelay);
+      } else {
+        // Pause before deleting
+        timeout = setTimeout(() => {
+          setIsDeleting(true);
+        }, pauseTime);
+      }
+    }
+
+    return () => clearTimeout(timeout);
+  }, [displayed, isDeleting, loopNum, isInView, words, typingDelay, erasingDelay, pauseTime]);
+
+  return (
+    <span ref={ref} className="inline-flex items-baseline whitespace-nowrap">
+      {displayed}
+      <span className="inline-block w-[clamp(4px,0.6vw,8px)] ml-1 md:ml-2 bg-primary-container animate-pulse"
+            style={{ height: '0.85em', transform: 'translateY(0.05em)' }} />
+    </span>
+  );
+}
+
 function Divider() {
   return <hr className="border-0 border-t border-white/5 my-0" />;
 }
@@ -386,7 +453,9 @@ export default function MysteryBoxHackathon() {
             <h1 className="font-headline-xl text-on-surface leading-[1.05] mb-4 uppercase tracking-widest flex flex-col items-start">
               <span className="text-[clamp(42px,8vw,96px)]">Mystery</span>
               <span className="text-[clamp(42px,8vw,96px)]">Box</span>
-              <span className="text-[clamp(42px,8vw,96px)] text-primary-container" style={{ textShadow: '0 0 30px rgba(255,153,0,0.4)' }}>Hackathon</span>
+              <span className="text-[clamp(42px,8vw,96px)] text-primary-container" style={{ textShadow: '0 0 30px rgba(255,153,0,0.4)' }}>
+                <TypeWriter text="Hackathon" delay={120} />
+              </span>
             </h1>
 
             <p className="text-[clamp(18px,2.5vw,24px)] text-primary-container font-headline-md mb-5 uppercase tracking-widest">
