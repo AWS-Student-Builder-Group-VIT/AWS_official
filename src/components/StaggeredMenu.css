@@ -27,7 +27,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25em 2em;
+  padding: 1rem 0.75rem 1rem 2rem;
   background: transparent;
   pointer-events: none;
   z-index: 20;
@@ -35,6 +35,22 @@
 
 .staggered-menu-header > * {
   pointer-events: auto;
+}
+
+/* ── Logo Container (slides up on scroll) ────────────────────────────────── */
+.sm-logo-container {
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.sm-logo-container.logo-hidden {
+  transform: translateY(-160%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* ── Logo ─────────────────────────────────────────────────────────────── */
@@ -64,11 +80,12 @@
   white-space: nowrap;
 }
 
-/* ── Toggle Button ─────────────────────────────────────────────────────── */
+/* ── Toggle Button Base ─────────────────────────────────────────────────────── */
 .sm-toggle {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   background: transparent;
   border: 1px solid rgba(255,255,255,0.15);
@@ -82,7 +99,7 @@
   padding: 0.55em 1em;
   line-height: 1;
   overflow: visible;
-  transition: border-color 0.25s ease, background 0.25s ease;
+  transition: opacity 0.3s ease, border-color 0.25s ease, background 0.25s ease, width 0.3s cubic-bezier(0.16, 1, 0.3, 1), height 0.3s cubic-bezier(0.16, 1, 0.3, 1), padding 0.3s ease, box-shadow 0.3s ease;
 }
 
 .sm-toggle:hover {
@@ -93,6 +110,110 @@
 .sm-toggle:focus-visible {
   outline: 2px solid #FF9900;
   outline-offset: 4px;
+}
+
+/* ── Toggle Button Scrolled State (compact 3-bars hamburger) ─────────────────── */
+.sm-toggle.sm-toggle-scrolled {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  gap: 0;
+  background: rgba(15, 16, 20, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.sm-toggle.sm-toggle-scrolled:hover {
+  border-color: #FF9900;
+  background: rgba(255, 153, 0, 0.12);
+  box-shadow: 0 0 14px rgba(255, 153, 0, 0.35);
+}
+
+.sm-toggle.sm-toggle-scrolled.sm-toggle-open {
+  border-color: #FF9900;
+  background: rgba(255, 153, 0, 0.15);
+}
+
+/* ── Faded State (when menu box comes on top of any button) ──────────────────── */
+.sm-toggle.sm-toggle-faded {
+  opacity: 0.25 !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+.sm-toggle.sm-toggle-faded:hover,
+.sm-toggle.sm-toggle-open {
+  opacity: 1 !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  box-shadow: 0 0 16px rgba(255, 153, 0, 0.35) !important;
+}
+
+/* Visibility toggling between default and scrolled modes */
+.sm-toggle:not(.sm-toggle-scrolled) .sm-hamburger-icon {
+  display: none !important;
+}
+
+.sm-toggle.sm-toggle-scrolled .sm-toggle-textWrap,
+.sm-toggle.sm-toggle-scrolled .sm-icon {
+  display: none !important;
+}
+
+/* ── 3-Bars Hamburger Icon ─────────────────────────────────────────────────── */
+.sm-hamburger-icon {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 16px;
+  height: 13px;
+  position: relative;
+  cursor: pointer;
+}
+
+.sm-hamburger-bar {
+  display: block;
+  width: 16px;
+  height: 1.5px;
+  background-color: currentColor;
+  border-radius: 1px;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease, background-color 0.25s ease;
+  position: absolute;
+  left: 0;
+}
+
+.sm-bar-top {
+  top: 1px;
+  transform-origin: center;
+}
+
+.sm-bar-middle {
+  top: 5.5px;
+  transform-origin: center;
+}
+
+.sm-bar-bottom {
+  top: 10px;
+  transform-origin: center;
+}
+
+/* When hamburger is in OPEN / Close state (X) */
+.sm-toggle-open .sm-bar-top {
+  transform: translateY(4.5px) rotate(45deg);
+  background-color: #FF9900;
+}
+
+.sm-toggle-open .sm-bar-middle {
+  opacity: 0;
+  transform: scaleX(0);
+}
+
+.sm-toggle-open .sm-bar-bottom {
+  transform: translateY(-4.5px) rotate(-45deg);
+  background-color: #FF9900;
 }
 
 .sm-toggle-textWrap {
@@ -345,12 +466,28 @@
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
+  .staggered-menu-header {
+    padding: 0.75rem 0.625rem 0.75rem 1rem;
+  }
+
+  .sm-logo-img {
+    height: 38px;
+    width: 38px;
+  }
+
+  .sm-logo span {
+    font-size: 1.25rem !important;
+    margin-left: 0.35rem !important;
+    margin-right: 0.35rem !important;
+  }
+
   .staggered-menu-panel {
     width: 100%;
     left: 0;
     right: 0;
     border-left: none;
     border-top: 1px solid rgba(255, 153, 0, 0.15);
+    padding: 5em 1.75em 2em 1.75em;
   }
 
   .sm-prelayers {
@@ -360,6 +497,6 @@
   }
 
   .sm-panel-item {
-    font-size: clamp(1.8rem, 8vw, 2.5rem);
+    font-size: clamp(1.6rem, 7vw, 2.2rem);
   }
 }
