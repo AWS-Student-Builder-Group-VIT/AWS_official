@@ -4,15 +4,16 @@ import EventTimeline from './EventTimeline';
 export default function CoreProtocols() {
   return (
     <section
-      className="py-24 px-container-padding bg-background relative border-b border-white/10"
+      className="bg-background relative"
       id="features"
     >
-      <div className="w-full">
+      {/* Section heading sits above the helix scroll zone */}
+      <div className="w-full px-container-padding pt-24 pb-8">
         <SectionHeading icon="developer_board" title="Events" />
-
-        {/* AWS Week Event Timeline */}
-        <EventTimeline />
       </div>
+
+      {/* AWS Week Event Timeline — uses sticky scroll internally */}
+      <EventTimeline />
     </section>
   );
 }
