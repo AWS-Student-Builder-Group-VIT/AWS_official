@@ -24,6 +24,8 @@ export const StaggeredMenu = ({
   onMenuClose,
 }) => {
   const [open, setOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isOverButton, setIsOverButton] = useState(false);
   const openRef = useRef(false);
   const panelRef = useRef(null);
   const preLayersRef = useRef(null);
@@ -34,6 +36,42 @@ export const StaggeredMenu = ({
   const textInnerRef = useRef(null);
   const textWrapRef = useRef(null);
   const [textLines, setTextLines] = useState(['Menu', 'Close']);
+
+  React.useEffect(() => {
+    const checkOverlap = () => {
+      const btn = toggleBtnRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const elements = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      const isOver = elements.some(el => {
+        if (!el || el === btn || btn.contains(el) || el.closest('.staggered-menu-header') || el.closest('.staggered-menu-panel') || el.closest('.sm-prelayers')) {
+          return false;
+        }
+        return (
+          el.tagName === 'BUTTON' ||
+          el.tagName === 'A' ||
+          el.getAttribute('role') === 'button' ||
+          el.closest('button') ||
+          el.closest('a')
+        );
+      });
+      setIsOverButton(isOver);
+    };
+
+    const handleScroll = () => {
+      const scrolled = window.scrollY > 60;
+      setIsScrolled(scrolled);
+      checkOverlap();
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', checkOverlap, { passive: true });
+    handleScroll();
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', checkOverlap);
+    };
+  }, []);
 
   const openTlRef = useRef(null);
   const closeTweenRef = useRef(null);
@@ -272,23 +310,26 @@ export const StaggeredMenu = ({
 
       {/* Header row */}
       <header className="staggered-menu-header" aria-label="Navigation header">
-        {/* Logo */}
-        <a className="sm-logo" href="/" aria-label="AWS Student Builder Group Home" style={{ display: 'flex', alignItems: 'center' }}>
-          {logoUrl && <img src={logoUrl} alt="AWS SBG" className="sm-logo-img flex-shrink-0" draggable={false} style={{ width: '48px', height: '48px', objectFit: 'contain' }} />}
-          <span className="text-[#FF9900] text-3xl font-light mx-4 pb-1">&times;</span>
-          <img src={vitLogo} alt="VIT Logo" className="object-contain flex-shrink-0" style={{ filter: 'brightness(0) invert(1)', width: '48px', height: '48px' }} />
-        </a>
+        {/* Logo container (slides up on scroll) */}
+        <div className={`sm-logo-container ${isScrolled ? 'logo-hidden' : ''}`}>
+          <a className="sm-logo" href="/" aria-label="AWS Student Builder Group Home" style={{ display: 'flex', alignItems: 'center' }}>
+            {logoUrl && <img src={logoUrl} alt="AWS SBG" className="sm-logo-img flex-shrink-0" draggable={false} style={{ width: '48px', height: '48px', objectFit: 'contain' }} />}
+            <span className="text-[#FF9900] text-3xl font-light mx-4 pb-1">&times;</span>
+            <img src={vitLogo} alt="VIT Logo" className="object-contain flex-shrink-0" style={{ filter: 'brightness(0) invert(1)', width: '48px', height: '48px' }} />
+          </a>
+        </div>
 
         {/* Toggle button */}
         <button
           ref={toggleBtnRef}
-          className="sm-toggle"
+          className={`sm-toggle ${isScrolled ? 'sm-toggle-scrolled' : ''} ${open ? 'sm-toggle-open' : ''} ${isOverButton && !open ? 'sm-toggle-faded' : ''}`}
           aria-label={open ? 'Close menu' : 'Open menu'}
           aria-expanded={open}
           aria-controls="staggered-menu-panel"
           onClick={toggleMenu}
           type="button"
         >
+          {/* Default state: Menu/Close text + plus/x icon */}
           <span ref={textWrapRef} className="sm-toggle-textWrap" aria-hidden="true">
             <span ref={textInnerRef} className="sm-toggle-textInner">
               {textLines.map((l, i) => (
@@ -299,6 +340,13 @@ export const StaggeredMenu = ({
           <span ref={iconRef} className="sm-icon" aria-hidden="true">
             <span ref={plusHRef} className="sm-icon-line" />
             <span ref={plusVRef} className="sm-icon-line sm-icon-line-v" />
+          </span>
+
+          {/* Scrolled state: 3-bars hamburger icon */}
+          <span className="sm-hamburger-icon" aria-hidden="true">
+            <span className="sm-hamburger-bar sm-bar-top" />
+            <span className="sm-hamburger-bar sm-bar-middle" />
+            <span className="sm-hamburger-bar sm-bar-bottom" />
           </span>
         </button>
       </header>

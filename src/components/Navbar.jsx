@@ -20,6 +20,16 @@ export default function Navbar() {
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0, opacity: 0 });
   const [user, setUser] = useState(getUser());
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 60);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     const handleAuthChange = () => setUser(getUser());
@@ -64,7 +74,7 @@ export default function Navbar() {
   }, []);
 
   return (
-    <nav className="bg-background/80 backdrop-blur-xl border-b border-white/5 fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-padding py-4 max-w-full">
+    <nav className={`bg-background/80 backdrop-blur-xl border-b border-white/5 fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-padding py-4 max-w-full transition-transform duration-500 ease-in-out ${isScrolled ? '-translate-y-full' : 'translate-y-0'}`}>
       {/* Logo */}
       <div className="font-headline-md text-headline-md text-on-surface tracking-tighter uppercase flex items-center gap-2 min-w-0 overflow-hidden mr-2 flex-1">
         <img src={awsIcon} alt="AWS Club Logo" className="object-contain flex-shrink-0" style={{ width: '48px', height: '48px' }} />
