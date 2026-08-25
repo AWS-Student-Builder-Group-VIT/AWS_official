@@ -1,359 +1,35 @@
-import { useState, useEffect, useRef } from 'react';
-import { motion, useInView } from 'framer-motion';
-import awsIcon from '../assets/aws_icon.jpeg';
+import { useEffect } from 'react';
+import { motion } from 'framer-motion';
+
+// Global assets (shared across the whole app)
+import awsIcon from '../../assets/aws_icon.jpeg';
+
+// Local Mystery Box Hackathon data + components
+import {
+  STEPS,
+  RULES,
+  POINTS,
+  SHOP_ITEMS,
+  REWARDS,
+  TWISTS,
+  CHAOS_EVENTS,
+  PENALTIES,
+  FINALE_PILLS,
+} from './data';
+import {
+  FadeInSection,
+  SectionLabel,
+  SectionTitle,
+  SectionSub,
+  TypeWriter,
+  Divider,
+  SpinWheel,
+  MysteryBoxSVG,
+  MiniMysteryBox,
+} from './components';
 
 /* ═══════════════════════════════════════════════════════════
    MYSTERY BOX HACKATHON — Landing Page
-   ═══════════════════════════════════════════════════════════ */
-
-/* ── Wheel Data ── */
-const WHEEL_SEGMENTS = [
-  { label: 'Better Luck', color: '#2a1800', stroke: '#FF9900' },
-  { label: 'Better Luck', color: '#1a0020', stroke: '#7C4DFF' },
-  { label: 'Better Luck', color: '#001a2a', stroke: '#00A8FF' },
-  { label: 'Better Luck', color: '#2a1800', stroke: '#FF9900' },
-  { label: 'Better Luck', color: '#1a0020', stroke: '#7C4DFF' },
-  { label: '🥇 Golden Pass', color: '#1a1000', stroke: '#FFD700' },
-  { label: '🃏 Wildcard', color: '#0f0025', stroke: '#b24dff' },
-];
-
-/* ── How It Works Steps ── */
-const STEPS = [
-  { num: 1, label: 'Team Registration', color: 'orange' },
-  { num: 2, label: 'Topic Reveal', color: 'blue' },
-  { num: 3, label: 'Build From Scratch', color: 'purple' },
-  { num: 4, label: 'Earn Points', color: 'orange' },
-  { num: 5, label: 'Unlock Advantages', color: 'blue' },
-  { num: 6, label: 'Face Chaos Events', color: 'purple' },
-  { num: 7, label: 'Final Pitch', color: 'orange' },
-];
-
-/* ── Rules ── */
-const RULES = [
-  { icon: '🎯', title: 'Topics Assigned On The Spot', desc: 'Zero preparation possible. Your problem statement is revealed only at kickoff. Pure skill, no shortcuts.' },
-  { icon: '🔒', title: 'No Pre-Built Projects', desc: 'Everything is built during the event. Bringing existing code will get your team disqualified.' },
-  { icon: '⚡', title: 'Real-Time Innovation', desc: 'Ideas born and executed live. Judges observe the build process, not just the outcome.' },
-  { icon: '🏗️', title: 'Build Everything During The Event', desc: 'Architecture, design, code, deployment — all within the window. Clock is always ticking.' },
-];
-
-/* ── Points Sources ── */
-const POINTS = [
-  { icon: '🧠', val: '+50', name: 'AWS Quiz', pct: 70, color: '#FF9900' },
-  { icon: '🧩', val: '+40', name: 'Cloud Puzzle', pct: 55, color: '#00A8FF' },
-  { icon: '🐛', val: '+60', name: 'Debug Challenge', pct: 40, color: '#7C4DFF' },
-  { icon: '🗺️', val: '+45', name: 'Treasure Hunt', pct: 30, color: '#00c864' },
-  { icon: '⭐', val: '+30', name: 'Bonus Tasks', pct: 60, color: '#ffd700' },
-  { icon: '⚡', val: '+80', name: 'Fastest Solver', pct: 20, color: '#ff3264' },
-];
-
-/* ── Shop Items ── */
-const SHOP_ITEMS = [
-  { price: '150 pts', title: 'Mentor Help', desc: '30 minutes with an expert mentor for technical guidance on your build.' },
-  { price: '80 pts', title: 'Hint Card', desc: 'Unlock a targeted hint for your current problem from the organizers.' },
-  { price: '100 pts', title: 'Technical Review', desc: 'Get a quick code review and feedback from a senior developer.' },
-  { price: '120 pts', title: 'Extra Pitch Time', desc: 'Buy 3 additional minutes for your final presentation to the judges.' },
-  { price: '200 pts', title: 'Second Chance Token', desc: 'Save your team from elimination. One-time use per team only.' },
-  { price: '180 pts', title: 'Reveal Judging Criteria', desc: 'Peek at what judges are scoring most heavily before your pitch.' },
-  { price: '250 pts', title: 'Recruit a Friend', desc: 'Add a temporary external collaborator to your team for 2 hours.' },
-];
-
-/* ── Mystery Box Rewards & Twists ── */
-const REWARDS = ['+100 Points', 'Mentor Assistance', 'Extra Review Time', 'Hint Card', 'Technical Support'];
-const TWISTS = ['Technology Restriction', 'Topic Modification', 'Additional Feature Req.', 'Surprise Client Request'];
-
-/* ── Chaos Events ── */
-const CHAOS_EVENTS = [
-  { icon: '🌐', title: 'Market Shift', desc: 'Your target user persona has changed completely. Rethink your value proposition.' },
-  { icon: '💸', title: 'Investor Pitch', desc: 'An investor arrives in 15 minutes. You must pitch your MVP immediately.' },
-  { icon: '🔐', title: 'Security Alert', desc: 'A critical vulnerability has been found in your stack. Patch it now.' },
-  { icon: '✂️', title: 'Budget Cut', desc: 'Your cloud budget has been slashed by 60%. Optimize your architecture.' },
-  { icon: '📈', title: 'Viral Growth', desc: 'Congrats — your app went viral. Now handle 100× the expected load.' },
-  { icon: '🔄', title: 'Client Revision', desc: 'The client changed their mind. Major feature redesign required. Today.' },
-];
-
-/* ── Penalties ── */
-const PENALTIES = [
-  { icon: '💸', val: '−50 pts', name: 'Point Loss' },
-  { icon: '🃏', val: '−1', name: 'Lose Hint' },
-  { icon: '⚙️', val: '+1', name: 'Extra Feature Required' },
-  { icon: '⏱️', val: '−2 min', name: 'Reduced Pitch Time' },
-  { icon: '🎯', val: '×1', name: 'Surprise Judge Question' },
-];
-
-/* ── Finale Pills ── */
-const FINALE_PILLS = ['🎁 Mystery Boxes', '⚡ Chaos Cards', '🛒 Point Shop', '🎰 Spin Wheel', '🎤 Final Presentation'];
-
-
-/* ═══════════════════════════════════════════════════════════
-   REUSABLE SUB-COMPONENTS
-   ═══════════════════════════════════════════════════════════ */
-
-function FadeInSection({ children, className = '', delay = 0 }) {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: '-60px' });
-
-  return (
-    <motion.div
-      ref={ref}
-      className={className}
-      initial={{ opacity: 0, y: 30 }}
-      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
-      transition={{ duration: 0.6, delay, ease: [0.16, 1, 0.3, 1] }}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-function SectionLabel({ children, className = '' }) {
-  return (
-    <p className={`font-label-sm text-[11px] tracking-[3px] uppercase font-medium mb-3 text-primary-container ${className}`}>
-      {children}
-    </p>
-  );
-}
-
-function SectionTitle({ children }) {
-  return (
-    <h2 className="font-headline-lg text-headline-lg text-on-surface tracking-widest uppercase mb-4 leading-tight">
-      {children}
-    </h2>
-  );
-}
-
-function SectionSub({ children, center = false }) {
-  return (
-    <p className={`text-on-surface-variant text-body-md font-body-md max-w-[580px] ${center ? 'mx-auto' : ''}`}>
-      {children}
-    </p>
-  );
-}
-
-function TypeWriter({ words = ['Hackathon', 'Hack It'], typingDelay = 120, erasingDelay = 80, pauseTime = 2000 }) {
-  const [displayed, setDisplayed] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [loopNum, setLoopNum] = useState(0);
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: '-40px' });
-
-  useEffect(() => {
-    if (!isInView) return;
-
-    let timeout;
-    const currentWord = words[loopNum % words.length];
-    const nextWord = words[(loopNum + 1) % words.length];
-
-    // Find the common prefix to know when to stop backspacing
-    let commonPrefixLength = 0;
-    while (
-      commonPrefixLength < currentWord.length &&
-      commonPrefixLength < nextWord.length &&
-      currentWord[commonPrefixLength].toLowerCase() === nextWord[commonPrefixLength].toLowerCase()
-    ) {
-      commonPrefixLength++;
-    }
-
-    if (isDeleting) {
-      // Backspacing
-      if (displayed.length > commonPrefixLength) {
-        // Human-like erasing variance (faster than typing)
-        const currentErasingDelay = erasingDelay - 20 + Math.random() * 40;
-        timeout = setTimeout(() => {
-          setDisplayed(currentWord.substring(0, displayed.length - 1));
-        }, currentErasingDelay);
-      } else {
-        setIsDeleting(false);
-        setLoopNum(loopNum + 1);
-      }
-    } else {
-      // Typing
-      if (displayed.length < currentWord.length) {
-        // Human-like typing variance (slower with natural pauses)
-        let currentTypingDelay = typingDelay - 40 + Math.random() * 80;
-        // Occasional longer pause simulating thinking
-        if (Math.random() < 0.1) currentTypingDelay += 150;
-        
-        timeout = setTimeout(() => {
-          setDisplayed(currentWord.substring(0, displayed.length + 1));
-        }, currentTypingDelay);
-      } else {
-        // Pause before deleting
-        timeout = setTimeout(() => {
-          setIsDeleting(true);
-        }, pauseTime);
-      }
-    }
-
-    return () => clearTimeout(timeout);
-  }, [displayed, isDeleting, loopNum, isInView, words, typingDelay, erasingDelay, pauseTime]);
-
-  return (
-    <span ref={ref} className="inline-flex items-baseline whitespace-nowrap">
-      {displayed}
-      <span className="inline-block w-[clamp(4px,0.6vw,8px)] ml-1 md:ml-2 bg-primary-container animate-pulse"
-            style={{ height: '0.85em', transform: 'translateY(0.05em)' }} />
-    </span>
-  );
-}
-
-function Divider() {
-  return <hr className="border-0 border-t border-white/5 my-0" />;
-}
-
-/* ═══════════════════════════════════════════════════════════
-   WHEEL COMPONENT
-   ═══════════════════════════════════════════════════════════ */
-
-function polarToCart(cx, cy, r, angle) {
-  const rad = (angle * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-
-function SpinWheel() {
-  const [spinning, setSpinning] = useState(false);
-  const [totalRotation, setTotalRotation] = useState(0);
-  const [result, setResult] = useState('');
-  const wheelRef = useRef(null);
-
-  const cx = 140, cy = 140, r = 120;
-  const total = WHEEL_SEGMENTS.length;
-  const step = 360 / total;
-
-  const segments = WHEEL_SEGMENTS.map((s, i) => {
-    const startAngle = i * step - 90;
-    const endAngle = (i + 1) * step - 90;
-    const p1 = polarToCart(cx, cy, r, startAngle);
-    const p2 = polarToCart(cx, cy, r, endAngle);
-    const mid = polarToCart(cx, cy, r * 0.65, (startAngle + endAngle) / 2);
-    const largeArc = step > 180 ? 1 : 0;
-    const d = `M ${cx} ${cy} L ${p1.x} ${p1.y} A ${r} ${r} 0 ${largeArc} 1 ${p2.x} ${p2.y} Z`;
-
-    return (
-      <g key={i}>
-        <path d={d} fill={s.color} stroke={s.stroke} strokeWidth="1.5" />
-        <text x={mid.x} y={mid.y} textAnchor="middle" dominantBaseline="middle"
-              fill={s.stroke} fontSize="9" fontWeight="600" fontFamily="'Space Mono', monospace">
-          {s.label}
-        </text>
-      </g>
-    );
-  });
-
-  const spin = () => {
-    if (spinning) return;
-    setSpinning(true);
-    setResult('Spinning...');
-    const extra = 360 * 8 + Math.random() * 360;
-    const newTotal = totalRotation + extra;
-    setTotalRotation(newTotal);
-
-    setTimeout(() => {
-      const norm = ((newTotal % 360) + 360) % 360;
-      const ptr = (360 - norm + 90) % 360;
-      const idx = Math.floor(ptr / step) % total;
-      const seg = WHEEL_SEGMENTS[idx];
-      setResult(seg.label.includes('Luck') ? '😅 Better luck next time!' : `🎉 You won: ${seg.label}!`);
-      setSpinning(false);
-    }, 3100);
-  };
-
-  return (
-    <div className="flex flex-col items-center mt-10 gap-8">
-      <div className="relative w-[280px] h-[280px]">
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-2xl z-10"
-             style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>▼</div>
-        <svg
-          ref={wheelRef}
-          viewBox="0 0 280 280"
-          width="280" height="280"
-          style={{
-            transition: 'transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99)',
-            transform: `rotate(${totalRotation}deg)`,
-          }}
-        >
-          <circle cx="140" cy="140" r="130" fill="#1a1200" stroke="#FF9900" strokeWidth="2" />
-          {segments}
-          <circle cx="140" cy="140" r="22" fill="#0A0C10" stroke="#FF9900" strokeWidth="2" />
-          <text x="140" y="145" textAnchor="middle" fontSize="14" fill="#FF9900" fontWeight="700">SPIN</text>
-        </svg>
-      </div>
-      <button
-        onClick={spin}
-        className="bg-primary-container text-background px-9 py-3.5 font-headline-md text-label-md uppercase tracking-widest font-bold transition-transform active:scale-[0.97] cursor-pointer border-0 hover:bg-primary"
-      >
-        🎰 Spin (1 Token)
-      </button>
-      <div className="flex items-center gap-2 bg-white/[0.03] border border-white/10 px-4 py-2.5 text-[13px] text-on-surface-variant font-label-sm">
-        🪙 Earn tokens via quizzes, challenges, milestones & bonus tasks
-      </div>
-      {result && (
-        <p className="text-body-md font-headline-md text-primary-container min-h-[24px]">{result}</p>
-      )}
-    </div>
-  );
-}
-
-
-/* ═══════════════════════════════════════════════════════════
-   MYSTERY BOX SVG
-   ═══════════════════════════════════════════════════════════ */
-
-function MysteryBoxSVG({ size = 300 }) {
-  return (
-    <motion.svg
-      viewBox="0 0 320 320"
-      width={size} height={size}
-      animate={{ y: [0, -12, 0] }}
-      transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
-      style={{ overflow: 'visible' }}
-    >
-      <defs>
-        <radialGradient id="boxGlow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#FF9900" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#FF9900" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <ellipse cx="160" cy="240" rx="90" ry="18" fill="url(#boxGlow)" />
-      <rect x="80" y="130" width="160" height="110" rx="8" fill="#1a1200" stroke="#FF9900" strokeWidth="1.5" />
-      <rect x="76" y="118" width="168" height="30" rx="6" fill="#221800" stroke="#FF9900" strokeWidth="1.5" />
-      <rect x="148" y="118" width="24" height="122" rx="4" fill="#FF9900" opacity="0.6" />
-      <text x="160" y="188" textAnchor="middle" fontSize="48" fontFamily="Arial">❓</text>
-      <circle cx="80" cy="60" r="6" fill="#00A8FF" opacity="0.8" />
-      <circle cx="240" cy="80" r="4" fill="#7C4DFF" opacity="0.8" />
-      <circle cx="260" cy="40" r="5" fill="#FF9900" opacity="0.6" />
-      <circle cx="60" cy="100" r="3" fill="#00A8FF" opacity="0.5" />
-      <text x="55" y="72" fontSize="11" fill="#00A8FF" opacity="0.7" fontFamily="monospace">const</text>
-      <text x="230" y="52" fontSize="11" fill="#7C4DFF" opacity="0.7" fontFamily="monospace">await</text>
-      <text x="260" y="100" fontSize="11" fill="#FF9900" opacity="0.6" fontFamily="monospace">{'S3{}'}</text>
-      <path d="M70,40 Q50,30 40,50 Q30,70 50,75 Q70,80 80,60 Z" fill="none" stroke="#00A8FF" strokeWidth="1" opacity="0.4" />
-      <path d="M250,130 Q270,120 280,140 Q290,160 270,165 Q250,170 240,150 Z" fill="none" stroke="#FF9900" strokeWidth="1" opacity="0.4" />
-    </motion.svg>
-  );
-}
-
-function MiniMysteryBox() {
-  return (
-    <motion.svg
-      viewBox="0 0 200 200"
-      width="160" height="160"
-      animate={{ y: [0, -10, 0] }}
-      transition={{ repeat: Infinity, duration: 2.5, ease: 'easeInOut' }}
-      style={{ overflow: 'visible' }}
-    >
-      <ellipse cx="100" cy="175" rx="60" ry="12" fill="rgba(255,153,0,0.15)" />
-      <rect x="40" y="90" width="120" height="80" rx="6" fill="#1a1200" stroke="#FF9900" strokeWidth="2" />
-      <rect x="36" y="78" width="128" height="22" rx="5" fill="#221800" stroke="#FF9900" strokeWidth="2" />
-      <rect x="92" y="78" width="16" height="92" rx="3" fill="#FF9900" opacity="0.7" />
-      <text x="100" y="143" textAnchor="middle" fontSize="36">❓</text>
-      <circle cx="100" cy="50" r="28" fill="none" stroke="#FF9900" strokeWidth="1" strokeDasharray="4 3" opacity="0.5" />
-      <circle cx="100" cy="50" r="38" fill="none" stroke="#FF9900" strokeWidth="0.5" strokeDasharray="2 6" opacity="0.3" />
-    </motion.svg>
-  );
-}
-
-
-/* ═══════════════════════════════════════════════════════════
-   MAIN PAGE
    ═══════════════════════════════════════════════════════════ */
 
 export default function MysteryBoxHackathon() {
@@ -454,7 +130,7 @@ export default function MysteryBoxHackathon() {
               <span className="text-[clamp(42px,8vw,96px)]">Mystery</span>
               <span className="text-[clamp(42px,8vw,96px)]">Box</span>
               <span className="text-[clamp(42px,8vw,96px)] text-primary-container" style={{ textShadow: '0 0 30px rgba(255,153,0,0.4)' }}>
-                <TypeWriter text="Hackathon" delay={120} />
+                <TypeWriter words={['Hackathon', 'Hack It']} typingDelay={120} />
               </span>
             </h1>
 
