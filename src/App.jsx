@@ -27,6 +27,7 @@ import { checkSessionValidity, getUser, logout } from './utils/auth';
 import MysteryBoxHackathon from './pages/MysteryBoxHackathon';
 import FlappyBird from './pages/games/FlappyBird';
 import FruitNinja from './pages/games/FruitNinja';
+import SnakeGame from './pages/games/SnakeGame';
 
 /**
  * Detect mobile viewport (≤768px).
@@ -230,6 +231,7 @@ export default function App() {
           <Route path="/mystery-box-hackathon" element={<MysteryBoxHackathon />} />
           <Route path="/games/flappy-bird" element={<FlappyBird />} />
           <Route path="/games/fruit-ninja" element={<FruitNinja />} />
+          <Route path="/games/snake" element={<SnakeGame />} />
         </Routes>
       </div>
     </>
