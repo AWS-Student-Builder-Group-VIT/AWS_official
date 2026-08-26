@@ -34,6 +34,9 @@ import DetectiveCrime from './pages/games/detective and cypher game/DetectiveCri
 import LevelDevilGame from './pages/games/level-devil/src/LevelDevilGame';
 import MorseGame from './pages/games/Morse-Game/src/MorseGame';
 import PacmanGame from './pages/games/PacmanGame/PacmanGame';
+import MarioKart from './pages/games/MarioKart';
+import WatergirlFireboy from './pages/games/WatergirlFireboy';
+import AsteroidCommand from './pages/games/AsteroidCommand';
 import GamesPage from './pages/GamesPage';
 import { games } from './pages/gamesRegistry';
 
@@ -84,6 +87,9 @@ const gameComponents = {
   'level-devil': LevelDevilGame,
   morse: MorseGame,
   pacman: PacmanGame,
+  'mario-kart': MarioKart,
+  'watergirl-fireboy': WatergirlFireboy,
+  'asteroid-command': AsteroidCommand,
 };
 
 export default function App() {
