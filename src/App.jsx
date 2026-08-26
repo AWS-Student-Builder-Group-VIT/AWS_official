@@ -28,6 +28,12 @@ import MysteryBoxHackathon from './pages/MysteryBoxHackathon';
 import FlappyBird from './pages/games/FlappyBird';
 import FruitNinja from './pages/games/FruitNinja';
 import SnakeGame from './pages/games/SnakeGame';
+import WordleGame from './pages/games/ASCII-Wordle/src/WordleGame';
+import CrackTheCode from './pages/games/detective and cypher game/CrackTheCode.react';
+import DetectiveCrime from './pages/games/detective and cypher game/DetectiveCrime.react';
+import LevelDevilGame from './pages/games/level-devil/src/LevelDevilGame';
+import MorseGame from './pages/games/Morse-Game/src/MorseGame';
+import PacmanGame from './pages/games/PacmanGame/PacmanGame';
 
 /**
  * Detect mobile viewport (≤768px).
@@ -232,6 +238,12 @@ export default function App() {
           <Route path="/games/flappy-bird" element={<FlappyBird />} />
           <Route path="/games/fruit-ninja" element={<FruitNinja />} />
           <Route path="/games/snake" element={<SnakeGame />} />
+          <Route path="/games/wordle" element={<WordleGame />} />
+          <Route path="/games/crack-the-code" element={<CrackTheCode />} />
+          <Route path="/games/detective-crime" element={<DetectiveCrime />} />
+          <Route path="/games/level-devil" element={<LevelDevilGame />} />
+          <Route path="/games/morse" element={<MorseGame />} />
+          <Route path="/games/pacman" element={<PacmanGame />} />
         </Routes>
       </div>
     </>
