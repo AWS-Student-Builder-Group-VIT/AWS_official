@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import AwsStudentBuilderLoader from './components/AwsStudentBuilderLoader';
 import MobilePreloader from './components/MobilePreloader';
 import Hero from './components/Hero';
@@ -34,6 +34,8 @@ import DetectiveCrime from './pages/games/detective and cypher game/DetectiveCri
 import LevelDevilGame from './pages/games/level-devil/src/LevelDevilGame';
 import MorseGame from './pages/games/Morse-Game/src/MorseGame';
 import PacmanGame from './pages/games/PacmanGame/PacmanGame';
+import GamesPage from './pages/GamesPage';
+import { games } from './pages/gamesRegistry';
 
 /**
  * Detect mobile viewport (≤768px).
@@ -67,9 +69,27 @@ function HomePage() {
   );
 }
 
+function GameRoute({ Component }) {
+  const navigate = useNavigate();
+  return <Component onExit={() => navigate('/games')} />;
+}
+
+const gameComponents = {
+  'flappy-bird': FlappyBird,
+  'fruit-ninja': FruitNinja,
+  snake: SnakeGame,
+  wordle: WordleGame,
+  'crack-the-code': CrackTheCode,
+  'detective-crime': DetectiveCrime,
+  'level-devil': LevelDevilGame,
+  morse: MorseGame,
+  pacman: PacmanGame,
+};
+
 export default function App() {
   const location = useLocation();
   const isHomePage = location.pathname === '/';
+  const isGamesRoute = location.pathname.startsWith('/games');
 
   // Skip preloader if already shown this session
   const [isLoading, setIsLoading] = useState(() => {
@@ -188,12 +208,12 @@ export default function App() {
 
   return (
     <>
-      {isLoading && (
+      {isLoading && !isGamesRoute && (
         isMobile
           ? <MobilePreloader onDone={handlePreloaderDone} />
           : <AwsStudentBuilderLoader onDone={handlePreloaderDone} />
       )}
-      {showIntro && <GridScanIntro onDone={handleIntroDone} onFadeStart={() => setIntroFading(true)} displayDuration={5} />}
+      {showIntro && !isGamesRoute && <GridScanIntro onDone={handleIntroDone} onFadeStart={() => setIntroFading(true)} displayDuration={5} />}
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
 
       {/* StaggeredMenu — fixed overlay, shown only on the homepage */}
@@ -235,15 +255,8 @@ export default function App() {
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/mystery-box-hackathon" element={<MysteryBoxHackathon />} />
-          <Route path="/games/flappy-bird" element={<FlappyBird />} />
-          <Route path="/games/fruit-ninja" element={<FruitNinja />} />
-          <Route path="/games/snake" element={<SnakeGame />} />
-          <Route path="/games/wordle" element={<WordleGame />} />
-          <Route path="/games/crack-the-code" element={<CrackTheCode />} />
-          <Route path="/games/detective-crime" element={<DetectiveCrime />} />
-          <Route path="/games/level-devil" element={<LevelDevilGame />} />
-          <Route path="/games/morse" element={<MorseGame />} />
-          <Route path="/games/pacman" element={<PacmanGame />} />
+          <Route path="/games" element={<GamesPage />} />
+          {games.map((game) => <Route key={game.slug} path={game.path} element={<GameRoute Component={gameComponents[game.slug]} />} />)}
         </Routes>
       </div>
     </>
