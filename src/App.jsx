@@ -25,6 +25,7 @@ import AccountPage from './pages/AccountPage';
 import LoginPage from './pages/LoginPage';
 import { checkSessionValidity, getUser, logout } from './utils/auth';
 import MysteryBoxHackathon from './pages/MysteryBoxHackathon';
+import FlappyBird from './pages/games/FlappyBird';
 
 /**
  * Detect mobile viewport (≤768px).
@@ -226,6 +227,7 @@ export default function App() {
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/mystery-box-hackathon" element={<MysteryBoxHackathon />} />
+          <Route path="/games/flappy-bird" element={<FlappyBird />} />
         </Routes>
       </div>
     </>
