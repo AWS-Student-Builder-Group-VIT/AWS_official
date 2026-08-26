@@ -8,4 +8,7 @@ export const games = [
   { slug: 'level-devil', path: '/games/level-devil', title: 'AWS Level Devil', description: 'Survive five deceptive platform levels.', status: 'Platform challenge' },
   { slug: 'morse', path: '/games/morse', title: 'AWS Morse Decoder', description: 'Read Morse signals before time expires.', status: 'Signal challenge' },
   { slug: 'pacman', path: '/games/pacman', title: 'Pacman', description: 'Clear the maze while staying ahead of the ghosts.', status: 'Maze challenge' },
+  { slug: 'mario-kart', path: '/games/mario-kart', title: 'AWS MarioKart', description: 'Race an EC2 data pod through a high-speed cloud corridor.', status: 'Runner challenge' },
+  { slug: 'watergirl-fireboy', path: '/games/watergirl-fireboy', title: 'AWS Watergirl Fireboy', description: 'Guide both cloud agents through hazards and into their portals.', status: 'Co-op challenge' },
+  { slug: 'asteroid-command', path: '/games/asteroid-command', title: 'AWS Asteroid Command', description: 'Defend your cloud ship in a 3D asteroid tournament.', status: 'Space challenge' },
 ];
