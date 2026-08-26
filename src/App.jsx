@@ -26,6 +26,10 @@ import LoginPage from './pages/LoginPage';
 import { checkSessionValidity, getUser, logout } from './utils/auth';
 import MysteryBoxHackathon from './pages/MysteryBoxHackathon';
 import FlappyBird from './pages/games/FlappyBird';
+import AsteroidVsAsteroid from './pages/games/asteroidVsasteroid';
+import WaterGirlFireboy from './pages/games/waterGirlFireBoy';
+import MarioKart from './pages/games/marioKart';
+
 
 /**
  * Detect mobile viewport (≤768px).
@@ -228,6 +232,10 @@ export default function App() {
           <Route path="/account" element={<AccountPage />} />
           <Route path="/mystery-box-hackathon" element={<MysteryBoxHackathon />} />
           <Route path="/games/flappy-bird" element={<FlappyBird />} />
+          <Route path="/games/asteroid" element={<AsteroidVsAsteroid />} />
+          <Route path="/games/asteroid-vs-asteroid" element={<AsteroidVsAsteroid />} />
+          <Route path="/games/watergirl-fireboy" element={<WaterGirlFireboy />} />
+          <Route path="/games/mario-kart" element={<MarioKart />} />
         </Routes>
       </div>
     </>

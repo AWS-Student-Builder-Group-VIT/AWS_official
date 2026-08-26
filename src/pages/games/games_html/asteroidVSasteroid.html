@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asteroid vs Asteroid: 3D AWS Command</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap');
+
+        :root {
+            --aws-orange: #ff9900;
+            --aws-orange-glow: rgba(255, 153, 0, 0.4);
+            --aws-orange-bright: #ffb347;
+            --aws-dark-charcoal: #19232d;
+            --aws-deep-slate: #232f3e;
+            --aws-black: #0f141a;
+            --critical-red: #ff3c00;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            outline: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            overflow: hidden;
+            color: #eaeded;
+            font-family: 'Rajdhani', sans-serif;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            background: radial-gradient(circle, rgba(25, 35, 45, 0.85) 0%, rgba(15, 20, 26, 0.98) 100%);
+            backdrop-filter: blur(8px);
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+        }
+
+        .overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .menu-card {
+            background-color: rgba(20, 27, 36, 0.95);
+            border: 2px solid var(--aws-deep-slate);
+            border-radius: 8px;
+            padding: 40px;
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 153, 0, 0.15);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .menu-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--aws-orange), transparent);
+            animation: scanline 2.5s infinite linear;
+        }
+
+        @keyframes scanline {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .glow-text {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            margin: 0 0 5px 0;
+            letter-spacing: 2px;
+            color: #ffffff;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.1), 0 0 20px var(--aws-orange-glow);
+            line-height: 1.1;
+        }
+
+        .glow-text.critical {
+            text-shadow: 0 0 10px rgba(255, 0, 0, 0.2), 0 0 20px rgba(255, 60, 0, 0.4);
+            color: #ffffff;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            letter-spacing: 5px;
+            color: var(--aws-orange);
+            margin-bottom: 30px;
+            font-weight: 700;
+        }
+
+        /* Controls guide */
+        .controls-guide {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 35px;
+            text-align: left;
+            background-color: rgba(15, 20, 26, 0.6);
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 153, 0, 0.1);
+        }
+
+        .control-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .control-item p {
+            margin: 0;
+            font-size: 0.95rem;
+            color: #a2b0b8;
+        }
+
+        .key-badge {
+            background-color: var(--aws-deep-slate);
+            border: 1px solid rgba(255, 153, 0, 0.3);
+            border-radius: 4px;
+            padding: 3px 8px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            color: #ffffff;
+            min-width: 25px;
+            text-align: center;
+            box-shadow: inset 0 0 5px rgba(255, 153, 0, 0.2);
+        }
+
+        /* Button */
+        .aws-btn {
+            background-color: var(--aws-orange);
+            color: #000000;
+            border: none;
+            border-radius: 4px;
+            padding: 14px 35px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 153, 0, 0.3);
+            letter-spacing: 1px;
+        }
+
+        .aws-btn:hover {
+            background-color: var(--aws-orange-bright);
+            box-shadow: 0 4px 25px rgba(255, 153, 0, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .aws-btn:active {
+            transform: translateY(1px);
+        }
+
+        /* HUD Overlay */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            padding: 0 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 5;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        #hud.hidden {
+            opacity: 0;
+        }
+
+        /* HUD elements */
+        .stage-tag {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #ffffff;
+            border-left: 3px solid var(--aws-orange);
+            padding-left: 10px;
+            letter-spacing: 1px;
+        }
+
+        .shield-container {
+            width: 240px;
+            text-align: center;
+        }
+
+        .shield-label {
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            color: #a2b0b8;
+            margin-bottom: 5px;
+        }
+
+        .shield-bar-bg {
+            height: 10px;
+            background-color: rgba(35, 47, 62, 0.6);
+            border: 1px solid rgba(255, 153, 0, 0.2);
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .shield-bar-fill {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, var(--aws-orange) 0%, #ff4500 100%);
+            box-shadow: 0 0 10px rgba(255, 153, 0, 0.7);
+            transition: width 0.3s ease;
+        }
+
+        .hud-top-right {
+            display: flex;
+            align-items: center;
+        }
+
+        .hud-stat-box {
+            text-align: right;
+        }
+
+        .hud-label {
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            color: #a2b0b8;
+        }
+
+        .hud-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .hud-value.highlight {
+            color: var(--aws-orange);
+            text-shadow: 0 0 8px var(--aws-orange-glow);
+        }
+
+        /* Stats panel in Game Over */
+        .stats-panel {
+            background-color: rgba(15, 20, 26, 0.7);
+            border: 1px solid var(--aws-deep-slate);
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 1rem;
+            color: #a2b0b8;
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-row.highlight {
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        .stat-row.highlight .stat-val {
+            color: var(--aws-orange);
+            text-shadow: 0 0 5px var(--aws-orange-glow);
+        }
+
+        .stat-val {
+            font-family: 'Orbitron', sans-serif;
+            color: #ffffff;
+        }
+
+        /* Mute button styling */
+        #mute-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 6;
+        }
+
+        #btn-mute {
+            background-color: rgba(20, 27, 36, 0.7);
+            border: 1px solid var(--aws-deep-slate);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        #btn-mute:hover {
+            border-color: var(--aws-orange);
+            box-shadow: 0 0 10px var(--aws-orange-glow);
+        }
+
+        #btn-mute svg {
+            width: 22px;
+            height: 22px;
+            fill: #a2b0b8;
+            transition: fill 0.3s ease;
+        }
+
+        #btn-mute:hover svg {
+            fill: var(--aws-orange);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="start-menu" class="overlay">
+        <div class="menu-card">
+            <h1 class="glow-text">ASTEROID<br><span style="color: #ff9900;">vs</span> ASTEROID</h1>
+            <p class="subtitle">3D AWS SPACE COMMAND</p>
+            <div class="controls-guide">
+                <div class="control-item">
+                    <span class="key-badge">←</span> <span class="key-badge">→</span> / <span class="key-badge">A</span> <span class="key-badge">D</span>
+                    <p>Move Ship Left / Right</p>
+                </div>
+                <div class="control-item">
+                    <span class="key-badge">↑</span> <span class="key-badge">↓</span> / <span class="key-badge">W</span> <span class="key-badge">S</span>
+                    <p>Slide Ship Forward / Backward</p>
+                </div>
+                <div class="control-item">
+                    <span class="key-badge" style="width: 110px;">SPACEBAR</span>
+                    <p>Fire Twin Plasma Lasers</p>
+                </div>
+            </div>
+            <button id="btn-start" class="aws-btn">LAUNCH MISSION</button>
+        </div>
+    </div>
+
+    <div id="game-over-menu" class="overlay hidden">
+        <div class="menu-card" style="max-width: 520px;">
+            <h1 id="over-title" class="glow-text critical">MISSION FAILURE</h1>
+            <p id="over-subtitle" class="subtitle" style="color: #ff3c00;">SHIP INTEGRITY COMPROMISED</p>
+            
+            <!-- Single Attempt Stats Panel -->
+            <div id="single-stats-panel" class="stats-panel">
+                <div class="stat-row">
+                    <span>Final Score</span>
+                    <span id="stat-score" class="stat-val">0</span>
+                </div>
+                <div class="stat-row">
+                    <span>Asteroids Blasted</span>
+                    <span id="stat-asteroids" class="stat-val">0</span>
+                </div>
+                <div class="stat-row">
+                    <span>Stage Reached</span>
+                    <span id="stat-stage" class="stat-val">0</span>
+                </div>
+                <div class="stat-row highlight">
+                    <span>Personal Best</span>
+                    <span id="stat-highscore" class="stat-val">0</span>
+                </div>
+            </div>
+            
+            <!-- Tournament Stats Panel -->
+            <div id="tournament-stats-panel" class="stats-panel hidden">
+                <div class="stat-row highlight" style="justify-content: center; font-size: 1.15rem; border-bottom: 2px solid var(--aws-deep-slate); padding-bottom: 8px; margin-bottom: 8px;">
+                    <span>TOURNAMENT BREAKDOWN</span>
+                </div>
+                <div class="stat-row">
+                    <span>Attempt 1 Score</span>
+                    <span id="attempt-1-val" class="stat-val">-</span>
+                </div>
+                <div class="stat-row">
+                    <span>Attempt 2 Score</span>
+                    <span id="attempt-2-val" class="stat-val">-</span>
+                </div>
+                <div class="stat-row">
+                    <span>Attempt 3 Score</span>
+                    <span id="attempt-3-val" class="stat-val">-</span>
+                </div>
+                <div class="stat-row">
+                    <span>Attempt 4 Score</span>
+                    <span id="attempt-4-val" class="stat-val">-</span>
+                </div>
+                <div class="stat-row" style="border-bottom: 2px solid var(--aws-deep-slate); padding-bottom: 8px; margin-bottom: 8px;">
+                    <span>Attempt 5 Score</span>
+                    <span id="attempt-5-val" class="stat-val">-</span>
+                </div>
+                <div class="stat-row highlight">
+                    <span>TOURNAMENT BEST</span>
+                    <span id="tournament-best-val" class="stat-val">0</span>
+                </div>
+                <div class="stat-row highlight" style="color: var(--aws-orange); border-top: 1px dashed rgba(255, 153, 0, 0.4); padding-top: 12px; margin-top: 8px; font-size: 1.15rem;">
+                    <span>TEAM POINTS AWARDED</span>
+                    <span id="team-points-val" class="stat-val" style="color: var(--aws-orange-bright); font-size: 1.25rem;">0.00 pts</span>
+                </div>
+            </div>
+            
+            <button id="btn-restart" class="aws-btn">REDEPLOY SHIP</button>
+        </div>
+    </div>
+
+    <div id="hud" class="hidden">
+        <div class="hud-top-left" style="display: flex; gap: 20px; align-items: center;">
+            <div class="stage-tag">STAGE <span id="hud-stage">01</span></div>
+            <div class="stage-tag" style="border-color: var(--aws-orange);">ATTEMPT <span id="hud-attempt">1 / 5</span></div>
+        </div>
+        
+        <div class="hud-top-center">
+            <div style="display: flex; gap: 30px; align-items: center;">
+                <div class="hud-stat-box" style="text-align: center;">
+                    <div class="hud-label">SURVIVAL TIME</div>
+                    <div id="hud-timer" class="hud-value" style="font-size: 1.25rem; color: var(--aws-orange);">00:00</div>
+                </div>
+                <div class="shield-container">
+                    <div class="shield-label">SHIELD INTEGRITY</div>
+                    <div class="shield-bar-bg">
+                        <div id="hud-shield-fill" class="shield-bar-fill"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="hud-top-right">
+            <div class="hud-stat-box">
+                <div class="hud-label">SCORE</div>
+                <div id="hud-score" class="hud-value">000,000</div>
+            </div>
+            <div class="hud-stat-box" style="margin-left: 20px;">
+                <div class="hud-label">MULTIPLIER</div>
+                <div id="hud-multiplier" class="hud-value highlight">x1</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="mute-container">
+        <button id="btn-mute" aria-label="Toggle Sound">
+            <svg id="sound-on-icon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            <svg id="sound-off-icon" class="hidden" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.21.05-.42.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+        </button>
+    </div>
+
+    <!-- Load Three.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // --- AUDIO ENGINE (WEB AUDIO API SYNTHESIZER) ---
+        let audioCtx = null;
+        let isMuted = false;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playLaserSound() {
+            if (isMuted) return;
+            initAudio();
+            if (!audioCtx) return;
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(110, audioCtx.currentTime + 0.15);
+            
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.15);
+        }
+
+        function playExplosionSound(size) {
+            if (isMuted) return;
+            initAudio();
+            if (!audioCtx) return;
+            
+            const duration = size === 3 ? 0.4 : size === 2 ? 0.25 : 0.15;
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            
+            const noiseNode = audioCtx.createBufferSource();
+            noiseNode.buffer = buffer;
+            
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(size === 3 ? 90 : size === 2 ? 180 : 360, audioCtx.currentTime);
+            filter.Q.setValueAtTime(2.5, audioCtx.currentTime);
+            
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(size === 3 ? 0.35 : size === 2 ? 0.25 : 0.15, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            
+            noiseNode.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            noiseNode.start();
+            noiseNode.stop(audioCtx.currentTime + duration);
+        }
+
+        function playShieldHitSound() {
+            if (isMuted) return;
+            initAudio();
+            if (!audioCtx) return;
+            
+            const osc1 = audioCtx.createOscillator();
+            const osc2 = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc1.type = 'triangle';
+            osc1.frequency.setValueAtTime(160, audioCtx.currentTime);
+            osc1.frequency.linearRampToValueAtTime(30, audioCtx.currentTime + 0.2);
+            
+            osc2.type = 'sawtooth';
+            osc2.frequency.setValueAtTime(220, audioCtx.currentTime);
+            osc2.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 0.25);
+            
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+            
+            osc1.connect(gain);
+            osc2.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc1.start();
+            osc2.start();
+            osc1.stop(audioCtx.currentTime + 0.25);
+            osc2.stop(audioCtx.currentTime + 0.25);
+        }
+
+        function playLevelUpSound() {
+            if (isMuted) return;
+            initAudio();
+            if (!audioCtx) return;
+            
+            const now = audioCtx.currentTime;
+            const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
+            notes.forEach((freq, index) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, now + index * 0.08);
+                gain.gain.setValueAtTime(0.1, now + index * 0.08);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + index * 0.08 + 0.15);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now + index * 0.08);
+                osc.stop(now + index * 0.08 + 0.15);
+            });
+        }
+
+
+        // --- GAME SYSTEM ---
+        let scene, camera, renderer;
+        let starfield;
+        let ship;
+        let lasers = [];
+        let asteroids = [];
+        let particles;
+        
+        // Game State
+        let score = 0;
+        let highScore = parseInt(localStorage.getItem('aws_space_high_score')) || 0;
+        let level = 1;
+        let shield = 100;
+        let multiplier = 1;
+        let consecutiveHits = 0;
+        let asteroidsDestroyed = 0;
+        
+        let gameStarted = false;
+        let gameOver = false;
+        let clock = new THREE.Clock();
+        
+        // Tournament & Timer settings
+        let attemptsScores = [];
+        const maxAttempts = 5;
+        let survivalTimer = 0;
+        
+        // Spawn configurations
+        let asteroidSpawnTimer = 0;
+        let spawnInterval = 1500; // ms
+        
+        // Camera shake state
+        let shakeIntensity = 0;
+        let shakeTime = 0;
+        
+        // Key controls mapping
+        const keys = {
+            ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false,
+            KeyA: false, KeyD: false, KeyW: false, KeyS: false,
+            Space: false
+        };
+        
+        let lastFireTime = 0;
+        const fireCooldown = 180; // ms
+        
+        // Setup DOM nodes
+        const startMenu = document.getElementById('start-menu');
+        const gameOverMenu = document.getElementById('game-over-menu');
+        const hud = document.getElementById('hud');
+        const shieldFill = document.getElementById('hud-shield-fill');
+        const scoreVal = document.getElementById('hud-score');
+        const multiplierVal = document.getElementById('hud-multiplier');
+        const stageVal = document.getElementById('hud-stage');
+        const hudAttempt = document.getElementById('hud-attempt');
+        const hudTimer = document.getElementById('hud-timer');
+        
+        const overTitle = document.getElementById('over-title');
+        const overSubtitle = document.getElementById('over-subtitle');
+        const singleStatsPanel = document.getElementById('single-stats-panel');
+        const tournamentStatsPanel = document.getElementById('tournament-stats-panel');
+        
+        const statScore = document.getElementById('stat-score');
+        const statAsteroids = document.getElementById('stat-asteroids');
+        const statStage = document.getElementById('stat-stage');
+        const statHighScore = document.getElementById('stat-highscore');
+        
+        const attempt1Val = document.getElementById('attempt-1-val');
+        const attempt2Val = document.getElementById('attempt-2-val');
+        const attempt3Val = document.getElementById('attempt-3-val');
+        const attempt4Val = document.getElementById('attempt-4-val');
+        const attempt5Val = document.getElementById('attempt-5-val');
+        const tournamentBestVal = document.getElementById('tournament-best-val');
+        const teamPointsVal = document.getElementById('team-points-val');
+        
+        const btnStart = document.getElementById('btn-start');
+        const btnRestart = document.getElementById('btn-restart');
+        const btnMute = document.getElementById('btn-mute');
+        const soundOnIcon = document.getElementById('sound-on-icon');
+        const soundOffIcon = document.getElementById('sound-off-icon');
+
+        // Initialize Three.js scene
+        function init3D() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x0a0f14, 0.015);
+            
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, -18, 8);
+            camera.lookAt(0, 2, 0);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setClearColor(0x0a0f14, 1);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+            
+            // Lighting Setup
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
+            scene.add(ambientLight);
+            
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            dirLight.position.set(5, 10, 15);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+            
+            // Glowing AWS theme point light directly over the field
+            const orangeLight = new THREE.PointLight(0xFF9900, 2.5, 30);
+            orangeLight.position.set(0, 0, 5);
+            scene.add(orangeLight);
+            
+            // Procedural Starfield background
+            starfield = createStarfield();
+            
+            // Particles helper
+            particles = new ParticleSystem(scene);
+            
+            // Render resizing
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function createStarfield() {
+            const starCount = 800;
+            const starGeom = new THREE.BufferGeometry();
+            const positions = new Float32Array(starCount * 3);
+            const colors = new Float32Array(starCount * 3);
+            
+            const colorAWS = new THREE.Color(0xFF9900);
+            const colorWhite = new THREE.Color(0xFFFFFF);
+            
+            for (let i = 0; i < starCount; i++) {
+                // Spread coordinates
+                positions[i * 3] = (Math.random() - 0.5) * 55;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 45;
+                positions[i * 3 + 2] = -Math.random() * 50 - 5;
+                
+                // 20% AWS orange stars, 80% white stars
+                const isOrange = Math.random() < 0.20;
+                const color = isOrange ? colorAWS : colorWhite;
+                
+                colors[i * 3] = color.r;
+                colors[i * 3 + 1] = color.g;
+                colors[i * 3 + 2] = color.b;
+            }
+            
+            starGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            starGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            // Circular star particle texture
+            const canvas = document.createElement('canvas');
+            canvas.width = 16;
+            canvas.height = 16;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 16, 16);
+            const starTexture = new THREE.CanvasTexture(canvas);
+            
+            const starMat = new THREE.PointsMaterial({
+                size: 0.35,
+                map: starTexture,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const stars = new THREE.Points(starGeom, starMat);
+            scene.add(stars);
+            return stars;
+        }
+
+        function updateStarfield(speed) {
+            const pos = starfield.geometry.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                let y = pos.getY(i);
+                y -= speed;
+                if (y < -22) {
+                    y = 22;
+                    pos.setX(i, (Math.random() - 0.5) * 55);
+                    pos.setZ(i, -Math.random() * 50 - 5);
+                }
+                pos.setY(i, y);
+            }
+            pos.needsUpdate = true;
+        }
+
+        // --- 3D PROCEDURAL ASSETS ---
+        function createPlayerShip() {
+            const shipGroup = new THREE.Group();
+            
+            // Fuselage - Charcoal cone
+            const fuselageGeom = new THREE.ConeGeometry(0.7, 3, 8);
+            fuselageGeom.rotateX(Math.PI / 2);
+            const darkSlateMat = new THREE.MeshStandardMaterial({
+                color: 0x19232D,
+                roughness: 0.4,
+                metalness: 0.8,
+                flatShading: true
+            });
+            const fuselage = new THREE.Mesh(fuselageGeom, darkSlateMat);
+            shipGroup.add(fuselage);
+            
+            // Wings - Styled AWS Orange panels
+            const wingGeom = new THREE.BoxGeometry(3.2, 0.15, 0.8);
+            const orangeMat = new THREE.MeshStandardMaterial({
+                color: 0xFF9900,
+                roughness: 0.3,
+                metalness: 0.7,
+                emissive: 0x331e00,
+                flatShading: true
+            });
+            const wings = new THREE.Mesh(wingGeom, orangeMat);
+            wings.position.set(0, -0.4, -0.2);
+            wings.rotation.x = 0.2;
+            shipGroup.add(wings);
+
+            // Side Engines / Cannon Pods
+            const leftEngineGeom = new THREE.CylinderGeometry(0.2, 0.25, 0.8, 6);
+            leftEngineGeom.rotateX(Math.PI / 2);
+            const rightEngineGeom = leftEngineGeom.clone();
+            
+            const engineMat = new THREE.MeshStandardMaterial({
+                color: 0x232F3E,
+                metalness: 0.9,
+                roughness: 0.1
+            });
+            
+            const leftEngine = new THREE.Mesh(leftEngineGeom, engineMat);
+            leftEngine.position.set(-1.6, -0.4, -0.2);
+            const rightEngine = new THREE.Mesh(rightEngineGeom, engineMat);
+            rightEngine.position.set(1.6, -0.4, -0.2);
+            shipGroup.add(leftEngine, rightEngine);
+            
+            // Cockpit - Translucent Orange glow
+            const cockpitGeom = new THREE.SphereGeometry(0.35, 8, 8);
+            cockpitGeom.scale(1, 2, 1);
+            cockpitGeom.rotateX(Math.PI / 2);
+            const cockpitMat = new THREE.MeshStandardMaterial({
+                color: 0xFF9900,
+                emissive: 0xFF9900,
+                emissiveIntensity: 0.6,
+                roughness: 0.1,
+                transparent: true,
+                opacity: 0.85
+            });
+            const cockpit = new THREE.Mesh(cockpitGeom, cockpitMat);
+            cockpit.position.set(0, 0.3, 0.25);
+            shipGroup.add(cockpit);
+            
+            // Thruster fire - Cone
+            const fireGeom = new THREE.ConeGeometry(0.25, 0.8, 8);
+            fireGeom.rotateX(-Math.PI / 2);
+            fireGeom.translate(0, -1.6, 0);
+            const fireMat = new THREE.MeshBasicMaterial({
+                color: 0xFF9900,
+                transparent: true,
+                opacity: 0.8
+            });
+            const thrusterFire = new THREE.Mesh(fireGeom, fireMat);
+            shipGroup.add(thrusterFire);
+            
+            shipGroup.castShadow = true;
+            shipGroup.receiveShadow = true;
+            shipGroup.userData = { thrusterFire: thrusterFire };
+            
+            return shipGroup;
+        }
+
+        function createAsteroidMesh(size) {
+            let radius;
+            let detail;
+            if (size === 3) { radius = 1.8; detail = 1; }
+            else if (size === 2) { radius = 1.0; detail = 1; }
+            else { radius = 0.5; detail = 0; }
+            
+            const geom = new THREE.DodecahedronGeometry(radius, detail);
+            
+            // Perturb vertices to create a craggy, jagged rock profile
+            const pos = geom.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                let x = pos.getX(i);
+                let y = pos.getY(i);
+                let z = pos.getZ(i);
+                
+                const noise = radius * 0.18 * (Math.random() - 0.5);
+                pos.setXYZ(i, x + noise, y + noise, z + noise);
+            }
+            geom.computeVertexNormals();
+            
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0x1d2126,
+                roughness: 0.9,
+                metalness: 0.15,
+                emissive: 0xff4500, // soft magma core glow
+                emissiveIntensity: 0.15,
+                flatShading: true
+            });
+            
+            const mesh = new THREE.Mesh(geom, mat);
+            mesh.rotation.set(
+                Math.random() * Math.PI,
+                Math.random() * Math.PI,
+                Math.random() * Math.PI
+            );
+            
+            return mesh;
+        }
+
+        // --- PARTICLE SYSTEM ---
+        class ParticleSystem {
+            constructor(scene) {
+                this.scene = scene;
+                this.particles = [];
+            }
+            
+            spawnExplosion(x, y, z, color, count = 25, isBig = false) {
+                const group = new THREE.Group();
+                const pSize = isBig ? 0.22 : 0.13;
+                const geom = new THREE.BoxGeometry(pSize, pSize, pSize);
+                const mat = new THREE.MeshBasicMaterial({
+                    color: color || 0xFF9900,
+                    transparent: true,
+                    opacity: 1
+                });
+                
+                const instances = [];
+                for (let i = 0; i < count; i++) {
+                    const mesh = new THREE.Mesh(geom, mat);
+                    mesh.position.set(x, y, z);
+                    
+                    const speed = (Math.random() * 8 + (isBig ? 5 : 2.5));
+                    const angle = Math.random() * Math.PI * 2;
+                    const pitch = (Math.random() - 0.5) * Math.PI;
+                    
+                    const xv = speed * Math.cos(angle) * Math.cos(pitch);
+                    const yv = speed * Math.sin(angle) * Math.cos(pitch);
+                    const zv = speed * Math.sin(pitch);
+                    
+                    group.add(mesh);
+                    instances.push({
+                        mesh: mesh,
+                        xv: xv,
+                        yv: yv,
+                        zv: zv,
+                        life: 1.0,
+                        decay: Math.random() * 1.6 + 1.2
+                    });
+                }
+                
+                this.scene.add(group);
+                this.particles.push({
+                    group: group,
+                    instances: instances
+                });
+            }
+            
+            update(dt) {
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const system = this.particles[i];
+                    let allDead = true;
+                    
+                    for (let p of system.instances) {
+                        if (p.life > 0) {
+                            p.mesh.position.x += p.xv * dt;
+                            p.mesh.position.y += p.yv * dt;
+                            p.mesh.position.z += p.zv * dt;
+                            
+                            p.xv *= 0.94;
+                            p.yv *= 0.94;
+                            p.zv *= 0.94;
+                            
+                            p.life -= p.decay * dt;
+                            p.mesh.scale.setScalar(p.life);
+                            p.mesh.material.opacity = p.life;
+                            
+                            if (p.life > 0) {
+                                allDead = false;
+                            } else {
+                                system.group.remove(p.mesh);
+                            }
+                        }
+                    }
+                    
+                    if (allDead) {
+                        this.scene.remove(system.group);
+                        this.particles.splice(i, 1);
+                    }
+                }
+            }
+        }
+
+        // --- CAMERA EFFECTS ---
+        function triggerScreenShake(intensity, duration) {
+            shakeIntensity = intensity;
+            shakeTime = duration;
+        }
+
+        function updateScreenShake(dt) {
+            if (shakeTime > 0) {
+                shakeTime -= dt;
+                const currentIntensity = (shakeTime / 0.4) * shakeIntensity;
+                camera.position.x = (Math.random() - 0.5) * currentIntensity;
+                camera.position.z = 8 + (Math.random() - 0.5) * currentIntensity;
+                camera.position.y = -18 + (Math.random() - 0.5) * currentIntensity;
+            } else {
+                camera.position.set(0, -18, 8);
+            }
+        }
+
+        // --- GAMEPLAY FLOW & MECHANICS ---
+        function startGame() {
+            initAudio();
+            
+            // If the last tournament finished 5 attempts, start a new tournament
+            if (attemptsScores.length >= maxAttempts) {
+                attemptsScores = [];
+            }
+            
+            // Clean active game elements
+            for (let a of asteroids) scene.remove(a.mesh);
+            for (let l of lasers) scene.remove(l.mesh);
+            asteroids = [];
+            lasers = [];
+            
+            score = 0;
+            level = 1;
+            shield = 100;
+            multiplier = 1;
+            consecutiveHits = 0;
+            asteroidsDestroyed = 0;
+            spawnInterval = 1500;
+            survivalTimer = 0;
+            
+            updateHUD();
+            
+            if (!ship) {
+                ship = createPlayerShip();
+                scene.add(ship);
+            }
+            ship.position.set(0, -11, 0);
+            ship.rotation.set(0, 0, 0);
+            ship.visible = true;
+            
+            gameOver = false;
+            gameStarted = true;
+            
+            startMenu.classList.add('hidden');
+            gameOverMenu.classList.add('hidden');
+            hud.classList.remove('hidden');
+            
+            clock.getDelta(); // reset clock delta
+        }
+
+        function triggerGameOver() {
+            gameOver = true;
+            ship.visible = false;
+            
+            // Explosion sound & visuals at ship location
+            playExplosionSound(3);
+            particles.spawnExplosion(ship.position.x, ship.position.y, 0, 0xFFFFFF, 35, true);
+            particles.spawnExplosion(ship.position.x, ship.position.y, 0, 0xFF9900, 35, true);
+            
+            // Record this attempt's score
+            attemptsScores.push(score);
+            const completedAttempts = attemptsScores.length;
+            
+            // Update High Score
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('aws_space_high_score', highScore);
+            }
+            
+            // Load stats into standard fields
+            statScore.innerText = formatNumber(score);
+            statAsteroids.innerText = asteroidsDestroyed;
+            statStage.innerText = level;
+            statHighScore.innerText = formatNumber(highScore);
+            
+            // Branch interface based on tournament completion
+            if (completedAttempts < maxAttempts) {
+                // Standard game over, next attempt pending
+                overTitle.innerText = "MISSION FAILURE";
+                overTitle.className = "glow-text critical";
+                overSubtitle.innerText = `ATTEMPTS COMPLETED: ${completedAttempts} / ${maxAttempts}`;
+                overSubtitle.style.color = "#ff9900";
+                
+                singleStatsPanel.classList.remove('hidden');
+                tournamentStatsPanel.classList.add('hidden');
+                btnRestart.innerText = `LAUNCH ATTEMPT ${completedAttempts + 1} / ${maxAttempts}`;
+                btnRestart.classList.remove('hidden');
+            } else {
+                // Tournament finished (5 attempts complete)
+                overTitle.innerText = "TOURNAMENT COMPLETE";
+                overTitle.className = "glow-text";
+                overSubtitle.innerText = "ALL 5 OF 5 ATTEMPTS COMPLETED";
+                overSubtitle.style.color = "var(--aws-orange)";
+                
+                // Show tournament panel
+                singleStatsPanel.classList.add('hidden');
+                tournamentStatsPanel.classList.remove('hidden');
+                
+                // Populate attempt scores
+                attempt1Val.innerText = formatNumber(attemptsScores[0]);
+                attempt2Val.innerText = formatNumber(attemptsScores[1]);
+                attempt3Val.innerText = formatNumber(attemptsScores[2]);
+                attempt4Val.innerText = formatNumber(attemptsScores[3]);
+                attempt5Val.innerText = formatNumber(attemptsScores[4]);
+                
+                const bestScore = Math.max(...attemptsScores);
+                tournamentBestVal.innerText = formatNumber(bestScore);
+                
+                // Awarded points calculation: best score divided by 100
+                const teamPoints = (bestScore / 100).toFixed(2);
+                teamPointsVal.innerText = teamPoints + ' pts';
+                
+                // Hide the restart button so no new tournament can be started
+                btnRestart.classList.add('hidden');
+            }
+            
+            setTimeout(() => {
+                hud.classList.add('hidden');
+                gameOverMenu.classList.remove('hidden');
+            }, 1000);
+        }
+
+        function addScore(amount) {
+            score += amount * multiplier;
+            updateHUD();
+            
+            // Level Progression based on score threshold
+            const targetStage = Math.floor(score / 2500) + 1;
+            if (targetStage > level) {
+                level = targetStage;
+                spawnInterval = Math.max(450, 1500 - (level - 1) * 140);
+                playLevelUpSound();
+                updateHUD();
+            }
+        }
+
+        function updateHUD() {
+            shieldFill.style.width = shield + '%';
+            if (shield < 35) {
+                shieldFill.style.background = 'linear-gradient(90deg, #ff3c00 0%, #ff0000 100%)';
+            } else {
+                shieldFill.style.background = 'linear-gradient(90deg, var(--aws-orange) 0%, #ff4500 100%)';
+            }
+            scoreVal.innerText = formatNumber(score);
+            multiplierVal.innerText = 'x' + multiplier;
+            stageVal.innerText = String(level).padStart(2, '0');
+            
+            // Update attempt and survival timer
+            hudAttempt.innerText = (attemptsScores.length + 1) + ' / ' + maxAttempts;
+            hudTimer.innerText = formatTime(survivalTimer);
+        }
+
+        function formatNumber(num) {
+            return num.toLocaleString('en-US', { minimumIntegerDigits: 6, useGrouping: false });
+        }
+        
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+        }
+
+        // Precision line-segment intersection checker to solve high speed bullet tunneling
+        function distToSegment(p, a, b) {
+            const ab = new THREE.Vector3().subVectors(b, a);
+            const ap = new THREE.Vector3().subVectors(p, a);
+            
+            let t = ap.dot(ab) / ab.lengthSq();
+            if (isNaN(t)) t = 0;
+            t = Math.max(0, Math.min(1, t)); // clamp to line segment
+            
+            const closest = new THREE.Vector3().addVectors(a, ab.multiplyScalar(t));
+            return p.distanceTo(closest);
+        }
+
+        function spawnAsteroid() {
+            if (asteroids.length >= 15) return;
+            
+            const roll = Math.random();
+            let size = 1;
+            if (roll > 0.6) size = 3; // Large
+            else if (roll > 0.25) size = 2; // Medium
+            
+            let radius = size === 3 ? 1.8 : size === 2 ? 1.0 : 0.5;
+            
+            const asteroid = {
+                mesh: createAsteroidMesh(size),
+                size: size,
+                radius: radius,
+                yv: -(Math.random() * 4 + 4 + level * 0.8), // downward speed
+                xv: (Math.random() - 0.5) * 2.5,
+                rx: (Math.random() - 0.5) * 2.5,
+                ry: (Math.random() - 0.5) * 2.5,
+                rz: (Math.random() - 0.5) * 2.5
+            };
+            
+            // Random horizontal placement at the top
+            asteroid.mesh.position.set(
+                (Math.random() - 0.5) * 28,
+                16,
+                (Math.random() - 0.5) * 2 // slight depth randomness
+            );
+            
+            scene.add(asteroid.mesh);
+            asteroids.push(asteroid);
+        }
+
+        function handleAsteroidHit(asteroid, index) {
+            scene.remove(asteroid.mesh);
+            asteroids.splice(index, 1);
+            
+            // Explosion visual & sound
+            particles.spawnExplosion(
+                asteroid.mesh.position.x,
+                asteroid.mesh.position.y,
+                asteroid.mesh.position.z,
+                0xFF9900,
+                asteroid.size === 3 ? 25 : asteroid.size === 2 ? 16 : 9,
+                asteroid.size === 3
+            );
+            playExplosionSound(asteroid.size);
+            
+            // Award score
+            const pts = asteroid.size === 3 ? 100 : asteroid.size === 2 ? 150 : 250;
+            addScore(pts);
+            
+            // Split asteroid if larger than size 1
+            if (asteroid.size > 1) {
+                const subSize = asteroid.size - 1;
+                const pos = asteroid.mesh.position;
+                
+                for (let k = 0; k < 2; k++) {
+                    const driftDir = k === 0 ? -1 : 1;
+                    const subAsteroid = {
+                        mesh: createAsteroidMesh(subSize),
+                        size: subSize,
+                        radius: subSize === 2 ? 1.0 : 0.5,
+                        yv: asteroid.yv * 1.15,
+                        xv: asteroid.xv + driftDir * (Math.random() * 2.0 + 1.2),
+                        rx: (Math.random() - 0.5) * 3,
+                        ry: (Math.random() - 0.5) * 3,
+                        rz: (Math.random() - 0.5) * 3
+                    };
+                    subAsteroid.mesh.position.set(pos.x + driftDir * 0.4, pos.y, pos.z);
+                    scene.add(subAsteroid.mesh);
+                    asteroids.push(subAsteroid);
+                }
+            }
+            
+            // Increment consecutive hits to scale multiplier
+            consecutiveHits++;
+            if (consecutiveHits % 8 === 0) {
+                multiplier++;
+                updateHUD();
+            }
+            asteroidsDestroyed++;
+        }
+
+        function fireLasers() {
+            const now = Date.now();
+            if (now - lastFireTime < fireCooldown) return;
+            lastFireTime = now;
+            
+            // Dual laser position relative to ship
+            const leftX = ship.position.x - 1.5;
+            const rightX = ship.position.x + 1.5;
+            const fireY = ship.position.y - 0.2;
+            
+            const laserGeom = new THREE.CylinderGeometry(0.08, 0.08, 0.9, 6);
+            const laserMat = new THREE.MeshBasicMaterial({ color: 0xFF9900 });
+            
+            function createLaser(x, y) {
+                const mesh = new THREE.Mesh(laserGeom, laserMat);
+                mesh.position.set(x, y, 0);
+                mesh.rotation.x = Math.PI / 2;
+                scene.add(mesh);
+                lasers.push({ 
+                    mesh: mesh, 
+                    yv: 42,
+                    prevPosition: new THREE.Vector3(x, y, 0)
+                });
+            }
+            
+            createLaser(leftX, fireY);
+            createLaser(rightX, fireY);
+            playLaserSound();
+            
+            // Flash points of ship muzzle
+            particles.spawnExplosion(leftX, fireY + 0.5, 0, 0xFF9900, 3, false);
+            particles.spawnExplosion(rightX, fireY + 0.5, 0, 0xFF9900, 3, false);
+        }
+
+        // --- WINDOW RESIZING ---
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- GAME LOOP ---
+        function gameLoop() {
+            requestAnimationFrame(gameLoop);
+            
+            const dt = clock.getDelta();
+            const time = clock.getElapsedTime();
+            
+            // Update Background Starfield
+            updateStarfield(gameStarted && !gameOver ? 12 * dt : 1.5 * dt);
+            
+            if (gameStarted && !gameOver) {
+                // Survival timer tick
+                survivalTimer += dt;
+                hudTimer.innerText = formatTime(survivalTimer);
+                
+                // Asteroid Spawning Tick
+                asteroidSpawnTimer += dt * 1000;
+                if (asteroidSpawnTimer >= spawnInterval) {
+                    asteroidSpawnTimer = 0;
+                    spawnAsteroid();
+                }
+                
+                // Ship Movement
+                let xMov = 0;
+                let yMov = 0;
+                const shipSpeed = 16.5;
+                
+                if (keys.ArrowLeft || keys.KeyA) xMov -= 1;
+                if (keys.ArrowRight || keys.KeyD) xMov += 1;
+                if (keys.ArrowUp || keys.KeyW) yMov += 1;
+                if (keys.ArrowDown || keys.KeyS) yMov -= 1;
+                
+                ship.position.x += xMov * shipSpeed * dt;
+                ship.position.y += yMov * shipSpeed * dt;
+                
+                // Keep player within gameplay bounds
+                ship.position.x = Math.max(-14.2, Math.min(14.2, ship.position.x));
+                ship.position.y = Math.max(-13.0, Math.min(-7.0, ship.position.y));
+                
+                // Visual Banking (lean) animations based on steering inputs
+                let targetZRot = 0;
+                let targetYRot = 0;
+                let targetXRot = 0;
+                
+                if (xMov < 0) {
+                    targetZRot = 0.52; 
+                    targetYRot = 0.32;
+                } else if (xMov > 0) {
+                    targetZRot = -0.52; 
+                    targetYRot = -0.32;
+                }
+                
+                if (yMov > 0) {
+                    targetXRot = 0.22;
+                } else if (yMov < 0) {
+                    targetXRot = -0.22;
+                }
+                
+                ship.rotation.z += (targetZRot - ship.rotation.z) * 11 * dt;
+                ship.rotation.y += (targetYRot - ship.rotation.y) * 11 * dt;
+                ship.rotation.x += (targetXRot - ship.rotation.x) * 11 * dt;
+                
+                // Thruster flicker and scaling based on movement
+                const fireScale = 1.0 + Math.sin(time * 35) * 0.16 + (yMov > 0 ? 0.35 : 0);
+                ship.userData.thrusterFire.scale.set(1, fireScale, 1);
+                
+                // Fire controls
+                if (keys.Space) {
+                    fireLasers();
+                }
+                
+                // Lasers physics
+                for (let i = lasers.length - 1; i >= 0; i--) {
+                    const l = lasers[i];
+                    l.prevPosition.copy(l.mesh.position);
+                    l.mesh.position.y += l.yv * dt;
+                    if (l.mesh.position.y > 17) {
+                        scene.remove(l.mesh);
+                        lasers.splice(i, 1);
+                    }
+                }
+                
+                // Asteroids physics
+                for (let i = asteroids.length - 1; i >= 0; i--) {
+                    const a = asteroids[i];
+                    a.mesh.position.y += a.yv * dt;
+                    a.mesh.position.x += a.xv * dt;
+                    
+                    a.mesh.rotation.x += a.rx * dt;
+                    a.mesh.rotation.y += a.ry * dt;
+                    a.mesh.rotation.z += a.rz * dt;
+                    
+                    // Cleanup when off-screen bottom
+                    if (a.mesh.position.y < -16) {
+                        scene.remove(a.mesh);
+                        asteroids.splice(i, 1);
+                    }
+                }
+                
+                // Collision Detection: Lasers vs Asteroids
+                for (let i = asteroids.length - 1; i >= 0; i--) {
+                    const a = asteroids[i];
+                    const aPos = a.mesh.position;
+                    
+                    for (let j = lasers.length - 1; j >= 0; j--) {
+                        const l = lasers[j];
+                        
+                        // Line-segment distance check prevents fast lasers tunneling small rocks
+                        const dist = distToSegment(aPos, l.prevPosition, l.mesh.position);
+                        if (dist < (a.radius + 0.15)) {
+                            scene.remove(l.mesh);
+                            lasers.splice(j, 1);
+                            handleAsteroidHit(a, i);
+                            break; // Skip rest of laser checks since asteroid is destroyed
+                        }
+                    }
+                }
+                
+                // Collision Detection: Ship vs Asteroids
+                for (let i = asteroids.length - 1; i >= 0; i--) {
+                    const a = asteroids[i];
+                    const aPos = a.mesh.position;
+                    const shipPos = ship.position;
+                    
+                    const dist = aPos.distanceTo(shipPos);
+                    // Combined bounding radius (asteroid + ship hitbox approximation)
+                    if (dist < (a.radius + 0.8)) {
+                        scene.remove(a.mesh);
+                        asteroids.splice(i, 1);
+                        
+                        // Hit Sound & Screen shake
+                        playShieldHitSound();
+                        const damage = a.size === 3 ? 35 : a.size === 2 ? 20 : 10;
+                        shield -= damage;
+                        if (shield < 0) shield = 0;
+                        
+                        // Break score multiplier streak
+                        consecutiveHits = 0;
+                        multiplier = 1;
+                        
+                        triggerScreenShake(0.85, 0.45);
+                        
+                        // Explosion spark debris at impact point
+                        particles.spawnExplosion(shipPos.x, shipPos.y + 0.5, 0, 0xFFFFFF, 12, false);
+                        particles.spawnExplosion(shipPos.x, shipPos.y + 0.5, 0, 0xFF9900, 12, false);
+                        
+                        updateHUD();
+                        
+                        if (shield <= 0) {
+                            triggerGameOver();
+                        }
+                    }
+                }
+            }
+            
+            // Updates global particles and camera effects
+            particles.update(dt);
+            updateScreenShake(dt);
+            
+            // Draw Scene
+            renderer.render(scene, camera);
+        }
+
+        // --- DOM KEY EVENTS ---
+        function setupInputListeners() {
+            window.addEventListener('keydown', (e) => {
+                if (keys.hasOwnProperty(e.code)) {
+                    keys[e.code] = true;
+                    // Prevent page scrolling on Space and Arrow keys
+                    if (e.code === 'Space' || e.code.startsWith('Arrow')) {
+                        e.preventDefault();
+                    }
+                }
+            });
+            
+            window.addEventListener('keyup', (e) => {
+                if (keys.hasOwnProperty(e.code)) {
+                    keys[e.code] = false;
+                }
+            });
+        }
+
+        // --- BUTTON INTERACTIVE BINDINGS ---
+        btnStart.addEventListener('click', () => {
+            startGame();
+        });
+        
+        btnRestart.addEventListener('click', () => {
+            startGame();
+        });
+        
+        btnMute.addEventListener('click', () => {
+            isMuted = !isMuted;
+            if (isMuted) {
+                soundOnIcon.classList.add('hidden');
+                soundOffIcon.classList.remove('hidden');
+            } else {
+                soundOnIcon.classList.remove('hidden');
+                soundOffIcon.classList.add('hidden');
+                initAudio();
+            }
+        });
+
+        // Start 3D Engine on page load
+        window.onload = () => {
+            init3D();
+            setupInputListeners();
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
