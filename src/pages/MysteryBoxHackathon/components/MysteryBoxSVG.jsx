@@ -56,3 +56,23 @@ export function MiniMysteryBox() {
     </motion.svg>
   );
 }
+
+export function MiniChaosMysteryBox() {
+  return (
+    <motion.svg
+      viewBox="0 0 200 200"
+      width="160" height="160"
+      animate={{ y: [0, -10, 0] }}
+      transition={{ repeat: Infinity, duration: 2.5, ease: 'easeInOut' }}
+      style={{ overflow: 'visible' }}
+    >
+      <ellipse cx="100" cy="175" rx="60" ry="12" fill="rgba(255,80,80,0.15)" />
+      <rect x="40" y="90" width="120" height="80" rx="6" fill="#150505" stroke="#ff5050" strokeWidth="2" />
+      <rect x="36" y="78" width="128" height="22" rx="5" fill="#200808" stroke="#ff5050" strokeWidth="2" />
+      <rect x="92" y="78" width="16" height="92" rx="3" fill="#7C4DFF" opacity="0.7" />
+      <text x="100" y="143" textAnchor="middle" fontSize="36">⚡</text>
+      <circle cx="100" cy="50" r="28" fill="none" stroke="#ff5050" strokeWidth="1" strokeDasharray="4 3" opacity="0.5" />
+      <circle cx="100" cy="50" r="38" fill="none" stroke="#ff5050" strokeWidth="0.5" strokeDasharray="2 6" opacity="0.3" />
+    </motion.svg>
+  );
+}

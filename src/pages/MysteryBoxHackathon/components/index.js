@@ -8,4 +8,4 @@ export {
 } from './Sections';
 
 export { default as SpinWheel } from './SpinWheel';
-export { MysteryBoxSVG, MiniMysteryBox } from './MysteryBoxSVG';
+export { MysteryBoxSVG, MiniMysteryBox, MiniChaosMysteryBox } from './MysteryBoxSVG';

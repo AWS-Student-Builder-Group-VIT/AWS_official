@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
 // Global assets (shared across the whole app)
@@ -101,6 +102,8 @@ const getMysteryQuestion = () => {
 };
 
 export default function MysteryBoxHackathon() {
+  const navigate = useNavigate();
+
   const [team, setTeam] = useState(() => {
     if (typeof window === 'undefined') return null;
     try {
@@ -114,8 +117,10 @@ export default function MysteryBoxHackathon() {
     if (typeof window === 'undefined') return '';
     return window.sessionStorage.getItem('mystery-box-hackathon-my-email') || '';
   });
-  const [isOpeningLocal, setIsOpeningLocal] = useState(false);
-  const [prevIsOpened, setPrevIsOpened] = useState(false);
+
+  const isMemberOfTeam = team && myEmail && team.members?.some((m) => m.email === myEmail);
+
+
 
   useEffect(() => {
     const handleStorageChange = (event) => {
@@ -137,20 +142,6 @@ export default function MysteryBoxHackathon() {
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
-
-  useEffect(() => {
-    if (team?.isOpened && !prevIsOpened) {
-      setIsOpeningLocal(true);
-      const timer = setTimeout(() => {
-        setIsOpeningLocal(false);
-        setPrevIsOpened(true);
-      }, 2000);
-      return () => clearTimeout(timer);
-    } else if (!team?.isOpened) {
-      setPrevIsOpened(false);
-      setIsOpeningLocal(false);
-    }
-  }, [team?.isOpened, prevIsOpened]);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [registerForm, setRegisterForm] = useState({
@@ -238,6 +229,7 @@ export default function MysteryBoxHackathon() {
       mysteryQuestion: getMysteryQuestion(),
       isOpened: false,
       points: 0,
+      registeredAt: Date.now(),
       members: [
         {
           email,
@@ -254,6 +246,7 @@ export default function MysteryBoxHackathon() {
     persistTeam(nextTeam);
     setRegisterForm({ email: '', regNo: '', teamName: '', isLeader: true });
     setRegisterOpen(false);
+    navigate('/mystery-box-hackathon/dashboard');
   };
 
   const handleJoinSubmit = (event) => {
@@ -304,44 +297,10 @@ export default function MysteryBoxHackathon() {
 
     setJoinForm({ email: '', regNo: '', teamCode: '' });
     setJoinOpen(false);
+    navigate('/mystery-box-hackathon/dashboard');
   };
 
-  const leader = team?.members?.find((member) => member.isLeader) || null;
-  const isCurrentLeader = leader && leader.email === myEmail;
-  const isMemberOfTeam = team && myEmail && team.members?.some((m) => m.email === myEmail);
 
-  const handleDisbandOrLeave = () => {
-    if (!team) return;
-    const isLeader = team.members?.find((member) => member.isLeader)?.email === myEmail;
-    if (isLeader) {
-      persistTeam(null);
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.removeItem('mystery-box-hackathon-my-email');
-      }
-      setMyEmail('');
-    } else {
-      const updatedMembers = (team.members || []).filter((m) => m.email !== myEmail);
-      const updatedTeam = {
-        ...team,
-        members: updatedMembers,
-      };
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(updatedTeam));
-        window.sessionStorage.removeItem('mystery-box-hackathon-my-email');
-      }
-      setTeam(null);
-      setMyEmail('');
-    }
-  };
-  const questionDesc = team?.mysteryQuestion
-    ? (typeof team.mysteryQuestion === 'string' ? team.mysteryQuestion : (team.mysteryQuestion.desc || ''))
-    : '';
-  const questionTitle = team?.mysteryQuestion
-    ? (typeof team.mysteryQuestion === 'string' ? 'Mystery Challenge' : (team.mysteryQuestion.title || 'Mystery Challenge'))
-    : 'Mystery Challenge';
-  const questionPoints = team?.mysteryQuestion
-    ? (typeof team.mysteryQuestion === 'string' ? 100 : (team.mysteryQuestion.points || 100))
-    : 100;
 
   const stepColors = {
     orange: { bg: 'rgba(255,153,0,0.15)', border: '#FF9900', text: '#FF9900' },
@@ -596,7 +555,15 @@ export default function MysteryBoxHackathon() {
             ))}
           </div>
           <div className="flex items-center gap-3">
-            {!isMemberOfTeam && (
+            {isMemberOfTeam ? (
+              <button
+                type="button"
+                onClick={() => navigate('/mystery-box-hackathon/dashboard')}
+                className="bg-primary-container text-background px-5 py-2 text-[13px] font-headline-md uppercase tracking-widest border-0 cursor-pointer hover:bg-primary transition-colors"
+              >
+                Go to Dashboard
+              </button>
+            ) : (
               <>
                 <button
                   type="button"
@@ -681,166 +648,7 @@ export default function MysteryBoxHackathon() {
           </div>
         </section>
 
-        {isMemberOfTeam && (
-          <section className="px-container-padding pb-8 relative z-10">
-            <div className="mx-auto max-w-[1100px] rounded-[24px] border border-primary-container/30 bg-[rgba(255,153,0,0.05)] p-6 shadow-[0_20px_60px_rgba(255,153,0,0.1)]">
-              <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-primary-container font-label-sm">Team Status</p>
-                  <h3 className="mt-2 text-3xl font-headline-md text-on-surface">{team.teamName}</h3>
-                  {myEmail && (
-                    <p className="text-xs text-on-surface-variant mt-1.5 font-label-sm">
-                      Signed in as: <span className="text-primary-container font-bold">{myEmail}</span> ({isCurrentLeader ? 'Leader' : 'Member'})
-                    </p>
-                  )}
-                </div>
 
-                <div className="flex items-center gap-4">
-                  <div className="rounded-2xl border border-primary-container/40 bg-background/40 px-4 py-3 text-center min-w-[120px]">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-on-surface-variant font-label-sm">Team Points</p>
-                    <p className="mt-2 text-3xl font-headline-xl text-green-400 font-bold">{team.points || 0} pts</p>
-                  </div>
-
-                  <div className="rounded-2xl border border-primary-container/40 bg-background/40 px-4 py-3 text-center">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-on-surface-variant font-label-sm">Team Code</p>
-                    <p className="mt-2 text-3xl font-headline-xl tracking-[0.28em] text-primary-container">{team.code}</p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleDisbandOrLeave}
-                    className="border border-red-500/30 bg-red-950/20 px-4 py-3 text-xs font-bold font-headline-md uppercase tracking-wider text-red-400 transition-colors hover:bg-red-500 hover:text-white rounded-xl cursor-pointer"
-                  >
-                    {isCurrentLeader ? 'Disband Team' : 'Leave Team'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-white/10 bg-[#15131d] p-4">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-label-sm">Members</p>
-                  <ul className="mt-4 space-y-3">
-                    {(team.members || []).map((member, index) => (
-                      <li key={`${member.email}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/3 px-3 py-2 text-sm text-on-surface">
-                        <span>{member.email}</span>
-                        <span className="text-primary-container">{member.isLeader ? 'Leader' : 'Member'}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="rounded-2xl border border-primary-container/30 bg-background/30 p-4 flex flex-col justify-between min-h-[220px]">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-primary-container font-label-sm">Mystery Box</p>
-
-                  {/* Closed Box State */}
-                  {!team.isOpened && !isOpeningLocal && (
-                    <div className="flex flex-col items-center justify-center py-4 text-center">
-                      <motion.div
-                        animate={{
-                          rotate: [0, -3, 3, -3, 3, 0],
-                          scale: [1, 1.02, 1],
-                        }}
-                        transition={{
-                          repeat: Infinity,
-                          duration: 4,
-                          ease: "easeInOut",
-                        }}
-                      >
-                        <MiniMysteryBox />
-                      </motion.div>
-
-                      <h4 className="mt-3 text-lg font-headline-md text-on-surface uppercase tracking-widest">Box is Sealed</h4>
-
-                      {isCurrentLeader ? (
-                        <div className="mt-3">
-                          <p className="text-xs text-on-surface-variant mb-2">You are the Team Leader. Unveil the mystery challenge for your team.</p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              persistTeam({
-                                ...team,
-                                isOpened: true,
-                                points: (team.points || 0) + questionPoints
-                              });
-                            }}
-                            className="bg-primary-container text-background px-5 py-2 text-xs font-bold font-headline-md uppercase tracking-wider border-0 rounded-md cursor-pointer hover:bg-primary transition-colors shadow-[0_0_15px_rgba(255,153,0,0.3)] hover:scale-105 transform duration-150"
-                          >
-                            Unveil Challenge
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="mt-3 flex flex-col items-center">
-                          <p className="text-xs text-on-surface-variant flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-primary-container animate-ping" />
-                            Waiting for Team Leader ({leader?.email || 'Leader'}) to open the box...
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Opening / Transition State */}
-                  {isOpeningLocal && (
-                    <div className="flex flex-col items-center justify-center py-6 text-center overflow-hidden">
-                      <motion.div
-                        animate={{
-                          rotate: [-8, 8, -8, 8, -8, 8, 0],
-                          scale: [1, 1.2, 1.4, 0.8, 1.8, 0],
-                          filter: ["brightness(1)", "brightness(1.5)", "brightness(2)"],
-                        }}
-                        transition={{
-                          duration: 2,
-                          ease: "easeInOut",
-                        }}
-                      >
-                        <MiniMysteryBox />
-                      </motion.div>
-                      <motion.h4
-                        animate={{ opacity: [0.5, 1, 0.5] }}
-                        transition={{ repeat: Infinity, duration: 0.5 }}
-                        className="mt-4 text-sm font-headline-md text-primary-container uppercase tracking-[0.2em]"
-                      >
-                        ⚡ Unlocking Challenge... ⚡
-                      </motion.h4>
-                    </div>
-                  )}
-
-                  {/* Revealed State */}
-                  {team.isOpened && !isOpeningLocal && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5 }}
-                      className="mt-2"
-                    >
-                      <div className="flex items-center justify-between text-xs uppercase tracking-widest font-semibold font-label-sm">
-                        <div className="flex items-center gap-2 text-green-400">
-                          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                          Challenge Unlocked
-                        </div>
-                        <div className="text-primary-container font-bold">
-                          +{questionPoints} PTS ADDED
-                        </div>
-                      </div>
-                      <h4 className="mt-2 text-md font-headline-md text-on-surface">Your Problem Statement: {questionTitle}</h4>
-                      <div className="mt-2 p-4 rounded-xl border border-primary-container/20 bg-background/50 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-primary-container" />
-                        <p className="text-sm leading-7 text-on-surface-variant font-body-md">
-                          {questionDesc}
-                        </p>
-                      </div>
-                      {leader && (
-                        <p className="mt-3 text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-label-sm">
-                          Leader: {leader.email}
-                        </p>
-                      )}
-                    </motion.div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
 
         <Divider />
 

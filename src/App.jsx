@@ -24,19 +24,19 @@ import AdminPage from './pages/AdminPage';
 import AccountPage from './pages/AccountPage';
 import LoginPage from './pages/LoginPage';
 import { checkSessionValidity, getUser, logout } from './utils/auth';
-import MysteryBoxHackathon from './pages/MysteryBoxHackathon';
-import FlappyBird from './pages/games/FlappyBird';
-import FruitNinja from './pages/games/FruitNinja';
-import SnakeGame from './pages/games/SnakeGame';
-import WordleGame from './pages/games/ASCII-Wordle/src/WordleGame';
-import CrackTheCode from './pages/games/detective and cypher game/CrackTheCode.react';
-import DetectiveCrime from './pages/games/detective and cypher game/DetectiveCrime.react';
-import LevelDevilGame from './pages/games/level-devil/src/LevelDevilGame';
-import MorseGame from './pages/games/Morse-Game/src/MorseGame';
-import PacmanGame from './pages/games/PacmanGame/PacmanGame';
-import MarioKart from './pages/games/MarioKart';
-import WatergirlFireboy from './pages/games/WatergirlFireboy';
-import AsteroidCommand from './pages/games/AsteroidCommand';
+import MysteryBoxHackathon, { MysteryBoxDashboard } from './pages/MysteryBoxHackathon/index.js';
+import FlappyBird from './pages/games/FlappyBird/FlappyBird.jsx';
+import FruitNinja from './pages/games/FruitNinja/FruitNinja.jsx';
+import SnakeGame from './pages/games/SnakeGame/SnakeGame.jsx';
+import WordleGame from './pages/games/ASCII-Wordle/src/WordleGame.jsx';
+import CrackTheCode from './pages/games/detective and cypher game/CrackTheCode.react.jsx';
+import DetectiveCrime from './pages/games/detective and cypher game/DetectiveCrime.react.jsx';
+import LevelDevilGame from './pages/games/level-devil/src/LevelDevilGame.jsx';
+import MorseGame from './pages/games/Morse-Game/src/MorseGame.jsx';
+import PacmanGame from './pages/games/PacmanGame/PacmanGame.jsx';
+import MarioKart from './pages/games/MarioKart/MarioKart.jsx';
+import WatergirlFireboy from './pages/games/WatergirlFireboy/WatergirlFireboy.jsx';
+import AsteroidCommand from './pages/games/AsteroidCommand/AsteroidCommand.jsx';
 import GamesPage from './pages/GamesPage';
 import { games } from './pages/gamesRegistry';
 
@@ -261,6 +261,7 @@ export default function App() {
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/mystery-box-hackathon" element={<MysteryBoxHackathon />} />
+          <Route path="/mystery-box-hackathon/dashboard" element={<MysteryBoxDashboard />} />
           <Route path="/games" element={<GamesPage />} />
           {games.map((game) => <Route key={game.slug} path={game.path} element={<GameRoute Component={gameComponents[game.slug]} />} />)}
         </Routes>
