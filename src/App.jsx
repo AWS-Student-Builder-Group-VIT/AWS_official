@@ -244,7 +244,7 @@ export default function App() {
       <div
         className="bg-background text-on-surface bg-grid-pattern min-h-screen relative selection:bg-primary-container selection:text-on-primary-container font-body-md"
         style={{
-          transform: (showIntro && !introFading) ? 'scale(0.96)' : 'scale(1)',
+          transform: (showIntro && !introFading) ? 'scale(0.96)' : 'none',
           opacity: (showIntro && !introFading) ? 0 : 1,
           transition: 'transform 2s cubic-bezier(0.16, 1, 0.3, 1), opacity 1.5s ease-out',
           transformOrigin: 'center center',
