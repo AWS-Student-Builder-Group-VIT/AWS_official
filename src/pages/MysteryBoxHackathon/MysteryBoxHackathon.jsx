@@ -54,6 +54,7 @@ import {
    ═══════════════════════════════════════════════════════════ */
 
 const TEAM_STORAGE_KEY = 'mystery-box-hackathon-team';
+const HACKATHON_TOKEN_KEY = 'mystery-box-hackathon-token';
 
 const MYSTERY_BOX_QUESTIONS = [
   {
@@ -228,7 +229,7 @@ function MysteryBoxHackathonInner() {
       return;
     }
     const email = decoded.email.toLowerCase().trim();
-    setGoogleUser({
+    setGoogleUser({ credential: credentialResponse.credential,
       email,
       name: decoded.name || 'Participant',
       picture: decoded.picture || '',
@@ -250,7 +251,7 @@ function MysteryBoxHackathonInner() {
       return;
     }
     const email = decoded.email.toLowerCase().trim();
-    setGoogleJoinUser({
+    setGoogleJoinUser({ credential: credentialResponse.credential,
       email,
       name: decoded.name || 'Participant',
       picture: decoded.picture || '',
@@ -301,16 +302,18 @@ function MysteryBoxHackathonInner() {
     ];
 
     try {
+      const session = await fetch('/api/mystery-box/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: googleUser.credential }) });
+      const sessionData = await session.json();
+      if (!session.ok) { setFormError(sessionData.error || 'Google verification failed.'); return; }
+      window.sessionStorage.setItem(HACKATHON_TOKEN_KEY, sessionData.token);
       const res = await fetch('/api/mystery-box/teams/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.token}` },
         body: JSON.stringify({
           code: newCode,
           teamName,
           mysteryQuestion: mysteryQ,
-          members: newMembers,
-          isOpened: false,
-          points: 0,
+          regNo,
         }),
       });
       const data = await res.json();
@@ -377,17 +380,16 @@ function MysteryBoxHackathonInner() {
     }
 
     try {
+      const session = await fetch('/api/mystery-box/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: googleJoinUser.credential }) });
+      const sessionData = await session.json();
+      if (!session.ok) { setJoinError(sessionData.error || 'Google verification failed.'); return; }
+      window.sessionStorage.setItem(HACKATHON_TOKEN_KEY, sessionData.token);
       const res = await fetch('/api/mystery-box/teams/join', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.token}` },
         body: JSON.stringify({
           teamCode,
-          member: {
-            email,
-            regNo,
-            name: googleJoinUser.name,
-            picture: googleJoinUser.picture,
-          }
+          regNo,
         }),
       });
 

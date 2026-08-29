@@ -11,4 +11,6 @@ export const games = [
   { slug: 'mario-kart', path: '/games/mario-kart', title: 'AWS MarioKart', description: 'Race an EC2 data pod through a high-speed cloud corridor.', status: 'Runner challenge' },
   { slug: 'watergirl-fireboy', path: '/games/watergirl-fireboy', title: 'AWS Watergirl Fireboy', description: 'Guide both cloud agents through hazards and into their portals.', status: 'Co-op challenge' },
   { slug: 'asteroid-command', path: '/games/asteroid-command', title: 'AWS Asteroid Command', description: 'Defend your cloud ship in a 3D asteroid tournament.', status: 'Space challenge' },
+  { slug: 'gunshot-roulette', path: '/games/gunshot-roulette', title: 'AWS Gunshot Roulette', description: 'Manage the chamber and outplay the dealer.', status: 'Risk challenge' },
+  { slug: 'hack-type', path: '/games/hack-type', title: 'AWS Hack // Type', description: 'Type falling AWS terms before they breach the firewall.', status: 'Typing challenge' },
 ];
