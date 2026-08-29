@@ -53,7 +53,7 @@ export default function SpinWheel() {
       const ptr = (360 - norm + 90) % 360;
       const idx = Math.floor(ptr / step) % total;
       const seg = WHEEL_SEGMENTS[idx];
-      setResult(seg.label.includes('Luck') ? '😅 Better luck next time!' : `🎉 You won: ${seg.label}!`);
+      setResult(seg.label.includes('Luck') ? 'Better luck next time!' : `You won: ${seg.label}!`);
       setSpinning(false);
     }, 3100);
   };
@@ -82,10 +82,10 @@ export default function SpinWheel() {
         onClick={spin}
         className="bg-primary-container text-background px-9 py-3.5 font-headline-md text-label-md uppercase tracking-widest font-bold transition-transform active:scale-[0.97] cursor-pointer border-0 hover:bg-primary"
       >
-        🎰 Spin (1 Token)
+        Spin (1 Token)
       </button>
       <div className="flex items-center gap-2 bg-white/[0.03] border border-white/10 px-4 py-2.5 text-[13px] text-on-surface-variant font-label-sm">
-        🪙 Earn tokens via quizzes, challenges, milestones &amp; bonus tasks
+        Earn tokens via quizzes, challenges, milestones &amp; bonus tasks
       </div>
       {result && (
         <p className="text-body-md font-headline-md text-primary-container min-h-[24px]">{result}</p>

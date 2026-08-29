@@ -7,15 +7,15 @@ import { motion, useInView } from 'framer-motion';
 
 export function FadeInSection({ children, className = '', delay = 0 }) {
   const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: '-60px' });
+  const isInView = useInView(ref, { once: false, margin: '-60px' });
 
   return (
     <motion.div
       ref={ref}
       className={className}
-      initial={{ opacity: 0, y: 30 }}
-      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
-      transition={{ duration: 0.6, delay, ease: [0.16, 1, 0.3, 1] }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+      transition={{ duration: 0.75, delay, ease: [0.22, 1, 0.36, 1] }}
     >
       {children}
     </motion.div>
@@ -23,26 +23,53 @@ export function FadeInSection({ children, className = '', delay = 0 }) {
 }
 
 export function SectionLabel({ children, className = '' }) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: false, margin: '-40px' });
+
   return (
-    <p className={`font-label-sm text-[11px] tracking-[3px] uppercase font-medium mb-3 text-primary-container ${className}`}>
+    <motion.p
+      ref={ref}
+      className={`font-label-sm text-[11px] tracking-[3px] uppercase font-medium mb-3 text-primary-container ${className}`}
+      initial={{ opacity: 0, y: 10 }}
+      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+    >
       {children}
-    </p>
+    </motion.p>
   );
 }
 
 export function SectionTitle({ children }) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: false, margin: '-40px' });
+
   return (
-    <h2 className="font-headline-lg text-headline-lg text-on-surface tracking-widest uppercase mb-4 leading-tight">
+    <motion.h2
+      ref={ref}
+      className="font-headline-lg text-headline-lg text-on-surface tracking-widest uppercase mb-4 leading-tight"
+      initial={{ opacity: 0, y: 18 }}
+      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 18 }}
+      transition={{ duration: 0.75, delay: 0.07, ease: [0.22, 1, 0.36, 1] }}
+    >
       {children}
-    </h2>
+    </motion.h2>
   );
 }
 
 export function SectionSub({ children, center = false }) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: false, margin: '-40px' });
+
   return (
-    <p className={`text-on-surface-variant text-body-md font-body-md max-w-[580px] ${center ? 'mx-auto' : ''}`}>
+    <motion.p
+      ref={ref}
+      className={`text-on-surface-variant text-body-md font-body-md max-w-[580px] ${center ? 'mx-auto' : ''}`}
+      initial={{ opacity: 0, y: 14 }}
+      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 14 }}
+      transition={{ duration: 0.75, delay: 0.14, ease: [0.22, 1, 0.36, 1] }}
+    >
       {children}
-    </p>
+    </motion.p>
   );
 }
 

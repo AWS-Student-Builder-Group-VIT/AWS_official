@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Global assets (shared across the whole app)
 import awsIcon from '../../assets/aws_icon.jpeg';
@@ -31,6 +31,205 @@ import {
 /* ═══════════════════════════════════════════════════════════
    MYSTERY BOX HACKATHON — Landing Page
    ═══════════════════════════════════════════════════════════ */
+
+function HorizontalCarousel({ rules }) {
+  const [current, setCurrent] = useState(0);
+  const containerRef = useRef(null);
+  const cooldownRef = useRef(false);
+
+  const go = (i) => {
+    setCurrent(Math.max(0, Math.min(rules.length - 1, i)));
+  };
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handleWheel = (e) => {
+      e.preventDefault();
+      if (cooldownRef.current) return;
+      cooldownRef.current = true;
+      setTimeout(() => { cooldownRef.current = false; }, 600);
+      if (e.deltaY > 0 || e.deltaX > 0) go(current + 1);
+      else go(current - 1);
+    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [current, rules.length]);
+
+  return (
+    <div className="flex flex-col items-center gap-7 w-full max-w-[900px] mx-auto overflow-visible mt-10">
+      <div 
+        ref={containerRef}
+        className="relative w-full h-[340px] perspective-[1400px]"
+      >
+        {rules.map((rule, i) => {
+          const offset = i - current;
+          const abs = Math.abs(offset);
+          let transform, opacity, zIndex, pointerEvents;
+          
+          if (abs === 0) {
+            transform = 'translateX(0) rotateY(0deg) scale(1)';
+            opacity = 1; zIndex = 5; pointerEvents = 'auto';
+          } else if (abs === 1) {
+            transform = `translateX(${offset * 240}px) rotateY(${offset * -34}deg) scale(0.82)`;
+            opacity = 0.5; zIndex = 3; pointerEvents = 'auto';
+          } else if (abs === 2) {
+            transform = `translateX(${offset * 200}px) rotateY(${offset * -40}deg) scale(0.6)`;
+            opacity = 0; zIndex = 1; pointerEvents = 'none';
+          } else {
+            transform = `translateX(${offset * 160}px) rotateY(${offset * -40}deg) scale(0.5)`;
+            opacity = 0; zIndex = 0; pointerEvents = 'none';
+          }
+
+          return (
+            <div
+              key={i}
+              onClick={() => { if (abs !== 0) go(i); }}
+              className={`absolute top-0 left-1/2 -ml-[170px] w-[340px] border-t-2 bg-[#121110] p-7 transition-all duration-[550ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] ${abs === 0 ? 'cursor-default border-primary-container' : 'cursor-pointer border-[rgba(255,153,0,0.3)] hover:border-[rgba(255,153,0,0.8)]'}`}
+              style={{ transform, opacity, zIndex, pointerEvents }}
+            >
+              <div className="inline-flex items-center gap-1.5 bg-[rgba(239,68,68,0.12)] text-[#f87171] border border-[rgba(239,68,68,0.3)] text-[11px] font-bold tracking-[1px] uppercase px-2.5 py-1 mb-5 font-label-sm">
+                ⚡ RULE
+              </div>
+              <div className="flex items-baseline gap-2.5 mb-3">
+                <span className="font-mono text-[18px] tracking-[0.5px] text-white font-bold">{rule.title}</span>
+              </div>
+              <p className="text-[#9c968c] text-[14px] leading-[1.6] m-0 font-body-md">{rule.desc}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function VerticalCarousel({ items }) {
+  const [current, setCurrent] = useState(0);
+  const containerRef = useRef(null);
+  const cooldownRef = useRef(false);
+
+  const go = (i) => {
+    setCurrent(Math.max(0, Math.min(items.length - 2, i)));
+  };
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handleWheel = (e) => {
+      e.preventDefault();
+      if (cooldownRef.current) return;
+      cooldownRef.current = true;
+      setTimeout(() => { cooldownRef.current = false; }, 600);
+      if (e.deltaY > 0) go(current + 1);
+      else go(current - 1);
+    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [current, items.length]);
+
+  const V_HALF_GAP = 95;
+  const V_RADIUS = 260;
+  const V_ANGLE_STEP = 30;
+
+  return (
+    <div className="flex flex-col md:flex-row items-center justify-center gap-7 w-full mt-8">
+      <div 
+        ref={containerRef}
+        className="relative w-full max-w-[560px] h-[460px] perspective-[1400px] overflow-hidden"
+        style={{ transformStyle: 'preserve-3d', maskImage: 'linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)' }}
+      >
+        {items.map((item, i) => {
+          const offset = i - current;
+          let translateY, translateZ, rotateX, opacity, zIndex, pointerEvents;
+
+          if (offset === 0 || offset === 1) {
+            translateY = offset === 0 ? -V_HALF_GAP : V_HALF_GAP;
+            translateZ = 0;
+            rotateX = 0;
+            opacity = 1;
+            zIndex = 5;
+            pointerEvents = 'auto';
+          } else {
+            const sign = offset < 0 ? -1 : 1;
+            const k = sign < 0 ? -offset : offset - 1;
+            const angle = k * V_ANGLE_STEP;
+            const rad = angle * Math.PI / 180;
+            translateY = sign * (V_HALF_GAP + V_RADIUS * Math.sin(rad));
+            translateZ = -V_RADIUS * (1 - Math.cos(rad));
+            rotateX = -sign * angle;
+            opacity = Math.max(0, 0.55 - (k - 1) * 0.4);
+            zIndex = 4 - k;
+            pointerEvents = k <= 2 ? 'auto' : 'none';
+          }
+
+          return (
+            <VerticalShopItem 
+              key={i} 
+              item={item} 
+              style={{
+                transform: `translateY(${translateY}px) translateZ(${translateZ}px) rotateX(${rotateX}deg)`,
+                opacity,
+                zIndex,
+                pointerEvents,
+                marginTop: '-90px'
+              }}
+              isFocused={offset === 0 || offset === 1}
+              onClick={() => {
+                if (offset < 0) go(i);
+                else if (offset > 1) go(i - 1);
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function VerticalShopItem({ item, style, isFocused, onClick }) {
+  const [flashKey, setFlashKey] = useState(0);
+
+  const handleClick = () => {
+    if (isFocused) {
+      setFlashKey(prev => prev + 1);
+    } else {
+      onClick();
+    }
+  };
+
+  return (
+    <div
+      className="absolute top-1/2 left-0 w-full h-[180px] border bg-[#121110] p-5 pt-5 pb-[22px] transition-all duration-[550ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] cursor-pointer overflow-hidden"
+      style={{
+        ...style,
+        borderColor: isFocused ? 'var(--color-primary-container)' : 'rgba(255,153,0,0.2)',
+      }}
+      onClick={handleClick}
+    >
+      <div className="inline-block bg-[rgba(245,165,36,0.1)] border border-[rgba(255,153,0,0.5)] text-primary-container font-mono font-bold text-[13px] px-3 py-1.5 rounded-full mb-3.5">
+        {item.price}
+      </div>
+      <div className="font-mono text-[15px] tracking-[0.5px] text-white font-bold mb-2 uppercase">{item.title}</div>
+      <p className="text-[#9c968c] text-[13px] leading-[1.5] m-0 font-body-md">{item.desc}</p>
+
+      <AnimatePresence mode="wait">
+        {flashKey > 0 && (
+          <motion.div
+            key={flashKey}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.3, 1, 0] }}
+            transition={{ duration: 0.55, ease: 'easeInOut' }}
+            className="absolute inset-0 z-20 flex items-center justify-center bg-[rgba(245,165,36,0.85)] pointer-events-none"
+          >
+            <span className="font-mono font-bold text-[14px] tracking-[2px] text-[#1a0f00]">
+              UNLOCKED
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 export default function MysteryBoxHackathon() {
   useEffect(() => {
@@ -218,7 +417,7 @@ export default function MysteryBoxHackathon() {
 
       {/* ═══════════ CORE RULES ═══════════ */}
       <section style={{ background: 'linear-gradient(135deg, rgba(255,153,0,0.03), rgba(255,153,0,0.01))' }}>
-        <div className="py-20 px-6 max-w-[1100px] mx-auto">
+        <div className="pt-10 pb-6 px-6 max-w-[1100px] mx-auto">
           <FadeInSection className="text-center">
             <SectionLabel>Core Rules</SectionLabel>
             <SectionTitle>
@@ -227,28 +426,7 @@ export default function MysteryBoxHackathon() {
             <SectionSub center>No templates. No pre-built repos. Pure raw innovation under pressure.</SectionSub>
           </FadeInSection>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-10">
-            {RULES.map((rule, i) => (
-              <FadeInSection key={i} delay={i * 0.08}>
-                <div className="relative overflow-hidden border border-white/[0.08] p-7"
-                     style={{
-                       background: 'linear-gradient(135deg, rgba(255,153,0,0.05), rgba(255,153,0,0.02))',
-                       borderRadius: '2px',
-                     }}>
-                  {/* Top gradient line */}
-                  <div className="absolute top-0 left-0 right-0 h-[2px]"
-                       style={{ background: 'linear-gradient(90deg, #FF9900, #ff6b00)' }} />
-                  <div className="inline-block px-2.5 py-0.5 text-[10px] font-bold tracking-[1px] uppercase mb-3 font-label-sm"
-                       style={{ background: 'rgba(255,80,80,0.15)', border: '1px solid rgba(255,80,80,0.3)', color: '#ff5050' }}>
-                    ⚡ RULE
-                  </div>
-                  <div className="text-[28px] mb-3.5">{rule.icon}</div>
-                  <h4 className="text-[17px] font-headline-md text-on-surface mb-2 uppercase tracking-widest">{rule.title}</h4>
-                  <p className="text-[13px] text-on-surface-variant font-body-md">{rule.desc}</p>
-                </div>
-              </FadeInSection>
-            ))}
-          </div>
+          <HorizontalCarousel rules={RULES} />
         </div>
       </section>
 
@@ -287,9 +465,16 @@ export default function MysteryBoxHackathon() {
             {/* Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
               {POINTS.map((p, i) => (
-                <div key={i} className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] p-4"
-                     style={{ borderRadius: '2px' }}>
-                  <div className="w-9 h-9 flex items-center justify-center text-[16px] flex-shrink-0"
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: false, margin: '-20px' }}
+                  transition={{ duration: 0.5, delay: i * 0.1, type: 'spring', stiffness: 100 }}
+                  className="group flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] p-4 hover:bg-white/[0.05] transition-colors duration-300"
+                  style={{ borderRadius: '2px' }}
+                >
+                  <div className="w-9 h-9 flex items-center justify-center text-[16px] flex-shrink-0 group-hover:animate-wiggle"
                        style={{ background: `${p.color}22`, borderRadius: '2px' }}>
                     {p.icon}
                   </div>
@@ -297,10 +482,10 @@ export default function MysteryBoxHackathon() {
                     <div className="text-[18px] font-bold text-primary-container font-headline-md">{p.val}</div>
                     <div className="text-[11px] text-on-surface-variant font-label-sm">{p.name}</div>
                     <div className="h-1 bg-white/[0.08] mt-1.5 overflow-hidden" style={{ borderRadius: '1px' }}>
-                      <div className="h-full transition-all duration-1000" style={{ width: `${p.pct}%`, background: p.color, borderRadius: '1px' }} />
+                      <div className="h-full transition-all duration-1000 group-hover:brightness-125" style={{ width: `${p.pct}%`, background: p.color, borderRadius: '1px' }} />
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -313,7 +498,7 @@ export default function MysteryBoxHackathon() {
 
       {/* ═══════════ POINT SHOP ═══════════ */}
       <section style={{ background: 'linear-gradient(135deg, rgba(255,153,0,0.04), rgba(255,153,0,0.02))' }}>
-        <div className="py-20 px-6 max-w-[1100px] mx-auto">
+        <div className="pt-10 pb-6 px-6 max-w-[1100px] mx-auto">
           <FadeInSection>
             <SectionLabel>Point Shop</SectionLabel>
             <SectionTitle>
@@ -322,25 +507,7 @@ export default function MysteryBoxHackathon() {
             <SectionSub>Convert your earned points into competitive advantages. Every purchase is a strategic decision.</SectionSub>
           </FadeInSection>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-8">
-            {SHOP_ITEMS.map((item, i) => (
-              <FadeInSection key={i} delay={i * 0.06}>
-                <div className="p-6 border transition-all duration-200 hover:-translate-y-1 hover:border-[rgba(255,153,0,0.5)] cursor-default"
-                     style={{
-                       background: 'linear-gradient(135deg, rgba(255,153,0,0.08), rgba(255,153,0,0.03))',
-                       border: '1px solid rgba(255,153,0,0.25)',
-                       borderRadius: '2px',
-                     }}>
-                  <span className="inline-block px-3 py-1 text-[13px] font-bold mb-3.5 font-label-sm"
-                        style={{ background: 'rgba(255,153,0,0.15)', border: '1px solid rgba(255,153,0,0.3)', color: 'var(--color-primary-container)', borderRadius: '20px' }}>
-                    {item.price}
-                  </span>
-                  <h4 className="text-[15px] text-on-surface mb-2 font-headline-md uppercase tracking-widest">{item.title}</h4>
-                  <p className="text-[13px] text-on-surface-variant font-body-md">{item.desc}</p>
-                </div>
-              </FadeInSection>
-            ))}
-          </div>
+          <VerticalCarousel items={SHOP_ITEMS} />
         </div>
       </section>
 
@@ -362,24 +529,31 @@ export default function MysteryBoxHackathon() {
           <MiniMysteryBox />
         </FadeInSection>
 
-        <FadeInSection delay={0.2}>
+        <div className="mt-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Rewards */}
             <div>
               <p className="text-[11px] tracking-[2px] uppercase font-semibold mb-3.5 font-label-sm" style={{ color: '#ffcc00' }}>
-                🏆 Rewards
+                  Rewards
               </p>
               <div className="flex flex-col gap-2.5">
                 {REWARDS.map((r, i) => (
-                  <div key={i} className="p-5 border"
-                       style={{
-                         background: 'linear-gradient(135deg, rgba(255,153,0,0.1), rgba(255,200,0,0.05))',
-                         border: '1px solid rgba(255,153,0,0.3)',
-                         borderRadius: '2px',
-                       }}>
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: false, margin: '-20px' }}
+                    transition={{ duration: 0.5, delay: i * 0.15 }}
+                    className="p-5 border"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(255,153,0,0.1), rgba(255,200,0,0.05))',
+                      border: '1px solid rgba(255,153,0,0.3)',
+                      borderRadius: '2px',
+                    }}
+                  >
                     <div className="text-[10px] tracking-[2px] uppercase font-bold mb-2 font-label-sm" style={{ color: '#ffcc00' }}>✦ REWARD</div>
                     <div className="text-[14px] font-semibold text-on-surface font-headline-md">{r}</div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </div>
@@ -387,24 +561,31 @@ export default function MysteryBoxHackathon() {
             {/* Twists */}
             <div>
               <p className="text-[11px] tracking-[2px] uppercase font-semibold mb-3.5 font-label-sm" style={{ color: '#ff4466' }}>
-                💀 Twists
+                Twists
               </p>
               <div className="flex flex-col gap-2.5">
                 {TWISTS.map((t, i) => (
-                  <div key={i} className="p-5 border"
-                       style={{
-                         background: 'linear-gradient(135deg, rgba(255,50,50,0.08), rgba(200,0,200,0.05))',
-                         border: '1px solid rgba(255,50,50,0.2)',
-                         borderRadius: '2px',
-                       }}>
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: 20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: false, margin: '-20px' }}
+                    transition={{ duration: 0.5, delay: i * 0.15 }}
+                    className="p-5 border"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(255,50,50,0.08), rgba(200,0,200,0.05))',
+                      border: '1px solid rgba(255,50,50,0.2)',
+                      borderRadius: '2px',
+                    }}
+                  >
                     <div className="text-[10px] tracking-[2px] uppercase font-bold mb-2 font-label-sm" style={{ color: '#ff4466' }}>⚡ TWIST</div>
                     <div className="text-[14px] font-semibold text-on-surface font-headline-md">{t}</div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </div>
           </div>
-        </FadeInSection>
+        </div>
       </section>
 
 
@@ -437,7 +618,7 @@ export default function MysteryBoxHackathon() {
                     <span className="w-1.5 h-1.5 rounded-full bg-[#ff5050] animate-pulse" />
                     INCOMING EVENT
                   </div>
-                  <h4 className="text-[15px] font-headline-md text-on-surface mb-1.5 uppercase tracking-widest">{evt.icon} {evt.title}</h4>
+                  <h4 className="text-[15px] font-headline-md text-on-surface mb-1.5 uppercase tracking-widest">{evt.title}</h4>
                   <p className="text-[12px] text-on-surface-variant font-body-md">{evt.desc}</p>
                 </div>
               </FadeInSection>
@@ -495,7 +676,6 @@ export default function MysteryBoxHackathon() {
                       style={{ background: 'linear-gradient(135deg, #ff9900, #ff6b00)', color: '#000' }}>
                   ✦ LEGENDARY · RARE
                 </span>
-                <div className="text-[32px] mb-3">🥇</div>
                 <h3 className="text-[22px] text-primary-container mb-4 font-headline-md uppercase tracking-widest">Golden Mentor Pass</h3>
                 <div className="flex flex-col gap-2.5">
                   {['20 Minutes Dedicated Mentor Help', 'Priority Mentor Access', 'Technical Guidance'].map(item => (
@@ -519,11 +699,10 @@ export default function MysteryBoxHackathon() {
                       style={{ background: 'linear-gradient(135deg, #FF9900, #ff6b00)', color: '#000' }}>
                   ✦ MYTHIC · ULTRA RARE
                 </span>
-                <div className="text-[32px] mb-3">🃏</div>
                 <h3 className="text-[22px] mb-4 font-headline-md uppercase tracking-widest" style={{ color: '#b24dff' }}>Wildcard Advantage</h3>
                 <p className="text-[13px] text-on-surface-variant mb-4 font-body-md">Choose any one of the following advantages:</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {['Remove One Penalty', '+100 Points', 'Additional Hint', 'Extra Pitch Time'].map(opt => (
+                  {['Remove One Penalty', '+100 Points', 'Additional Hint'].map(opt => (
                     <div key={opt} className="p-2.5 text-[13px] text-on-surface border"
                          style={{ background: 'rgba(255,153,0,0.1)', border: '1px solid rgba(255,153,0,0.2)', borderRadius: '2px' }}>
                       {opt}
@@ -559,7 +738,6 @@ export default function MysteryBoxHackathon() {
                      border: '1px solid rgba(200,0,0,0.2)',
                      borderRadius: '2px',
                    }}>
-                <div className="text-[32px] mb-2.5">{p.icon}</div>
                 <div className="text-[20px] font-bold font-headline-xl mb-1" style={{ color: '#ff4444' }}>{p.val}</div>
                 <div className="text-[13px] text-on-surface-variant font-label-sm">{p.name}</div>
               </div>
@@ -591,7 +769,7 @@ export default function MysteryBoxHackathon() {
                    borderRadius: '2px',
                  }}>
               <div className="text-[48px] font-bold font-headline-xl uppercase tracking-widest" style={{ color: '#ff4444', textShadow: '0 0 40px rgba(255,50,50,0.5)' }}>
-                ⚔️ ARENA ⚔️
+                ARENA
               </div>
               <p className="text-[15px] text-on-surface-variant max-w-[480px] mx-auto mt-4 font-body-md">
                 Eliminated teams enter the Second Chance Arena. Beat the challenge. Spend the points. Return to the competition stronger than before.
@@ -625,7 +803,6 @@ export default function MysteryBoxHackathon() {
         }}
       >
         <FadeInSection>
-          <div className="text-[64px] mb-4">🏆</div>
           <SectionLabel className="!text-center">Grand Finale</SectionLabel>
           <h2 className="font-headline-xl text-[clamp(28px,5vw,52px)] text-on-surface mb-5 uppercase tracking-widest">
             The Stage Is Set.{' '}
