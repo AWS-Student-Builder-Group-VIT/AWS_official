@@ -91,9 +91,214 @@ async function initDb() {
       value VARCHAR(255) NOT NULL
     );
   `);
+  // Initialize hackathon teams table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS hackathon_teams (
+      id SERIAL PRIMARY KEY,
+      code VARCHAR(16) UNIQUE,
+      team_name VARCHAR(128),
+      mystery_question JSONB,
+      is_opened BOOLEAN DEFAULT FALSE,
+      points INTEGER DEFAULT 0,
+      chaos_event JSONB,
+      is_chaos_opened BOOLEAN DEFAULT FALSE,
+      is_chaos_resolved BOOLEAN DEFAULT FALSE,
+      owned_items JSONB DEFAULT '[]'::jsonb,
+      members JSONB DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  await pool.query(`
+    DO $$
+    DECLARE
+      col RECORD;
+    BEGIN
+      FOR col IN (SELECT column_name FROM information_schema.columns WHERE table_name = 'hackathon_teams' AND is_nullable = 'NO' AND column_name != 'id') LOOP
+        EXECUTE 'ALTER TABLE hackathon_teams ALTER COLUMN ' || quote_ident(col.column_name) || ' DROP NOT NULL';
+      END LOOP;
+    END $$;
+  `).catch(err => console.log('Drop NOT NULL constraints error:', err.message));
+  await pool.query(`
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS code VARCHAR(16) UNIQUE;
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS team_name VARCHAR(128);
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS mystery_question JSONB;
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS is_opened BOOLEAN DEFAULT FALSE;
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS points INTEGER DEFAULT 0;
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS chaos_event JSONB;
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS is_chaos_opened BOOLEAN DEFAULT FALSE;
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS is_chaos_resolved BOOLEAN DEFAULT FALSE;
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS owned_items JSONB DEFAULT '[]'::jsonb;
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS members JSONB DEFAULT '[]'::jsonb;
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+  `).catch(err => console.log('ALTER columns for hackathon_teams error:', err.message));
   console.log('Database tables ready');
 }
 initDb().catch(console.error);
+
+// ── Mystery Box Hackathon Team Endpoints ──────────────────────
+app.post('/api/mystery-box/teams/create', async (req, res) => {
+  try {
+    const { code, teamName, mysteryQuestion, members, isOpened, points } = req.body;
+    if (!code || !teamName || !members || !members.length) {
+      return res.status(400).json({ error: 'Missing required team fields' });
+    }
+
+    const upperCode = code.toUpperCase().trim();
+
+    // Check if team with this code exists
+    const existing = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [upperCode]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'A team with this code already exists. Please try again.' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO hackathon_teams (code, team_name, mystery_question, is_opened, points, members)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [upperCode, teamName, JSON.stringify(mysteryQuestion), !!isOpened, points || 0, JSON.stringify(members)]
+    );
+
+    const row = result.rows[0];
+    const formattedTeam = {
+      code: row.code,
+      teamName: row.team_name,
+      mysteryQuestion: row.mystery_question,
+      isOpened: row.is_opened,
+      points: row.points,
+      chaosEvent: row.chaos_event,
+      isChaosOpened: row.is_chaos_opened,
+      isChaosResolved: row.is_chaos_resolved,
+      ownedItems: row.owned_items || [],
+      members: row.members || [],
+      registeredAt: new Date(row.created_at).getTime(),
+    };
+
+    res.status(201).json({ success: true, team: formattedTeam });
+  } catch (error) {
+    console.error('Create team error:', error);
+    res.status(500).json({ error: 'Failed to create team in database' });
+  }
+});
+
+app.post('/api/mystery-box/teams/join', async (req, res) => {
+  try {
+    const { teamCode, member } = req.body;
+    if (!teamCode || !member || !member.email) {
+      return res.status(400).json({ error: 'Missing team code or member details' });
+    }
+
+    const upperCode = teamCode.toUpperCase().trim();
+    const result = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [upperCode]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'That team code does not exist. Please check the code or ask the leader.' });
+    }
+
+    const row = result.rows[0];
+    let members = Array.isArray(row.members) ? row.members : [];
+    
+    // Check if member already in team
+    const existingIndex = members.findIndex(m => m.email?.toLowerCase() === member.email.toLowerCase());
+    if (existingIndex >= 0) {
+      members[existingIndex] = { ...members[existingIndex], ...member };
+    } else {
+      members.push({ ...member, isLeader: false });
+    }
+
+    const updateResult = await pool.query(
+      `UPDATE hackathon_teams 
+       SET members = $1, updated_at = NOW() 
+       WHERE code = $2 
+       RETURNING *`,
+      [JSON.stringify(members), upperCode]
+    );
+
+    const updatedRow = updateResult.rows[0];
+    const formattedTeam = {
+      code: updatedRow.code,
+      teamName: updatedRow.team_name,
+      mysteryQuestion: updatedRow.mystery_question,
+      isOpened: updatedRow.is_opened,
+      points: updatedRow.points,
+      chaosEvent: updatedRow.chaos_event,
+      isChaosOpened: updatedRow.is_chaos_opened,
+      isChaosResolved: updatedRow.is_chaos_resolved,
+      ownedItems: updatedRow.owned_items || [],
+      members: updatedRow.members || [],
+      registeredAt: new Date(updatedRow.created_at).getTime(),
+    };
+
+    res.json({ success: true, team: formattedTeam });
+  } catch (error) {
+    console.error('Join team error:', error);
+    res.status(500).json({ error: 'Failed to join team in database' });
+  }
+});
+
+app.get('/api/mystery-box/teams/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    const result = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [code.toUpperCase().trim()]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    const row = result.rows[0];
+    const formattedTeam = {
+      code: row.code,
+      teamName: row.team_name,
+      mysteryQuestion: row.mystery_question,
+      isOpened: row.is_opened,
+      points: row.points,
+      chaosEvent: row.chaos_event,
+      isChaosOpened: row.is_chaos_opened,
+      isChaosResolved: row.is_chaos_resolved,
+      ownedItems: row.owned_items || [],
+      members: row.members || [],
+      registeredAt: new Date(row.created_at).getTime(),
+    };
+    res.json(formattedTeam);
+  } catch (error) {
+    console.error('Fetch team error:', error);
+    res.status(500).json({ error: 'Failed to fetch team' });
+  }
+});
+
+app.post('/api/mystery-box/teams/update', async (req, res) => {
+  try {
+    const { code, isOpened, points, ownedItems, chaosEvent, isChaosOpened, isChaosResolved } = req.body;
+    if (!code) return res.status(400).json({ error: 'Team code is required' });
+
+    const upperCode = code.toUpperCase().trim();
+    const result = await pool.query(
+      `UPDATE hackathon_teams 
+       SET is_opened = COALESCE($1, is_opened),
+           points = COALESCE($2, points),
+           owned_items = COALESCE($3, owned_items),
+           chaos_event = COALESCE($4, chaos_event),
+           is_chaos_opened = COALESCE($5, is_chaos_opened),
+           is_chaos_resolved = COALESCE($6, is_chaos_resolved),
+           updated_at = NOW()
+       WHERE code = $7
+       RETURNING *`,
+      [
+        isOpened !== undefined ? isOpened : null,
+        points !== undefined ? points : null,
+        ownedItems ? JSON.stringify(ownedItems) : null,
+        chaosEvent ? JSON.stringify(chaosEvent) : null,
+        isChaosOpened !== undefined ? isChaosOpened : null,
+        isChaosResolved !== undefined ? isChaosResolved : null,
+        upperCode
+      ]
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Update team error:', error);
+    res.status(500).json({ error: 'Failed to update team' });
+  }
+});
 
 // ── Register ─────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {

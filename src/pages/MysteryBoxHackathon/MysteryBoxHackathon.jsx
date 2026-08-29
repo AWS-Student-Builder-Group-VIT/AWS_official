@@ -1,8 +1,29 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 
 // Global assets (shared across the whole app)
 import awsIcon from '../../assets/aws_icon.jpeg';
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '225205318470-pn0cdqbs39jg8b60lem10e6fs9vh72q4.apps.googleusercontent.com';
+
+function decodeJwt(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    console.error('Error decoding Google JWT:', e);
+    return null;
+  }
+}
 
 // Local Mystery Box Hackathon data + components
 import {
@@ -100,7 +121,9 @@ const getMysteryQuestion = () => {
   return MYSTERY_BOX_QUESTIONS[Math.floor(Math.random() * MYSTERY_BOX_QUESTIONS.length)];
 };
 
-export default function MysteryBoxHackathon() {
+function MysteryBoxHackathonInner() {
+  const navigate = useNavigate();
+
   const [team, setTeam] = useState(() => {
     if (typeof window === 'undefined') return null;
     try {
@@ -114,8 +137,10 @@ export default function MysteryBoxHackathon() {
     if (typeof window === 'undefined') return '';
     return window.sessionStorage.getItem('mystery-box-hackathon-my-email') || '';
   });
-  const [isOpeningLocal, setIsOpeningLocal] = useState(false);
-  const [prevIsOpened, setPrevIsOpened] = useState(false);
+
+  const isMemberOfTeam = team && myEmail && team.members?.some((m) => m.email === myEmail);
+
+
 
   useEffect(() => {
     const handleStorageChange = (event) => {
@@ -137,22 +162,10 @@ export default function MysteryBoxHackathon() {
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
-
-  useEffect(() => {
-    if (team?.isOpened && !prevIsOpened) {
-      setIsOpeningLocal(true);
-      const timer = setTimeout(() => {
-        setIsOpeningLocal(false);
-        setPrevIsOpened(true);
-      }, 2000);
-      return () => clearTimeout(timer);
-    } else if (!team?.isOpened) {
-      setPrevIsOpened(false);
-      setIsOpeningLocal(false);
-    }
-  }, [team?.isOpened, prevIsOpened]);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  const [googleUser, setGoogleUser] = useState(null);
+  const [googleJoinUser, setGoogleJoinUser] = useState(null);
   const [registerForm, setRegisterForm] = useState({
     email: '',
     regNo: '',
@@ -203,21 +216,65 @@ export default function MysteryBoxHackathon() {
     }
   };
 
-  const handleRegisterSubmit = (event) => {
+  const handleGoogleRegisterSuccess = (credentialResponse) => {
+    setFormError('');
+    if (!credentialResponse?.credential) {
+      setFormError('Failed to receive Google credential.');
+      return;
+    }
+    const decoded = decodeJwt(credentialResponse.credential);
+    if (!decoded || !decoded.email) {
+      setFormError('Failed to parse Google account information.');
+      return;
+    }
+    const email = decoded.email.toLowerCase().trim();
+    setGoogleUser({
+      email,
+      name: decoded.name || 'Participant',
+      picture: decoded.picture || '',
+      givenName: decoded.given_name || '',
+      familyName: decoded.family_name || '',
+    });
+    setRegisterForm((prev) => ({ ...prev, email }));
+  };
+
+  const handleGoogleJoinSuccess = (credentialResponse) => {
+    setJoinError('');
+    if (!credentialResponse?.credential) {
+      setJoinError('Failed to receive Google credential.');
+      return;
+    }
+    const decoded = decodeJwt(credentialResponse.credential);
+    if (!decoded || !decoded.email) {
+      setJoinError('Failed to parse Google account information.');
+      return;
+    }
+    const email = decoded.email.toLowerCase().trim();
+    setGoogleJoinUser({
+      email,
+      name: decoded.name || 'Participant',
+      picture: decoded.picture || '',
+      givenName: decoded.given_name || '',
+      familyName: decoded.family_name || '',
+    });
+    setJoinForm((prev) => ({ ...prev, email }));
+  };
+
+  const handleRegisterSubmit = async (event) => {
     event.preventDefault();
     setFormError('');
 
-    const email = registerForm.email.trim().toLowerCase();
-    const regNo = registerForm.regNo.trim();
-    const teamName = registerForm.teamName.trim();
-
-    if (!email || !email.endsWith('@vitstudent.ac.in')) {
-      setFormError('Please enter a valid VIT email ending with @vitstudent.ac.in');
+    if (!googleUser || !googleUser.email) {
+      setFormError('Please sign in with your Google account first.');
       return;
     }
 
+    const email = googleUser.email.trim().toLowerCase();
+    const regNo = registerForm.regNo.trim().toUpperCase();
+    const teamName = registerForm.teamName.trim();
+
     if (!regNo) {
-      setFormError('Registration number is required.');
+      setFormError('Registration number / Student ID is required.');
       return;
     }
 
@@ -232,45 +289,85 @@ export default function MysteryBoxHackathon() {
     }
 
     const newCode = createTeamCode();
-    const nextTeam = {
-      code: newCode,
-      teamName,
-      mysteryQuestion: getMysteryQuestion(),
-      isOpened: false,
-      points: 0,
-      members: [
-        {
-          email,
-          regNo,
-          isLeader: true,
-        },
-      ],
-    };
+    const mysteryQ = getMysteryQuestion();
+    const newMembers = [
+      {
+        email,
+        regNo,
+        name: googleUser.name,
+        picture: googleUser.picture,
+        isLeader: true,
+      },
+    ];
 
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem('mystery-box-hackathon-my-email', email);
+    try {
+      const res = await fetch('/api/mystery-box/teams/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: newCode,
+          teamName,
+          mysteryQuestion: mysteryQ,
+          members: newMembers,
+          isOpened: false,
+          points: 0,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setFormError(data.error || 'Failed to create team.');
+        return;
+      }
+
+      const createdTeam = data.team;
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem('mystery-box-hackathon-my-email', email);
+      }
+      setMyEmail(email);
+      persistTeam(createdTeam);
+      setRegisterForm({ email: '', regNo: '', teamName: '', isLeader: true });
+      setGoogleUser(null);
+      setRegisterOpen(false);
+      navigate('/mystery-box-hackathon/dashboard');
+    } catch (err) {
+      console.error('Error creating team:', err);
+      // Fallback to local
+      const localTeam = {
+        code: newCode,
+        teamName,
+        mysteryQuestion: mysteryQ,
+        isOpened: false,
+        points: 0,
+        registeredAt: Date.now(),
+        members: newMembers,
+      };
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem('mystery-box-hackathon-my-email', email);
+      }
+      setMyEmail(email);
+      persistTeam(localTeam);
+      setRegisterForm({ email: '', regNo: '', teamName: '', isLeader: true });
+      setGoogleUser(null);
+      setRegisterOpen(false);
+      navigate('/mystery-box-hackathon/dashboard');
     }
-    setMyEmail(email);
-    persistTeam(nextTeam);
-    setRegisterForm({ email: '', regNo: '', teamName: '', isLeader: true });
-    setRegisterOpen(false);
   };
 
-  const handleJoinSubmit = (event) => {
+  const handleJoinSubmit = async (event) => {
     event.preventDefault();
     setJoinError('');
 
-    const email = joinForm.email.trim().toLowerCase();
-    const regNo = joinForm.regNo.trim();
-    const teamCode = joinForm.teamCode.trim().toUpperCase();
-
-    if (!email || !email.endsWith('@vitstudent.ac.in')) {
-      setJoinError('Please enter a valid VIT email ending with @vitstudent.ac.in');
+    if (!googleJoinUser || !googleJoinUser.email) {
+      setJoinError('Please sign in with your Google account first.');
       return;
     }
 
+    const email = googleJoinUser.email.trim().toLowerCase();
+    const regNo = joinForm.regNo.trim().toUpperCase();
+    const teamCode = joinForm.teamCode.trim().toUpperCase();
+
     if (!regNo) {
-      setJoinError('Registration number is required.');
+      setJoinError('Registration number / Student ID is required.');
       return;
     }
 
@@ -279,69 +376,45 @@ export default function MysteryBoxHackathon() {
       return;
     }
 
-    if (!team || team.code !== teamCode) {
-      setJoinError('That team code does not exist yet. Please ask the leader to create the team first.');
-      return;
+    try {
+      const res = await fetch('/api/mystery-box/teams/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamCode,
+          member: {
+            email,
+            regNo,
+            name: googleJoinUser.name,
+            picture: googleJoinUser.picture,
+          }
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setJoinError(data.error || 'That team code does not exist. Please ask your team leader.');
+        return;
+      }
+
+      const joinedTeam = data.team;
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem('mystery-box-hackathon-my-email', email);
+      }
+      setMyEmail(email);
+      persistTeam(joinedTeam);
+
+      setJoinForm({ email: '', regNo: '', teamCode: '' });
+      setGoogleJoinUser(null);
+      setJoinOpen(false);
+      navigate('/mystery-box-hackathon/dashboard');
+    } catch (err) {
+      console.error('Error joining team:', err);
+      setJoinError('Network error joining team. Please check the code and try again.');
     }
-
-    const existingMembers = team.members || [];
-    const memberExists = existingMembers.some((member) => member.email === email);
-
-    const nextMembers = memberExists
-      ? existingMembers.map((member) => (member.email === email ? { ...member, regNo } : member))
-      : [...existingMembers, { email, regNo, isLeader: false }];
-
-    const nextTeam = {
-      ...team,
-      members: nextMembers,
-    };
-
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem('mystery-box-hackathon-my-email', email);
-    }
-    setMyEmail(email);
-    persistTeam(nextTeam);
-
-    setJoinForm({ email: '', regNo: '', teamCode: '' });
-    setJoinOpen(false);
   };
 
-  const leader = team?.members?.find((member) => member.isLeader) || null;
-  const isCurrentLeader = leader && leader.email === myEmail;
-  const isMemberOfTeam = team && myEmail && team.members?.some((m) => m.email === myEmail);
 
-  const handleDisbandOrLeave = () => {
-    if (!team) return;
-    const isLeader = team.members?.find((member) => member.isLeader)?.email === myEmail;
-    if (isLeader) {
-      persistTeam(null);
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.removeItem('mystery-box-hackathon-my-email');
-      }
-      setMyEmail('');
-    } else {
-      const updatedMembers = (team.members || []).filter((m) => m.email !== myEmail);
-      const updatedTeam = {
-        ...team,
-        members: updatedMembers,
-      };
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(updatedTeam));
-        window.sessionStorage.removeItem('mystery-box-hackathon-my-email');
-      }
-      setTeam(null);
-      setMyEmail('');
-    }
-  };
-  const questionDesc = team?.mysteryQuestion
-    ? (typeof team.mysteryQuestion === 'string' ? team.mysteryQuestion : (team.mysteryQuestion.desc || ''))
-    : '';
-  const questionTitle = team?.mysteryQuestion
-    ? (typeof team.mysteryQuestion === 'string' ? 'Mystery Challenge' : (team.mysteryQuestion.title || 'Mystery Challenge'))
-    : 'Mystery Challenge';
-  const questionPoints = team?.mysteryQuestion
-    ? (typeof team.mysteryQuestion === 'string' ? 100 : (team.mysteryQuestion.points || 100))
-    : 100;
 
   const stepColors = {
     orange: { bg: 'rgba(255,153,0,0.15)', border: '#FF9900', text: '#FF9900' },
@@ -391,7 +464,10 @@ export default function MysteryBoxHackathon() {
             background: 'radial-gradient(circle at center, rgba(255,153,0,0.16), rgba(0,0,0,0.86) 42%, rgba(0,0,0,0.95) 100%)',
             backdropFilter: 'blur(6px)',
           }}
-          onClick={() => setRegisterOpen(false)}
+          onClick={() => {
+            setRegisterOpen(false);
+            setFormError('');
+          }}
         >
           <div
             className="relative z-10 w-full max-w-md rounded-[28px] border border-[#ffb347]/80 bg-[#120d09] p-6 shadow-[0_0_0_2px_rgba(255,153,0,0.22),0_25px_80px_rgba(0,0,0,0.95)] pointer-events-auto"
@@ -408,69 +484,127 @@ export default function MysteryBoxHackathon() {
               </div>
               <button
                 type="button"
-                onClick={() => setRegisterOpen(false)}
+                onClick={() => {
+                  setRegisterOpen(false);
+                  setFormError('');
+                }}
                 className="text-xl text-on-surface-variant transition-colors hover:text-primary-container bg-transparent border-none cursor-pointer"
               >
                 ×
               </button>
             </div>
 
-            <form onSubmit={handleRegisterSubmit} className="space-y-4">
-              <div>
-                <label className="mb-1 block text-[12px] uppercase tracking-[0.16em] text-on-surface-variant font-label-sm">Email</label>
-                <input
-                  type="email"
-                  value={registerForm.email}
-                  onChange={(event) => setRegisterForm({ ...registerForm, email: event.target.value })}
-                  className="w-full rounded-xl border border-[#ff9900]/30 bg-[#221b16] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/25"
-                  placeholder="name@vitstudent.ac.in"
-                  required
-                />
-              </div>
+            <div className="space-y-4">
+              {/* Google Auth Step */}
+              {!googleUser ? (
+                <div className="rounded-2xl border border-[#ff9900]/30 bg-[#221b16]/70 p-5 text-center flex flex-col items-center justify-center space-y-3">
+                  <div className="w-10 h-10 rounded-full bg-[#ff9900]/10 flex items-center justify-center border border-[#ff9900]/30 text-[#ff9900]">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold text-sm">Step 1: Sign in with Google</h4>
+                    <p className="text-xs text-on-surface-variant mt-0.5">Use your Google account (VIT or External)</p>
+                  </div>
+                  <div className="w-full flex justify-center pt-2">
+                    <GoogleLogin
+                      onSuccess={handleGoogleRegisterSuccess}
+                      onError={() => setFormError('Google sign in was cancelled or failed.')}
+                      theme="filled_black"
+                      shape="pill"
+                      size="large"
+                      text="continue_with"
+                      width="100%"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3.5 flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {googleUser.picture ? (
+                      <img src={googleUser.picture} alt="Avatar" className="w-9 h-9 rounded-full border border-emerald-400/50 object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                        {googleUser.name?.charAt(0) || 'V'}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-semibold text-white truncate">{googleUser.name}</span>
+                        <span className="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.2 rounded font-mono font-medium flex-shrink-0">✓ Verified</span>
+                      </div>
+                      <p className="text-[11px] text-emerald-200/80 font-mono mt-0.5 truncate">{googleUser.email}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setGoogleUser(null); setRegisterForm(prev => ({ ...prev, email: '' })); }}
+                    className="text-xs text-white/50 hover:text-red-400 underline cursor-pointer bg-transparent border-none ml-2 flex-shrink-0"
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
 
-              <div>
-                <label className="mb-1 block text-[12px] uppercase tracking-[0.16em] text-on-surface-variant font-label-sm">Registration Number</label>
-                <input
-                  type="text"
-                  value={registerForm.regNo}
-                  onChange={(event) => setRegisterForm({ ...registerForm, regNo: event.target.value })}
-                  className="w-full rounded-xl border border-[#ff9900]/30 bg-[#221b16] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/25"
-                  placeholder="22BCE1234"
-                  required
-                />
-              </div>
+              {/* Team Registration Form (Enabled after Google Auth) */}
+              <form onSubmit={handleRegisterSubmit} className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-[12px] uppercase tracking-[0.16em] text-on-surface-variant font-label-sm">Registration No. / College ID</label>
+                  <input
+                    type="text"
+                    value={registerForm.regNo}
+                    onChange={(event) => setRegisterForm({ ...registerForm, regNo: event.target.value })}
+                    className="w-full rounded-xl border border-[#ff9900]/30 bg-[#221b16] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/25 uppercase font-mono placeholder:normal-case placeholder:font-sans"
+                    placeholder="e.g. 22BCE1234 or College Roll No."
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="mb-1 block text-[12px] uppercase tracking-[0.16em] text-on-surface-variant font-label-sm">Team Name</label>
-                <input
-                  type="text"
-                  value={registerForm.teamName}
-                  onChange={(event) => setRegisterForm({ ...registerForm, teamName: event.target.value })}
-                  className="w-full rounded-xl border border-[#ff9900]/30 bg-[#221b16] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/25"
-                  placeholder="Cloud Chaos Crew"
-                  required
-                />
-              </div>
+                <div>
+                  <label className="mb-1 block text-[12px] uppercase tracking-[0.16em] text-on-surface-variant font-label-sm">Team Name</label>
+                  <input
+                    type="text"
+                    value={registerForm.teamName}
+                    onChange={(event) => setRegisterForm({ ...registerForm, teamName: event.target.value })}
+                    className="w-full rounded-xl border border-[#ff9900]/30 bg-[#221b16] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/25"
+                    placeholder="Cloud Chaos Crew"
+                    required
+                  />
+                </div>
 
-              <label className="flex items-center gap-3 rounded-xl border border-[#ff9900]/20 bg-[#221b16] px-3 py-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={registerForm.isLeader}
-                  onChange={(event) => setRegisterForm({ ...registerForm, isLeader: event.target.checked })}
-                  className="h-4 w-4 accent-[#ff9900]"
-                />
-                <span className="text-sm text-white">I am the team leader</span>
-              </label>
+                <label className="flex items-center gap-3 rounded-xl border border-[#ff9900]/20 bg-[#221b16] px-3 py-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={registerForm.isLeader}
+                    onChange={(event) => setRegisterForm({ ...registerForm, isLeader: event.target.checked })}
+                    className="h-4 w-4 accent-[#ff9900]"
+                  />
+                  <span className="text-sm text-white">I am the team leader</span>
+                </label>
 
-              {formError && <p className="text-sm text-red-400">{formError}</p>}
+                {formError && (
+                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400 font-medium">
+                    ⚠️ {formError}
+                  </div>
+                )}
 
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-primary-container px-4 py-3 text-sm font-headline-md uppercase tracking-[0.18em] text-background transition hover:bg-primary border-none cursor-pointer"
-              >
-                Create Team
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={!googleUser}
+                  className={`w-full rounded-xl px-4 py-3 text-sm font-headline-md uppercase tracking-[0.18em] transition border-none cursor-pointer ${
+                    googleUser 
+                      ? 'bg-primary-container text-background hover:bg-primary shadow-[0_0_20px_rgba(255,153,0,0.3)]' 
+                      : 'bg-white/10 text-white/40 cursor-not-allowed'
+                  }`}
+                >
+                  {googleUser ? 'Create Team →' : 'Sign in with Google First'}
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       )}
@@ -483,7 +617,10 @@ export default function MysteryBoxHackathon() {
             background: 'radial-gradient(circle at center, rgba(255,153,0,0.16), rgba(0,0,0,0.86) 42%, rgba(0,0,0,0.95) 100%)',
             backdropFilter: 'blur(6px)',
           }}
-          onClick={() => setJoinOpen(false)}
+          onClick={() => {
+            setJoinOpen(false);
+            setJoinError('');
+          }}
         >
           <div
             className="relative z-10 w-full max-w-md rounded-[28px] border border-[#ffb347]/80 bg-[#120d09] p-6 shadow-[0_0_0_2px_rgba(255,153,0,0.22),0_25px_80px_rgba(0,0,0,0.95)] pointer-events-auto"
@@ -500,59 +637,117 @@ export default function MysteryBoxHackathon() {
               </div>
               <button
                 type="button"
-                onClick={() => setJoinOpen(false)}
+                onClick={() => {
+                  setJoinOpen(false);
+                  setJoinError('');
+                }}
                 className="text-xl text-on-surface-variant transition-colors hover:text-primary-container bg-transparent border-none cursor-pointer"
               >
                 ×
               </button>
             </div>
 
-            <form onSubmit={handleJoinSubmit} className="space-y-4">
-              <div>
-                <label className="mb-1 block text-[12px] uppercase tracking-[0.16em] text-on-surface-variant font-label-sm">Email</label>
-                <input
-                  type="email"
-                  value={joinForm.email}
-                  onChange={(event) => setJoinForm({ ...joinForm, email: event.target.value })}
-                  className="w-full rounded-xl border border-[#ff9900]/30 bg-[#221b16] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/25"
-                  placeholder="member@vitstudent.ac.in"
-                  required
-                />
-              </div>
+            <div className="space-y-4">
+              {/* Google Auth Step */}
+              {!googleJoinUser ? (
+                <div className="rounded-2xl border border-[#ff9900]/30 bg-[#221b16]/70 p-5 text-center flex flex-col items-center justify-center space-y-3">
+                  <div className="w-10 h-10 rounded-full bg-[#ff9900]/10 flex items-center justify-center border border-[#ff9900]/30 text-[#ff9900]">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="text-white font-semibold text-sm">Step 1: Sign in with Google</h4>
+                    <p className="text-xs text-on-surface-variant mt-0.5">Use your Google account (VIT or External)</p>
+                  </div>
+                  <div className="w-full flex justify-center pt-2">
+                    <GoogleLogin
+                      onSuccess={handleGoogleJoinSuccess}
+                      onError={() => setJoinError('Google sign in was cancelled or failed.')}
+                      theme="filled_black"
+                      shape="pill"
+                      size="large"
+                      text="continue_with"
+                      width="100%"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3.5 flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {googleJoinUser.picture ? (
+                      <img src={googleJoinUser.picture} alt="Avatar" className="w-9 h-9 rounded-full border border-emerald-400/50 object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                        {googleJoinUser.name?.charAt(0) || 'V'}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-semibold text-white truncate">{googleJoinUser.name}</span>
+                        <span className="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.2 rounded font-mono font-medium flex-shrink-0">✓ Verified</span>
+                      </div>
+                      <p className="text-[11px] text-emerald-200/80 font-mono mt-0.5 truncate">{googleJoinUser.email}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setGoogleJoinUser(null); setJoinForm(prev => ({ ...prev, email: '' })); }}
+                    className="text-xs text-white/50 hover:text-red-400 underline cursor-pointer bg-transparent border-none ml-2 flex-shrink-0"
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
 
-              <div>
-                <label className="mb-1 block text-[12px] uppercase tracking-[0.16em] text-on-surface-variant font-label-sm">Registration Number</label>
-                <input
-                  type="text"
-                  value={joinForm.regNo}
-                  onChange={(event) => setJoinForm({ ...joinForm, regNo: event.target.value })}
-                  className="w-full rounded-xl border border-[#ff9900]/30 bg-[#221b16] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/25"
-                  placeholder="22BCE9876"
-                  required
-                />
-              </div>
+              {/* Join Form (Enabled after Google Auth) */}
+              <form onSubmit={handleJoinSubmit} className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-[12px] uppercase tracking-[0.16em] text-on-surface-variant font-label-sm">Registration No. / College ID</label>
+                  <input
+                    type="text"
+                    value={joinForm.regNo}
+                    onChange={(event) => setJoinForm({ ...joinForm, regNo: event.target.value })}
+                    className="w-full rounded-xl border border-[#ff9900]/30 bg-[#221b16] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/25 uppercase font-mono placeholder:normal-case placeholder:font-sans"
+                    placeholder="e.g. 22BCE9876 or College Roll No."
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="mb-1 block text-[12px] uppercase tracking-[0.16em] text-on-surface-variant font-label-sm">Team Code</label>
-                <input
-                  type="text"
-                  value={joinForm.teamCode}
-                  onChange={(event) => setJoinForm({ ...joinForm, teamCode: event.target.value })}
-                  className="w-full rounded-xl border border-[#ff9900]/30 bg-[#221b16] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/25"
-                  placeholder="AB12CD"
-                  required
-                />
-              </div>
+                <div>
+                  <label className="mb-1 block text-[12px] uppercase tracking-[0.16em] text-on-surface-variant font-label-sm">Team Code</label>
+                  <input
+                    type="text"
+                    value={joinForm.teamCode}
+                    onChange={(event) => setJoinForm({ ...joinForm, teamCode: event.target.value })}
+                    className="w-full rounded-xl border border-[#ff9900]/30 bg-[#221b16] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/25 uppercase font-mono tracking-wider placeholder:normal-case placeholder:tracking-normal placeholder:font-sans"
+                    placeholder="e.g. 7X9K2L"
+                    required
+                  />
+                </div>
 
-              {joinError && <p className="text-sm text-red-400">{joinError}</p>}
+                {joinError && (
+                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400 font-medium">
+                    ⚠️ {joinError}
+                  </div>
+                )}
 
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-primary-container px-4 py-3 text-sm font-headline-md uppercase tracking-[0.18em] text-background transition hover:bg-primary border-none cursor-pointer"
-              >
-                Join Team
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={!googleJoinUser}
+                  className={`w-full rounded-xl px-4 py-3 text-sm font-headline-md uppercase tracking-[0.18em] transition border-none cursor-pointer ${
+                    googleJoinUser 
+                      ? 'bg-primary-container text-background hover:bg-primary shadow-[0_0_20px_rgba(255,153,0,0.3)]' 
+                      : 'bg-white/10 text-white/40 cursor-not-allowed'
+                  }`}
+                >
+                  {googleJoinUser ? 'Join Team →' : 'Sign in with Google First'}
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       )}
@@ -596,7 +791,15 @@ export default function MysteryBoxHackathon() {
             ))}
           </div>
           <div className="flex items-center gap-3">
-            {!isMemberOfTeam && (
+            {isMemberOfTeam ? (
+              <button
+                type="button"
+                onClick={() => navigate('/mystery-box-hackathon/dashboard')}
+                className="bg-primary-container text-background px-5 py-2 text-[13px] font-headline-md uppercase tracking-widest border-0 cursor-pointer hover:bg-primary transition-colors"
+              >
+                Go to Dashboard
+              </button>
+            ) : (
               <>
                 <button
                   type="button"
@@ -681,166 +884,7 @@ export default function MysteryBoxHackathon() {
           </div>
         </section>
 
-        {isMemberOfTeam && (
-          <section className="px-container-padding pb-8 relative z-10">
-            <div className="mx-auto max-w-[1100px] rounded-[24px] border border-primary-container/30 bg-[rgba(255,153,0,0.05)] p-6 shadow-[0_20px_60px_rgba(255,153,0,0.1)]">
-              <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-primary-container font-label-sm">Team Status</p>
-                  <h3 className="mt-2 text-3xl font-headline-md text-on-surface">{team.teamName}</h3>
-                  {myEmail && (
-                    <p className="text-xs text-on-surface-variant mt-1.5 font-label-sm">
-                      Signed in as: <span className="text-primary-container font-bold">{myEmail}</span> ({isCurrentLeader ? 'Leader' : 'Member'})
-                    </p>
-                  )}
-                </div>
 
-                <div className="flex items-center gap-4">
-                  <div className="rounded-2xl border border-primary-container/40 bg-background/40 px-4 py-3 text-center min-w-[120px]">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-on-surface-variant font-label-sm">Team Points</p>
-                    <p className="mt-2 text-3xl font-headline-xl text-green-400 font-bold">{team.points || 0} pts</p>
-                  </div>
-
-                  <div className="rounded-2xl border border-primary-container/40 bg-background/40 px-4 py-3 text-center">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-on-surface-variant font-label-sm">Team Code</p>
-                    <p className="mt-2 text-3xl font-headline-xl tracking-[0.28em] text-primary-container">{team.code}</p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleDisbandOrLeave}
-                    className="border border-red-500/30 bg-red-950/20 px-4 py-3 text-xs font-bold font-headline-md uppercase tracking-wider text-red-400 transition-colors hover:bg-red-500 hover:text-white rounded-xl cursor-pointer"
-                  >
-                    {isCurrentLeader ? 'Disband Team' : 'Leave Team'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-white/10 bg-[#15131d] p-4">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-label-sm">Members</p>
-                  <ul className="mt-4 space-y-3">
-                    {(team.members || []).map((member, index) => (
-                      <li key={`${member.email}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/3 px-3 py-2 text-sm text-on-surface">
-                        <span>{member.email}</span>
-                        <span className="text-primary-container">{member.isLeader ? 'Leader' : 'Member'}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="rounded-2xl border border-primary-container/30 bg-background/30 p-4 flex flex-col justify-between min-h-[220px]">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-primary-container font-label-sm">Mystery Box</p>
-
-                  {/* Closed Box State */}
-                  {!team.isOpened && !isOpeningLocal && (
-                    <div className="flex flex-col items-center justify-center py-4 text-center">
-                      <motion.div
-                        animate={{
-                          rotate: [0, -3, 3, -3, 3, 0],
-                          scale: [1, 1.02, 1],
-                        }}
-                        transition={{
-                          repeat: Infinity,
-                          duration: 4,
-                          ease: "easeInOut",
-                        }}
-                      >
-                        <MiniMysteryBox />
-                      </motion.div>
-
-                      <h4 className="mt-3 text-lg font-headline-md text-on-surface uppercase tracking-widest">Box is Sealed</h4>
-
-                      {isCurrentLeader ? (
-                        <div className="mt-3">
-                          <p className="text-xs text-on-surface-variant mb-2">You are the Team Leader. Unveil the mystery challenge for your team.</p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              persistTeam({
-                                ...team,
-                                isOpened: true,
-                                points: (team.points || 0) + questionPoints
-                              });
-                            }}
-                            className="bg-primary-container text-background px-5 py-2 text-xs font-bold font-headline-md uppercase tracking-wider border-0 rounded-md cursor-pointer hover:bg-primary transition-colors shadow-[0_0_15px_rgba(255,153,0,0.3)] hover:scale-105 transform duration-150"
-                          >
-                            Unveil Challenge
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="mt-3 flex flex-col items-center">
-                          <p className="text-xs text-on-surface-variant flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-primary-container animate-ping" />
-                            Waiting for Team Leader ({leader?.email || 'Leader'}) to open the box...
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Opening / Transition State */}
-                  {isOpeningLocal && (
-                    <div className="flex flex-col items-center justify-center py-6 text-center overflow-hidden">
-                      <motion.div
-                        animate={{
-                          rotate: [-8, 8, -8, 8, -8, 8, 0],
-                          scale: [1, 1.2, 1.4, 0.8, 1.8, 0],
-                          filter: ["brightness(1)", "brightness(1.5)", "brightness(2)"],
-                        }}
-                        transition={{
-                          duration: 2,
-                          ease: "easeInOut",
-                        }}
-                      >
-                        <MiniMysteryBox />
-                      </motion.div>
-                      <motion.h4
-                        animate={{ opacity: [0.5, 1, 0.5] }}
-                        transition={{ repeat: Infinity, duration: 0.5 }}
-                        className="mt-4 text-sm font-headline-md text-primary-container uppercase tracking-[0.2em]"
-                      >
-                        ⚡ Unlocking Challenge... ⚡
-                      </motion.h4>
-                    </div>
-                  )}
-
-                  {/* Revealed State */}
-                  {team.isOpened && !isOpeningLocal && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5 }}
-                      className="mt-2"
-                    >
-                      <div className="flex items-center justify-between text-xs uppercase tracking-widest font-semibold font-label-sm">
-                        <div className="flex items-center gap-2 text-green-400">
-                          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                          Challenge Unlocked
-                        </div>
-                        <div className="text-primary-container font-bold">
-                          +{questionPoints} PTS ADDED
-                        </div>
-                      </div>
-                      <h4 className="mt-2 text-md font-headline-md text-on-surface">Your Problem Statement: {questionTitle}</h4>
-                      <div className="mt-2 p-4 rounded-xl border border-primary-container/20 bg-background/50 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-primary-container" />
-                        <p className="text-sm leading-7 text-on-surface-variant font-body-md">
-                          {questionDesc}
-                        </p>
-                      </div>
-                      {leader && (
-                        <p className="mt-3 text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-label-sm">
-                          Leader: {leader.email}
-                        </p>
-                      )}
-                    </motion.div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
 
         <Divider />
 
@@ -1307,5 +1351,13 @@ export default function MysteryBoxHackathon() {
 
       </div>
     </>
+  );
+}
+
+export default function MysteryBoxHackathon(props) {
+  return (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <MysteryBoxHackathonInner {...props} />
+    </GoogleOAuthProvider>
   );
 }
