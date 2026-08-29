@@ -95,6 +95,38 @@ export default function MysteryBoxDashboard() {
     };
   }, []);
 
+  // Live polling from server so teammates on other devices/windows appear in real-time
+  useEffect(() => {
+    if (!team?.code) return;
+    const fetchLatestTeam = async () => {
+      try {
+        const res = await fetch(`/api/mystery-box/teams/${team.code}`);
+        if (res.ok) {
+          const freshTeam = await res.json();
+          if (freshTeam && freshTeam.code) {
+            setTeam(prev => {
+              if (!prev) return freshTeam;
+              return {
+                ...freshTeam,
+                isOpened: freshTeam.isOpened || prev.isOpened,
+                points: Math.max(freshTeam.points || 0, prev.points || 0),
+              };
+            });
+            if (typeof window !== 'undefined') {
+              window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(freshTeam));
+            }
+          }
+        }
+      } catch (e) {
+        // quiet catch
+      }
+    };
+
+    fetchLatestTeam();
+    const interval = setInterval(fetchLatestTeam, 3000);
+    return () => clearInterval(interval);
+  }, [team?.code]);
+
   // Redirect to landing page if not in a team
   useEffect(() => {
     const isMemberOfTeam = team && myEmail && team.members?.some((m) => m.email === myEmail);
@@ -141,15 +173,19 @@ export default function MysteryBoxDashboard() {
   const isCurrentLeader = leader && leader.email === myEmail;
 
   // Primary Box Problem Details
-  const questionDesc = team.mysteryQuestion
-    ? (typeof team.mysteryQuestion === 'string' ? team.mysteryQuestion : (team.mysteryQuestion.desc || ''))
-    : '';
-  const questionTitle = team.mysteryQuestion
-    ? (typeof team.mysteryQuestion === 'string' ? 'Mystery Challenge' : (team.mysteryQuestion.title || 'Mystery Challenge'))
-    : 'Mystery Challenge';
-  const questionPoints = team.mysteryQuestion
-    ? (typeof team.mysteryQuestion === 'string' ? 100 : (team.mysteryQuestion.points || 100))
-    : 100;
+  const parsedQuestion = (() => {
+    if (!team.mysteryQuestion) return null;
+    if (typeof team.mysteryQuestion === 'object') return team.mysteryQuestion;
+    try {
+      return JSON.parse(team.mysteryQuestion);
+    } catch {
+      return { title: 'Mystery Challenge', desc: team.mysteryQuestion, points: 100 };
+    }
+  })();
+
+  const questionDesc = parsedQuestion?.desc || 'Build your serverless or cloud hackathon solution as assigned.';
+  const questionTitle = parsedQuestion?.title || 'Mystery Challenge';
+  const questionPoints = parsedQuestion?.points || 100;
 
   // Chaos Box details & countdown math
   const registeredAt = team.registeredAt || (Date.now() - 60000);
@@ -165,15 +201,50 @@ export default function MysteryBoxDashboard() {
     return `${h}h ${m}m ${s}s`;
   };
 
-  const persistTeam = (nextTeam) => {
+  const persistTeam = async (nextTeam) => {
     setTeam(nextTeam);
     if (typeof window !== 'undefined') {
       if (nextTeam) {
         window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(nextTeam));
+        if (nextTeam.code) {
+          try {
+            await fetch('/api/mystery-box/teams/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                code: nextTeam.code,
+                isOpened: nextTeam.isOpened,
+                points: nextTeam.points,
+                ownedItems: nextTeam.ownedItems || ownedItems,
+                chaosEvent: nextTeam.chaosEvent,
+                isChaosOpened: nextTeam.isChaosOpened,
+                isChaosResolved: nextTeam.isChaosResolved,
+              }),
+            });
+          } catch (e) {
+            console.error('Error updating team on server:', e);
+          }
+        }
       } else {
         window.localStorage.removeItem(TEAM_STORAGE_KEY);
       }
     }
+  };
+
+  const handleUnveilMysteryTopic = () => {
+    if (!team) return;
+    setIsOpeningLocal(true);
+    const nextPoints = (team.points || 0) + questionPoints;
+    const updatedTeam = {
+      ...team,
+      isOpened: true,
+      points: nextPoints,
+    };
+    persistTeam(updatedTeam);
+    setTimeout(() => {
+      setIsOpeningLocal(false);
+      setPrevIsOpened(true);
+    }, 2000);
   };
 
   const handleDisbandOrLeave = () => {
@@ -441,13 +512,7 @@ export default function MysteryBoxDashboard() {
                         {isCurrentLeader ? (
                           <button
                             type="button"
-                            onClick={() => {
-                              persistTeam({
-                                ...team,
-                                isOpened: true,
-                                points: (team.points || 0) + questionPoints
-                              });
-                            }}
+                            onClick={handleUnveilMysteryTopic}
                             className="bg-primary-container text-background px-7 py-3.5 font-bold font-headline-md uppercase tracking-wider border-0 rounded-xl cursor-pointer hover:bg-primary transition-colors shadow-[0_0_20px_rgba(255,153,0,0.4)] hover:scale-105 transform duration-150 text-sm"
                           >
                             Unveil Mystery Topic
@@ -530,163 +595,41 @@ export default function MysteryBoxDashboard() {
                   </div>
 
                   {/* WIDGET 2: Chaos Mystery Box */}
-                  <div className="rounded-[24px] border border-red-500/20 bg-[rgba(239,68,68,0.01)] p-6 shadow-[0_15px_45px_rgba(239,68,68,0.02)] relative overflow-hidden">
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500/30 to-transparent" />
+                  <div className="rounded-[24px] border border-red-500/20 bg-[rgba(239,68,68,0.02)] p-6 shadow-[0_15px_45px_rgba(239,68,68,0.02)] relative overflow-hidden">
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500/40 via-red-500/20 to-transparent" />
                     
                     <div className="flex justify-between items-center mb-4">
                       <p className="text-[10px] uppercase tracking-[0.2em] text-red-400 font-label-sm m-0">Chaos Mode Injector</p>
-                      {team.isChaosOpened && (
-                        <span className={`px-2.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider font-label-sm ${
-                          team.isChaosResolved ? 'bg-green-500/10 border border-green-500/30 text-green-400' : 'bg-red-500/10 border border-red-500/30 text-red-400 animate-pulse'
-                        }`}>
-                          {team.isChaosResolved ? 'Threat Mitigated ✓' : 'Threat Active ⚡'}
-                        </span>
-                      )}
+                      <span className="px-2.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider font-label-sm bg-red-500/10 border border-red-500/30 text-red-400">
+                        Admin Controlled
+                      </span>
                     </div>
 
-                    {/* Stage A: Countdown Timer / Wait State */}
-                    {!isChaosUnlocked && !team.isChaosOpened && (
-                      <div className="flex flex-col items-center justify-center py-6 text-center">
-                        <div className="w-14 h-14 rounded-full bg-red-950/20 border border-red-500/20 flex items-center justify-center text-red-400 text-xl font-bold mb-4">
-                          🔒
-                        </div>
-                        <h4 className="text-md font-headline-md text-on-surface uppercase tracking-wider mb-1.5">Chaos Mystery Box is Locked</h4>
-                        <p className="text-xs text-on-surface-variant max-w-[420px] mt-1.5 mb-4">
-                          A surprise challenge revision or system block is schedule-injected into your cockpit 5 hours after registration.
-                        </p>
-                        
-                        {/* Countdown display */}
-                        <div className="font-headline-xl text-3xl text-red-400 font-bold px-5 py-2.5 bg-red-950/10 border border-red-500/25 rounded-2xl tracking-[0.12em] mb-5">
-                          {formatTime(secondsLeft)}
-                        </div>
-
-                        {/* Demo simulator button */}
-                        <button
-                          type="button"
-                          onClick={handleSimulateChaosUnlock}
-                          className="bg-transparent hover:bg-red-500/15 border border-red-500/30 text-red-400 px-4 py-2 text-[11px] font-headline-md uppercase tracking-wider rounded-lg transition-all cursor-pointer font-bold"
-                        >
-                          ⏩ Simulate 5 Hours Passing (Demo)
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Stage B: Unlocked but Sealed (Ready to open) */}
-                    {isChaosUnlocked && !team.isChaosOpened && !isChaosOpeningLocal && (
-                      <div className="flex flex-col items-center justify-center py-8 text-center">
-                        <motion.div
-                          animate={{
-                            rotate: [0, -3, 3, -3, 3, 0],
-                            scale: [1, 1.02, 1],
-                          }}
-                          transition={{
-                            repeat: Infinity,
-                            duration: 3,
-                            ease: "easeInOut",
-                          }}
-                        >
-                          <MiniChaosMysteryBox />
-                        </motion.div>
-
-                        <h4 className="mt-4 text-xl font-headline-md text-red-400 uppercase tracking-widest">Chaos Box is Ready</h4>
-                        <p className="text-xs text-on-surface-variant max-w-[380px] mt-2 mb-6">The countdown has expired. A chaos event has been assigned. Decrypt it to reveal your team's live threat.</p>
-
-                        {isCurrentLeader ? (
-                          <button
-                            type="button"
-                            onClick={handleUnveilChaos}
-                            className="bg-red-500 text-black px-7 py-3.5 font-bold font-headline-md uppercase tracking-wider border-0 rounded-xl cursor-pointer hover:bg-red-400 transition-colors shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:scale-105 transform duration-150 text-sm"
-                          >
-                            Decrypt Chaos Event
-                          </button>
-                        ) : (
-                          <div className="flex items-center gap-2.5 bg-red-950/10 border border-red-500/20 px-4 py-3 rounded-xl">
-                            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
-                            <p className="text-xs text-on-surface-variant m-0">
-                              Waiting for Team Leader ({leader?.email || 'Leader'}) to open the chaos box...
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Stage C: Opening Animation */}
-                    {isChaosOpeningLocal && (
-                      <div className="flex flex-col items-center justify-center py-10 text-center overflow-hidden">
-                        <motion.div
-                          animate={{
-                            rotate: [-8, 8, -8, 8, -8, 8, 0],
-                            scale: [1, 1.2, 1.4, 0.8, 1.8, 0],
-                            filter: ["brightness(1)", "brightness(1.5)", "brightness(2)"],
-                          }}
-                          transition={{
-                            duration: 2,
-                            ease: "easeInOut",
-                          }}
-                        >
-                          <MiniChaosMysteryBox />
-                        </motion.div>
-                        <motion.h4
-                          animate={{ opacity: [0.5, 1, 0.5] }}
-                          transition={{ repeat: Infinity, duration: 0.5 }}
-                          className="mt-6 text-sm font-headline-md text-red-400 uppercase tracking-[0.2em]"
-                        >
-                          ⚡ Injecting Disruption Script... ⚡
-                        </motion.h4>
-                      </div>
-                    )}
-
-                    {/* Stage D: Opened / Decrypted Threat details */}
-                    {team.isChaosOpened && !isChaosOpeningLocal && team.chaosEvent && (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
                       <motion.div
-                        initial={{ opacity: 0, y: 15 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
+                        animate={{
+                          rotate: [0, -2, 2, -2, 0],
+                          scale: [1, 1.03, 1],
+                        }}
+                        transition={{
+                          repeat: Infinity,
+                          duration: 4,
+                          ease: "easeInOut",
+                        }}
                       >
-                        <div className="flex items-center justify-between text-xs uppercase tracking-widest font-semibold font-label-sm border-b border-white/5 pb-3">
-                          <div className={`flex items-center gap-2 ${team.isChaosResolved ? 'text-green-400' : 'text-red-400 animate-pulse'}`}>
-                            <span className={`w-2 h-2 rounded-full ${team.isChaosResolved ? 'bg-green-500' : 'bg-red-500 animate-ping'}`} />
-                            {team.isChaosResolved ? 'Chaos Solved' : 'Live Threat Detected'}
-                          </div>
-                          <div className="text-red-400 font-bold">
-                            {team.isChaosResolved ? '+120 PTS AWARDED' : 'RESOLVE FOR +120 PTS'}
-                          </div>
-                        </div>
-
-                        <h4 className="mt-4 text-lg font-headline-md text-on-surface uppercase tracking-wide">
-                          Threat ID: {team.chaosEvent.icon} {team.chaosEvent.title}
-                        </h4>
-
-                        <div className={`mt-3 p-5 rounded-xl border relative overflow-hidden bg-background/60`}>
-                          <div className={`absolute top-0 left-0 w-1 h-full ${team.isChaosResolved ? 'bg-green-500' : 'bg-red-500'}`} />
-                          <p className="text-[14px] leading-7 text-on-surface-variant font-body-md m-0">
-                            {team.chaosEvent.desc}
-                          </p>
-                        </div>
-
-                        <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-white/5 pt-4">
-                          <div>
-                            <p className="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-label-sm m-0">
-                              Threat Vector: Injected Mid-Build
-                            </p>
-                          </div>
-                          
-                          {team.isChaosResolved ? (
-                            <span className="px-4 py-2.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-wider font-headline-md">
-                              Threat Mitigated ✓
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={handleResolveChaos}
-                              className="bg-red-500 hover:bg-red-400 text-black px-5 py-3 text-xs font-bold font-headline-md uppercase tracking-wider rounded-xl cursor-pointer border-0 transition-transform active:scale-[0.98]"
-                            >
-                              ⚙ Deploy Mitigation Patch
-                            </button>
-                          )}
-                        </div>
+                        <MiniChaosMysteryBox />
                       </motion.div>
-                    )}
+
+                      <div className="mt-5 p-4 rounded-xl border border-red-500/30 bg-red-950/20 max-w-[480px]">
+                        <p className="text-[15px] font-headline-md text-red-300 font-bold uppercase tracking-wider m-0">
+                          "Chaos event awaits - Revealed by admins after Round 1"
+                        </p>
+                      </div>
+
+                      <p className="text-xs text-on-surface-variant max-w-[420px] mt-3 mb-0">
+                        Stay tuned. When Round 1 concludes, event organizers will trigger the live system disruption for all qualified teams.
+                      </p>
+                    </div>
                   </div>
 
                   {/* Sandbox Deliverables Widget */}
@@ -755,12 +698,16 @@ export default function MysteryBoxDashboard() {
                         <div key={index} className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-[#15131d]/30">
                           <div className="flex items-center gap-3 min-w-0">
                             {/* Avatar */}
-                            <div className="w-8 h-8 rounded-lg bg-primary-container/10 border border-primary-container/20 flex items-center justify-center font-bold text-xs text-primary-container">
-                              {member.email.slice(0, 2).toUpperCase()}
-                            </div>
+                            {member.picture ? (
+                              <img src={member.picture} alt="Avatar" className="w-8 h-8 rounded-lg border border-primary-container/30 object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-lg bg-primary-container/10 border border-primary-container/20 flex items-center justify-center font-bold text-xs text-primary-container flex-shrink-0">
+                                {(member.name || member.email).slice(0, 2).toUpperCase()}
+                              </div>
+                            )}
                             <div className="min-w-0">
-                              <h5 className="text-xs font-bold text-on-surface truncate m-0">{member.email}</h5>
-                              <p className="text-[9px] text-on-surface-variant mt-0.5 m-0 font-label-sm">VIT Student</p>
+                              <h5 className="text-xs font-bold text-on-surface truncate m-0">{member.name || member.email}</h5>
+                              <p className="text-[9px] text-on-surface-variant mt-0.5 m-0 font-label-sm font-mono truncate">{member.email}{member.regNo ? ` • ${member.regNo}` : ''}</p>
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
