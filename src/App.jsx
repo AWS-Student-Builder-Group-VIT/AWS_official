@@ -37,6 +37,8 @@ import PacmanGame from './pages/games/PacmanGame/PacmanGame.jsx';
 import MarioKart from './pages/games/MarioKart/MarioKart.jsx';
 import WatergirlFireboy from './pages/games/WatergirlFireboy/WatergirlFireboy.jsx';
 import AsteroidCommand from './pages/games/AsteroidCommand/AsteroidCommand.jsx';
+import GunshotRoulette from './pages/games/GunshotRoulette/GunshotRoulette.jsx';
+import HackType from './pages/games/HackType/HackType.jsx';
 import GamesPage from './pages/GamesPage';
 import { games } from './pages/gamesRegistry';
 
@@ -90,6 +92,8 @@ const gameComponents = {
   'mario-kart': MarioKart,
   'watergirl-fireboy': WatergirlFireboy,
   'asteroid-command': AsteroidCommand,
+  'gunshot-roulette': GunshotRoulette,
+  'hack-type': HackType,
 };
 
 export default function App() {
