@@ -16,6 +16,7 @@ import SpinWheel from './components/SpinWheel';
 
 const TEAM_STORAGE_KEY = 'mystery-box-hackathon-team';
 const OWNED_ITEMS_KEY = 'mystery-box-owned-items';
+const HACKATHON_TOKEN_KEY = 'mystery-box-hackathon-token';
 
 export default function MysteryBoxDashboard() {
   const navigate = useNavigate();
@@ -107,7 +108,8 @@ export default function MysteryBoxDashboard() {
     if (!team?.code) return;
     const fetchLatestTeam = async () => {
       try {
-        const res = await fetch(`/api/mystery-box/teams/${team.code}`);
+          const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
+          const res = await fetch(`/api/mystery-box/teams/${team.code}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         if (res.ok) {
           const freshTeam = await res.json();
           if (freshTeam && freshTeam.code) {
@@ -266,7 +268,7 @@ export default function MysteryBoxDashboard() {
           try {
             await fetch('/api/mystery-box/teams/update', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${window.sessionStorage.getItem(HACKATHON_TOKEN_KEY) || ''}` },
               body: JSON.stringify({
                 code: nextTeam.code,
                 isOpened: nextTeam.isOpened,

@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { OAuth2Client } from 'google-auth-library';
 import pool from './db.js';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -11,6 +12,8 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const HACKATHON_JWT_SECRET = `${process.env.JWT_SECRET || 'development-only-change-me'}:hackathon`;
 
 // Admin credentials (temporary hardcoded)
 const ADMIN_ID = 'aws_admin';
@@ -60,6 +63,29 @@ function adminMiddleware(req, res, next) {
     res.status(401).json({ error: 'Invalid admin token' });
   }
 }
+
+function hackathonAuth(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Hackathon sign-in required' });
+  try { req.hackathonUser = jwt.verify(token, HACKATHON_JWT_SECRET); next(); }
+  catch { res.status(401).json({ error: 'Hackathon session expired. Sign in with Google again.' }); }
+}
+
+const formatHackathonTeam = (row) => ({
+  code: row.code,
+  teamName: row.team_name,
+  mysteryQuestion: row.mystery_question,
+  isOpened: row.is_opened,
+  points: row.points || 0,
+  chaosEvent: row.chaos_event,
+  isChaosOpened: row.is_chaos_opened,
+  isChaosResolved: row.is_chaos_resolved,
+  ownedItems: row.owned_items || [],
+  members: row.members || [],
+  hasChangedQuestion: row.has_changed_question || false,
+  registeredAt: new Date(row.created_at).getTime(),
+  updatedAt: new Date(row.updated_at).getTime()
+});
 
 // ── Init quiz_scores table ────────────────────────────────────
 async function initDb() {
@@ -162,9 +188,19 @@ async function logHackathonActivity(teamCode, teamName, eventType, message, deta
 }
 
 // ── Mystery Box Hackathon Team Endpoints ──────────────────────
+app.post('/api/mystery-box/session', async (req, res) => {
+  try {
+    const ticket = await googleClient.verifyIdToken({ idToken: req.body?.credential, audience: process.env.GOOGLE_CLIENT_ID });
+    const payload = ticket.getPayload();
+    if (!payload?.email_verified || !payload.email || !payload.sub) return res.status(401).json({ error: 'Verified Google identity required' });
+    const token = jwt.sign({ email: payload.email.toLowerCase(), sub: payload.sub, kind: 'hackathon' }, HACKATHON_JWT_SECRET, { expiresIn: '2h' });
+    res.json({ token, user: { email: payload.email.toLowerCase(), sub: payload.sub, name: payload.name || 'Participant', picture: payload.picture || '' } });
+  } catch { res.status(401).json({ error: 'Invalid Google credential' }); }
+});
+
 app.post('/api/mystery-box/teams/create', async (req, res) => {
   try {
-    const { code, teamName, mysteryQuestion, members, isOpened, points } = req.body;
+    const { code, teamName, mysteryQuestion, members, isOpened, points, regNo } = req.body;
     if (!code || !teamName) {
       return res.status(400).json({ error: 'Code and Team Name are required' });
     }
@@ -173,6 +209,11 @@ app.post('/api/mystery-box/teams/create', async (req, res) => {
     const existing = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [upperCode]);
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'Team code already exists' });
+    }
+
+    let teamMembers = members || [];
+    if (req.hackathonUser && teamMembers.length === 0) {
+      teamMembers = [{ email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo || '').toUpperCase(), isLeader: true }];
     }
 
     const result = await pool.query(
@@ -185,29 +226,16 @@ app.post('/api/mystery-box/teams/create', async (req, res) => {
         mysteryQuestion ? JSON.stringify(mysteryQuestion) : null,
         isOpened || false,
         points || 0,
-        JSON.stringify(members || [])
+        JSON.stringify(teamMembers)
       ]
     );
 
     const row = result.rows[0];
-    logHackathonActivity(upperCode, teamName, 'TEAM_CREATED', `Squad "${teamName}" registered with code #${upperCode}`, { membersCount: (members || []).length });
+    logHackathonActivity(upperCode, teamName, 'TEAM_CREATED', `Squad "${teamName}" registered with code #${upperCode}`, { membersCount: teamMembers.length });
 
     res.json({
       success: true,
-      team: {
-        code: row.code,
-        teamName: row.team_name,
-        mysteryQuestion: row.mystery_question,
-        isOpened: row.is_opened,
-        points: row.points,
-        members: row.members,
-        chaosEvent: row.chaos_event,
-        isChaosOpened: row.is_chaos_opened,
-        isChaosResolved: row.is_chaos_resolved,
-        ownedItems: row.owned_items || [],
-        hasChangedQuestion: row.has_changed_question || false,
-        registeredAt: new Date(row.created_at).getTime()
-      }
+      team: formatHackathonTeam(row)
     });
   } catch (error) {
     console.error('Create team error:', error);
@@ -217,25 +245,35 @@ app.post('/api/mystery-box/teams/create', async (req, res) => {
 
 app.post('/api/mystery-box/teams/join', async (req, res) => {
   try {
-    const { code, member } = req.body;
-    if (!code || !member || !member.email) {
-      return res.status(400).json({ error: 'Code and Member with email are required' });
+    const { code, teamCode, member, regNo } = req.body;
+    const searchCode = (code || teamCode || '').toUpperCase().trim();
+    if (!searchCode) {
+      return res.status(400).json({ error: 'Team code is required' });
     }
 
-    const upperCode = code.toUpperCase().trim();
-    const result = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [upperCode]);
+    const result = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [searchCode]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Team code not found' });
     }
 
     const row = result.rows[0];
-    const currentMembers = row.members || [];
+    let currentMembers = Array.isArray(row.members) ? row.members : [];
     
+    let joinMember = member;
+    if (!joinMember && req.hackathonUser) {
+      joinMember = { email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo || '').toUpperCase(), isLeader: false };
+    }
+
+    if (!joinMember || !joinMember.email) {
+      return res.status(400).json({ error: 'Member email is required to join team' });
+    }
+
     // Check if already in team
-    const alreadyIn = currentMembers.some(m => m.email.toLowerCase() === member.email.toLowerCase());
-    let updatedMembers = currentMembers;
-    if (!alreadyIn) {
-      updatedMembers = [...currentMembers, { ...member, isLeader: false }];
+    const existingIndex = currentMembers.findIndex(m => (m.email && m.email.toLowerCase() === joinMember.email.toLowerCase()) || (m.googleSub && joinMember.googleSub && m.googleSub === joinMember.googleSub));
+    if (existingIndex >= 0) {
+      currentMembers[existingIndex] = { ...currentMembers[existingIndex], ...joinMember };
+    } else {
+      currentMembers.push({ ...joinMember, isLeader: false });
     }
 
     const updateRes = await pool.query(
@@ -243,28 +281,15 @@ app.post('/api/mystery-box/teams/join', async (req, res) => {
        SET members = $1, updated_at = NOW() 
        WHERE code = $2 
        RETURNING *`,
-      [JSON.stringify(updatedMembers), upperCode]
+      [JSON.stringify(currentMembers), searchCode]
     );
 
     const updatedRow = updateRes.rows[0];
-    logHackathonActivity(upperCode, updatedRow.team_name, 'MEMBER_JOINED', `${member.name || member.email} joined squad "${updatedRow.team_name}"`, { email: member.email });
+    logHackathonActivity(searchCode, updatedRow.team_name, 'MEMBER_JOINED', `${joinMember.name || joinMember.email} joined squad "${updatedRow.team_name}"`, { email: joinMember.email });
 
     res.json({
       success: true,
-      team: {
-        code: updatedRow.code,
-        teamName: updatedRow.team_name,
-        mysteryQuestion: updatedRow.mystery_question,
-        isOpened: updatedRow.is_opened,
-        points: updatedRow.points,
-        members: updatedRow.members,
-        chaosEvent: updatedRow.chaos_event,
-        isChaosOpened: updatedRow.is_chaos_opened,
-        isChaosResolved: updatedRow.is_chaos_resolved,
-        ownedItems: updatedRow.owned_items || [],
-        hasChangedQuestion: updatedRow.has_changed_question || false,
-        registeredAt: new Date(updatedRow.created_at).getTime()
-      }
+      team: formatHackathonTeam(updatedRow)
     });
   } catch (error) {
     console.error('Join team error:', error);
@@ -281,20 +306,7 @@ app.get('/api/mystery-box/teams/:code', async (req, res) => {
     }
 
     const row = result.rows[0];
-    res.json({
-      code: row.code,
-      teamName: row.team_name,
-      mysteryQuestion: row.mystery_question,
-      isOpened: row.is_opened,
-      points: row.points,
-      members: row.members,
-      chaosEvent: row.chaos_event,
-      isChaosOpened: row.is_chaos_opened,
-      isChaosResolved: row.is_chaos_resolved,
-      ownedItems: row.owned_items || [],
-      hasChangedQuestion: row.has_changed_question || false,
-      registeredAt: new Date(row.created_at).getTime()
-    });
+    res.json(formatHackathonTeam(row));
   } catch (error) {
     console.error('Get team error:', error);
     res.status(500).json({ error: 'Failed to retrieve team' });
@@ -351,7 +363,7 @@ app.post('/api/mystery-box/teams/update', async (req, res) => {
       logHackathonActivity(upperCode, row.team_name, req.body.activityEvent.type, req.body.activityEvent.message, req.body.activityEvent.details);
     }
 
-    res.json({ success: true, team: row });
+    res.json({ success: true, team: formatHackathonTeam(row) });
   } catch (error) {
     console.error('Update team error:', error);
     res.status(500).json({ error: 'Failed to update team' });
