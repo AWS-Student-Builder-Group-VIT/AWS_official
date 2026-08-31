@@ -880,28 +880,32 @@ app.get('/api/health', async (req, res) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
   app.use(express.static(path.join(__dirname, '../dist')));
   app.get('/{*path}', (req, res) => {
     res.sendFile(path.join(__dirname, '../dist/index.html'));
   });
 }
 
-const server = app.listen(PORT, () => {
-  console.log('\n┌──────────────────────────────────────────┐');
-  console.log(`│  ✅ Backend running  →  http://localhost:${PORT}  │`);
-  console.log('│  📡 Database        →  Neon PostgreSQL    │');
-  console.log('│  🔑 Admin login     →  /admin              │');
-  console.log('│  ❤️  Health check   →  /api/health         │');
-  console.log('└──────────────────────────────────────────┘\n');
-});
+if (!process.env.VERCEL) {
+  const server = app.listen(PORT, () => {
+    console.log('\n┌──────────────────────────────────────────┐');
+    console.log(`│  ✅ Backend running  →  http://localhost:${PORT}  │`);
+    console.log('│  📡 Database        →  Neon PostgreSQL    │');
+    console.log('│  🔑 Admin login     →  /admin              │');
+    console.log('│  ❤️  Health check   →  /api/health         │');
+    console.log('└──────────────────────────────────────────┘\n');
+  });
 
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`\n❌ Port ${PORT} is already in use. Kill the process using it and restart.\n`);
-    console.error('   Run: kill -9 $(lsof -ti:5000)');
-  } else {
-    console.error('❌ Server error:', err);
-  }
-  process.exit(1);
-});
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n❌ Port ${PORT} is already in use. Kill the process using it and restart.\n`);
+      console.error('   Run: kill -9 $(lsof -ti:5000)');
+    } else {
+      console.error('❌ Server error:', err);
+    }
+    process.exit(1);
+  });
+}
+
+export default app;
