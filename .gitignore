@@ -27,3 +27,6 @@ dist-ssr
 **/.vite/
 *.log
 tmp/
+.env
+.env.local
+.env.*.local
