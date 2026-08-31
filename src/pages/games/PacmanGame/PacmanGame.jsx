@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ==========================================
 // 1. INLINE STYLES (Self-Contained in Single File)
@@ -297,7 +297,7 @@ class SoundSynth {
   }
   destroy() {
     if (this.ctx) {
-      try { this.ctx.close(); } catch (_) {}
+      try { this.ctx.close(); } catch { /* Audio context may already be closed. */ }
       this.ctx = null;
     }
   }
@@ -793,11 +793,12 @@ function drawWallTile(ctx, grid, r, c, x, y) {
 // ==========================================
 // 5. REACT COMPONENT
 // ==========================================
-export default function PacmanGame() {
+export default function PacmanGame({ onComplete }) {
   const canvasRef = useRef(null);
   const audioRef = useRef(null);
   const gameRef = useRef(null);
   const rafIdRef = useRef(null);
+  const completionSentRef = useRef(false);
 
   // React State for HUD & UI Controls
   const [score, setScore] = useState(0);
@@ -822,14 +823,18 @@ export default function PacmanGame() {
     setLives(newLives);
   };
 
-  const handleGameOver = () => {
+  const handleGameOver = useCallback((finalScore) => {
+    if (!completionSentRef.current) {
+      completionSentRef.current = true;
+      onComplete?.({ official: true, score: Number(finalScore) || 0 });
+    }
     setOverlay({
       show: true,
       title: 'GAME OVER',
       desc: 'You ran out of lives! Click below to try again.',
       btnText: 'PLAY AGAIN'
     });
-  };
+  }, [onComplete]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -884,7 +889,7 @@ export default function PacmanGame() {
       ghosts,
       blinky,
       onHudUpdate: handleHudUpdate,
-      onGameOver: handleGameOver,
+      onGameOver: () => handleGameOver(game.score),
       triggerFrightened: () => {
         game.frightenedTimer = 360;
         game.ghostChain = 0;
@@ -926,6 +931,7 @@ export default function PacmanGame() {
         game.stateTimer = 90;
       },
       startNewGame: () => {
+        completionSentRef.current = false;
         const fresh = createGrid();
         game.grid = fresh.grid;
         game.totalDots = fresh.totalDots;
@@ -1100,7 +1106,7 @@ export default function PacmanGame() {
       canvas.removeEventListener('touchend', handleTouchEnd);
       audio.destroy();
     };
-  }, []);
+  }, [handleGameOver]);
 
   const handleStartGame = () => {
     if (gameRef.current) {

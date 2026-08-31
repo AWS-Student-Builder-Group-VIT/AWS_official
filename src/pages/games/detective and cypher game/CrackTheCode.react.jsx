@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 
 // ==========================================================
 // 1. DATA & CIPHER TABLES
@@ -547,7 +547,7 @@ const STYLES = `
 // ==========================================================
 // 3. REACT COMPONENT
 // ==========================================================
-export default function CrackTheCodeGame({ onExit }) {
+export default function CrackTheCodeGame({ onExit, onComplete }) {
   const [screen, setScreen] = useState('intro'); // 'intro' | 'game' | 'prize'
   const [currentLevelIdx, setCurrentLevelIdx] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
@@ -557,6 +557,7 @@ export default function CrackTheCodeGame({ onExit }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const inputRef = useRef(null);
+  const completionSentRef = useRef(false);
   const currentLevel = LEVELS[currentLevelIdx] || LEVELS[0];
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
@@ -580,9 +581,6 @@ export default function CrackTheCodeGame({ onExit }) {
 
   useEffect(() => {
     if (screen === 'game') {
-      setUserAnswer('');
-      setFeedback(null);
-      setToolOpen(false);
       if (inputRef.current) inputRef.current.focus();
     }
   }, [currentLevelIdx, screen]);
@@ -604,8 +602,15 @@ export default function CrackTheCodeGame({ onExit }) {
       setTimeout(() => {
         setIsSubmitting(false);
         if (currentLevelIdx + 1 >= LEVELS.length) {
+          if (!completionSentRef.current) {
+            completionSentRef.current = true;
+            onComplete?.({ official: true, solved: true, levelsCompleted: LEVELS.length });
+          }
           setScreen('prize');
         } else {
+          setUserAnswer('');
+          setFeedback(null);
+          setToolOpen(false);
           setCurrentLevelIdx(prev => prev + 1);
         }
       }, 1800);

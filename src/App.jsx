@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import AwsStudentBuilderLoader from './components/AwsStudentBuilderLoader';
 import MobilePreloader from './components/MobilePreloader';
@@ -41,6 +41,7 @@ import GunshotRoulette from './pages/games/GunshotRoulette/GunshotRoulette.jsx';
 import HackType from './pages/games/HackType/HackType.jsx';
 import GamesPage from './pages/GamesPage';
 import { games } from './pages/gamesRegistry';
+import { completeTeamGame, SCORED_TEAM_GAMES, startTeamGame } from './utils/teamGameScoring';
 
 /**
  * Detect mobile viewport (≤768px).
@@ -74,9 +75,36 @@ function HomePage() {
   );
 }
 
-function GameRoute({ Component }) {
+function GameRoute({ Component, gameSlug }) {
   const navigate = useNavigate();
-  return <Component onExit={() => navigate('/games')} />;
+  const [teamGameAttempt, setTeamGameAttempt] = useState(null);
+  const attemptRef = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    startTeamGame(gameSlug).then((attempt) => {
+      if (!active) return;
+      attemptRef.current = attempt;
+      setTeamGameAttempt(attempt);
+    });
+    return () => { active = false; };
+  }, [gameSlug]);
+
+  const handleComplete = useCallback((result) => {
+    return completeTeamGame(gameSlug, attemptRef.current, result);
+  }, [gameSlug]);
+
+  if (SCORED_TEAM_GAMES.includes(gameSlug) && teamGameAttempt === null) {
+    return <main className="min-h-screen bg-[#080b11] text-white grid place-items-center p-6"><p>Checking official team attempt…</p></main>;
+  }
+  if (teamGameAttempt?.locked) {
+    return (
+      <main className="min-h-screen bg-[#080b11] text-white grid place-items-center p-6 text-center">
+        <div><p className="text-[#ff9900] uppercase tracking-widest">Official attempt locked</p><h1 className="text-3xl font-bold mb-4">Your team already completed this game.</h1><button className="px-5 py-3 bg-[#ff9900] text-black font-bold rounded" onClick={() => navigate('/games')}>Back to games</button></div>
+      </main>
+    );
+  }
+  return <Component onComplete={handleComplete} teamGameAttempt={teamGameAttempt} onExit={() => navigate('/games')} />;
 }
 
 const gameComponents = {
@@ -267,7 +295,7 @@ export default function App() {
           <Route path="/mystery-box-hackathon" element={<MysteryBoxHackathon />} />
           <Route path="/mystery-box-hackathon/dashboard" element={<MysteryBoxDashboard />} />
           <Route path="/games" element={<GamesPage />} />
-          {games.map((game) => <Route key={game.slug} path={game.path} element={<GameRoute Component={gameComponents[game.slug]} />} />)}
+          {games.map((game) => <Route key={game.slug} path={game.path} element={<GameRoute Component={gameComponents[game.slug]} gameSlug={game.slug} />} />)}
         </Routes>
       </div>
     </>

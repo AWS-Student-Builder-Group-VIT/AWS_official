@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 
 // ==========================================================
 // 1. DATA: ALL 25 CASES
@@ -861,7 +861,7 @@ const STYLES = `
 // ==========================================================
 // 3. REACT COMPONENT
 // ==========================================================
-export default function DetectiveCrimeGame({ onExit }) {
+export default function DetectiveCrimeGame({ onExit, onComplete }) {
   const [selectedCaseIdx, setSelectedCaseIdx] = useState(null);
   const [solvedCases, setSolvedCases] = useState(() => new Set());
   const [revealedClues, setRevealedClues] = useState({});
@@ -870,6 +870,7 @@ export default function DetectiveCrimeGame({ onExit }) {
   const [resultStatus, setResultStatus] = useState(null);
 
   const resultRef = useRef(null);
+  const completionSentRef = useRef(false);
   const currentCase = selectedCaseIdx !== null ? CASES[selectedCaseIdx] : null;
 
   const handleOpenCase = (index) => {
@@ -906,6 +907,10 @@ export default function DetectiveCrimeGame({ onExit }) {
     const guiltyName = currentCase.suspects[currentCase.culprit].name;
 
     if (isCorrect) {
+      if (!completionSentRef.current) {
+        completionSentRef.current = true;
+        onComplete?.({ official: true, solved: true, caseIndex: selectedCaseIdx });
+      }
       setSolvedCases(prev => new Set(prev).add(selectedCaseIdx));
       setResultStatus({
         type: 'correct',

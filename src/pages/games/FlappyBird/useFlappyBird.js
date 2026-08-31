@@ -12,8 +12,9 @@ import { useEffect } from 'react';
 /**
  * Attaches the Flappy Bird engine to a canvas.
  * @param {React.RefObject<HTMLCanvasElement>} canvasRef
+ * @param {(result: {official:boolean, score:number}) => void} onComplete
  */
-export default function useFlappyBird(canvasRef) {
+export default function useFlappyBird(canvasRef, onComplete) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
@@ -31,6 +32,7 @@ export default function useFlappyBird(canvasRef) {
     let shakeTime = 0;
     let shakeMag = 0;
     let rafId = 0;
+    let completionSent = false;
 
     // ---------- Utility ----------
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -579,6 +581,10 @@ export default function useFlappyBird(canvasRef) {
     function die() {
       if (state !== STATE.PLAY) return;
       state = STATE.DEAD;
+      if (!completionSent) {
+        completionSent = true;
+        onComplete?.({ official: true, score });
+      }
       spawnBurst();
       shakeTime = 0.35;
       shakeMag = 8;
@@ -587,6 +593,7 @@ export default function useFlappyBird(canvasRef) {
     }
     function startGame() {
       score = 0;
+      completionSent = false;
       resetBird();
       resetPipes();
       particles = [];
@@ -884,5 +891,5 @@ export default function useFlappyBird(canvasRef) {
         audioCtx = null;
       }
     };
-  }, [canvasRef]);
+  }, [canvasRef, onComplete]);
 }

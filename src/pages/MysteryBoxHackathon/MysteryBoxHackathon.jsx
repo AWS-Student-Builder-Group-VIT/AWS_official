@@ -56,7 +56,8 @@ import {
 const TEAM_STORAGE_KEY = 'mystery-box-hackathon-team';
 const HACKATHON_TOKEN_KEY = 'mystery-box-hackathon-token';
 
-const MYSTERY_BOX_QUESTIONS = [
+// eslint-disable-next-line react-refresh/only-export-components
+export const MYSTERY_BOX_QUESTIONS = [
   {
     title: 'Serverless Student Portal',
     desc: 'Design a serverless, highly-scalable backend on AWS (Lambda, API Gateway, DynamoDB) that allows student clubs to manage events, registrations, and announcements with zero server costs.',
@@ -116,10 +117,6 @@ const createTeamCode = () => {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;
-};
-
-const getMysteryQuestion = () => {
-  return MYSTERY_BOX_QUESTIONS[Math.floor(Math.random() * MYSTERY_BOX_QUESTIONS.length)];
 };
 
 function MysteryBoxHackathonInner() {
@@ -290,17 +287,6 @@ function MysteryBoxHackathonInner() {
     }
 
     const newCode = createTeamCode();
-    const mysteryQ = getMysteryQuestion();
-    const newMembers = [
-      {
-        email,
-        regNo,
-        name: googleUser.name,
-        picture: googleUser.picture,
-        isLeader: true,
-      },
-    ];
-
     try {
       const session = await fetch('/api/mystery-box/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: googleUser.credential }) });
       const sessionData = await session.json();
@@ -312,7 +298,6 @@ function MysteryBoxHackathonInner() {
         body: JSON.stringify({
           code: newCode,
           teamName,
-          mysteryQuestion: mysteryQ,
           regNo,
         }),
       });
@@ -334,25 +319,7 @@ function MysteryBoxHackathonInner() {
       navigate('/mystery-box-hackathon/dashboard');
     } catch (err) {
       console.error('Error creating team:', err);
-      // Fallback to local
-      const localTeam = {
-        code: newCode,
-        teamName,
-        mysteryQuestion: mysteryQ,
-        isOpened: false,
-        points: 0,
-        registeredAt: Date.now(),
-        members: newMembers,
-      };
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem('mystery-box-hackathon-my-email', email);
-      }
-      setMyEmail(email);
-      persistTeam(localTeam);
-      setRegisterForm({ email: '', regNo: '', teamName: '', isLeader: true });
-      setGoogleUser(null);
-      setRegisterOpen(false);
-      navigate('/mystery-box-hackathon/dashboard');
+      setFormError('Could not reach the team server. Please try again; no local team was created.');
     }
   };
 

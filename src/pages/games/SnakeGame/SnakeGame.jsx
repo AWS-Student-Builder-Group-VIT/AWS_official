@@ -10,7 +10,7 @@ import useSnakeGame from './useSnakeGame';
 const FONTS_HREF =
   'https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;500;700&display=swap';
 
-export default function SnakeGame() {
+export default function SnakeGame({ onComplete }) {
   const canvasRef = useRef(null);
 
   const [phase, setPhase] = useState('start'); // start | playing | paused | gameover | levelup
@@ -21,11 +21,13 @@ export default function SnakeGame() {
   const [quota, setQuota] = useState(5);
   const [levelLabel, setLevelLabel] = useState('');
   const [levelObstacles, setLevelObstacles] = useState(0);
+  const completionSent = useRef(false);
 
   const onState = useCallback((s) => {
     if (s.type === 'init') {
       setBest(s.best);
     } else if (s.type === 'start') {
+      completionSent.current = false;
       setPhase('playing');
     } else if (s.type === 'pause') {
       setPhase('paused');
@@ -35,6 +37,10 @@ export default function SnakeGame() {
       setPhase('gameover');
       setScore(s.score);
       setBest(s.best);
+      if (!completionSent.current) {
+        completionSent.current = true;
+        onComplete?.({ official: true, score: Number(s.score) || 0 });
+      }
     } else if (s.type === 'levelup') {
       setPhase('levelup');
       setLevel(s.level);
@@ -49,7 +55,7 @@ export default function SnakeGame() {
       setFoodEaten(s.foodEaten);
       setQuota(s.quota);
     }
-  }, []);
+  }, [onComplete]);
 
   const api = useSnakeGame(canvasRef, onState);
 

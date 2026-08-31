@@ -4,6 +4,13 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import pool from './db.js';
+import {
+  initializeHackathonScoring,
+  listHackathonMembers,
+  pickMysteryQuestion,
+  registerHackathonScoringRoutes,
+  upsertHackathonMember,
+} from './hackathonScoring.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -15,10 +22,9 @@ const PORT = process.env.PORT || 5000;
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const HACKATHON_JWT_SECRET = `${process.env.JWT_SECRET || 'development-only-change-me'}:hackathon`;
 
-// Admin credentials (temporary hardcoded)
-const ADMIN_ID = 'aws_admin';
-const ADMIN_PASSWORD = 'CloudAdmin@2025';
-const ADMIN_JWT_SECRET = (process.env.JWT_SECRET || 'fallback') + '_admin';
+const ADMIN_ID = process.env.ADMIN_ID;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const ADMIN_JWT_SECRET = `${process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'development-only-change-me'}:admin`;
 
 const allowedOrigins = [
   'http://localhost:5173',
@@ -71,7 +77,22 @@ function hackathonAuth(req, res, next) {
   catch { res.status(401).json({ error: 'Hackathon session expired. Sign in with Google again.' }); }
 }
 
-const formatHackathonTeam = (row) => ({ code: row.code, teamName: row.team_name, mysteryQuestion: row.mystery_question, isOpened: row.is_opened, points: row.points, chaosEvent: row.chaos_event, isChaosOpened: row.is_chaos_opened, isChaosResolved: row.is_chaos_resolved, ownedItems: row.owned_items || [], members: row.members || [], registeredAt: new Date(row.created_at).getTime() });
+const formatHackathonTeam = (row, members = row.members || []) => ({ code: row.code, teamName: row.team_name, mysteryQuestion: row.mystery_question, isOpened: row.is_opened, points: row.points, chaosEvent: row.chaos_event, isChaosOpened: row.is_chaos_opened, isChaosResolved: row.is_chaos_resolved, ownedItems: row.owned_items || [], members, registeredAt: new Date(row.created_at).getTime() });
+
+async function withTransaction(operation) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const value = await operation(client);
+    await client.query('COMMIT');
+    return value;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 
 // ── Init quiz_scores table ────────────────────────────────────
 async function initDb() {
@@ -145,6 +166,7 @@ async function initDb() {
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
   `).catch(err => console.log('ALTER columns for hackathon_teams error:', err.message));
+  await initializeHackathonScoring(pool);
   console.log('Database tables ready');
 }
 initDb().catch(console.error);
@@ -162,7 +184,7 @@ app.post('/api/mystery-box/session', async (req, res) => {
 
 app.post('/api/mystery-box/teams/create', hackathonAuth, async (req, res) => {
   try {
-    const { code, teamName, mysteryQuestion, regNo } = req.body;
+    const { code, teamName, regNo } = req.body;
     if (!code || !teamName || !regNo) {
       return res.status(400).json({ error: 'Missing required team fields' });
     }
@@ -175,15 +197,19 @@ app.post('/api/mystery-box/teams/create', hackathonAuth, async (req, res) => {
       return res.status(400).json({ error: 'A team with this code already exists. Please try again.' });
     }
 
-    const result = await pool.query(
-      `INSERT INTO hackathon_teams (code, team_name, mystery_question, is_opened, points, members)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [upperCode, teamName, JSON.stringify(mysteryQuestion), false, 0, JSON.stringify([{ email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: true }])]
-    );
-
-    const row = result.rows[0];
-    res.status(201).json({ success: true, team: formatHackathonTeam(row) });
+    const mysteryQuestion = pickMysteryQuestion();
+    const { row, members } = await withTransaction(async (client) => {
+      const result = await client.query(
+        `INSERT INTO hackathon_teams (code, team_name, mystery_question, is_opened, points, members)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [upperCode, teamName, JSON.stringify(mysteryQuestion), false, 0, JSON.stringify([{ email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: true }])]
+      );
+      const created = result.rows[0];
+      await upsertHackathonMember(client, { teamId: created.id, email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: true });
+      return { row: created, members: await listHackathonMembers(client, created.id) };
+    });
+    res.status(201).json({ success: true, team: formatHackathonTeam(row, members) });
   } catch (error) {
     console.error('Create team error:', error);
     res.status(500).json({ error: 'Failed to create team in database' });
@@ -214,16 +240,19 @@ app.post('/api/mystery-box/teams/join', hackathonAuth, async (req, res) => {
       members.push({ email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: false });
     }
 
-    const updateResult = await pool.query(
-      `UPDATE hackathon_teams 
-       SET members = $1, updated_at = NOW() 
-       WHERE code = $2 
-       RETURNING *`,
-      [JSON.stringify(members), upperCode]
-    );
-
-    const updatedRow = updateResult.rows[0];
-    res.json({ success: true, team: formatHackathonTeam(updatedRow) });
+    const { updatedRow, normalizedMembers } = await withTransaction(async (client) => {
+      const updateResult = await client.query(
+        `UPDATE hackathon_teams
+         SET members = $1, updated_at = NOW()
+         WHERE code = $2
+         RETURNING *`,
+        [JSON.stringify(members), upperCode]
+      );
+      const updated = updateResult.rows[0];
+      await upsertHackathonMember(client, { teamId: updated.id, email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: false });
+      return { updatedRow: updated, normalizedMembers: await listHackathonMembers(client, updated.id) };
+    });
+    res.json({ success: true, team: formatHackathonTeam(updatedRow, normalizedMembers) });
   } catch (error) {
     console.error('Join team error:', error);
     res.status(500).json({ error: 'Failed to join team in database' });
@@ -238,53 +267,21 @@ app.get('/api/mystery-box/teams/:code', hackathonAuth, async (req, res) => {
       return res.status(404).json({ error: 'Team not found' });
     }
     const row = result.rows[0];
-    if (!(row.members || []).some((member) => member.googleSub === req.hackathonUser.sub || member.email?.toLowerCase() === req.hackathonUser.email)) return res.status(403).json({ error: 'Not a team member' });
-    res.json(formatHackathonTeam(row));
+    let members = await listHackathonMembers(pool, row.id);
+    const member = members.find((entry) => entry.googleSub === req.hackathonUser.sub || (!entry.googleSub && entry.email?.toLowerCase() === req.hackathonUser.email));
+    if (!member) return res.status(403).json({ error: 'Not a team member' });
+    if (!member.googleSub) {
+      await upsertHackathonMember(pool, { teamId: row.id, email: member.email, googleSub: req.hackathonUser.sub, regNo: member.regNo, isLeader: member.isLeader });
+      members = await listHackathonMembers(pool, row.id);
+    }
+    res.json(formatHackathonTeam(row, members));
   } catch (error) {
     console.error('Fetch team error:', error);
     res.status(500).json({ error: 'Failed to fetch team' });
   }
 });
 
-app.post('/api/mystery-box/teams/update', hackathonAuth, async (req, res) => {
-  try {
-    const { code, isOpened, points, ownedItems, chaosEvent, isChaosOpened, isChaosResolved } = req.body;
-    if (!code) return res.status(400).json({ error: 'Team code is required' });
-
-    const upperCode = code.toUpperCase().trim();
-    const teamLookup = await pool.query('SELECT members FROM hackathon_teams WHERE code = $1', [upperCode]);
-    if (!teamLookup.rows.length) return res.status(404).json({ error: 'Team not found' });
-    const leader = (teamLookup.rows[0].members || []).find((member) => member.isLeader);
-    if (!leader || !((leader.googleSub && leader.googleSub === req.hackathonUser.sub) || (!leader.googleSub && leader.email?.toLowerCase() === req.hackathonUser.email))) return res.status(403).json({ error: 'Only the verified team leader can update this team' });
-    const result = await pool.query(
-      `UPDATE hackathon_teams 
-       SET is_opened = COALESCE($1, is_opened),
-           points = COALESCE($2, points),
-           owned_items = COALESCE($3, owned_items),
-           chaos_event = COALESCE($4, chaos_event),
-           is_chaos_opened = COALESCE($5, is_chaos_opened),
-           is_chaos_resolved = COALESCE($6, is_chaos_resolved),
-           updated_at = NOW()
-       WHERE code = $7
-       RETURNING *`,
-      [
-        isOpened !== undefined ? isOpened : null,
-        points !== undefined ? points : null,
-        ownedItems ? JSON.stringify(ownedItems) : null,
-        chaosEvent ? JSON.stringify(chaosEvent) : null,
-        isChaosOpened !== undefined ? isChaosOpened : null,
-        isChaosResolved !== undefined ? isChaosResolved : null,
-        upperCode
-      ]
-    );
-
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Update team error:', error);
-    res.status(500).json({ error: 'Failed to update team' });
-  }
-});
+registerHackathonScoringRoutes(app, { pool, hackathonAuth, adminMiddleware });
 
 // ── Register ─────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
@@ -495,6 +492,7 @@ app.get('/api/quiz-scores/round-status', authMiddleware, async (req, res) => {
 
 // ── Admin — Login ─────────────────────────────────────────────
 app.post('/api/admin/login', (req, res) => {
+  if (!ADMIN_ID || !ADMIN_PASSWORD) return res.status(503).json({ error: 'Admin login is not configured' });
   const { adminId, password } = req.body;
   if (adminId !== ADMIN_ID || password !== ADMIN_PASSWORD)
     return res.status(401).json({ error: 'Invalid admin credentials' });

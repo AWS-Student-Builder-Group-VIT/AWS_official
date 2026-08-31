@@ -5,7 +5,7 @@ import './marioKart.css';
 
 const initialHud = { timer: 30, score: 0, coins: 0, speed: 0, lane: 'CENTER' };
 
-export default function MarioKart({ onExit }) {
+export default function MarioKart({ onExit, onComplete }) {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
   const [screen, setScreen] = useState('landing');
@@ -21,6 +21,7 @@ export default function MarioKart({ onExit }) {
         setAttempts((current) => {
           const next = [...current, result];
           setScreen(next.length === 5 ? 'complete' : 'attempt');
+          if (next.length === 5) onComplete?.({ official: true, score: summarizeMarioKart(next).bestScore, attempts: next });
           return next;
         });
       },
@@ -32,7 +33,7 @@ export default function MarioKart({ onExit }) {
     };
     window.addEventListener('keydown', onKey);
     return () => { window.removeEventListener('keydown', onKey); engineRef.current?.destroy(); };
-  }, []);
+  }, [onComplete]);
 
   const start = () => { setScreen('playing'); engineRef.current?.start(); };
   const restart = () => { setAttempts([]); setHud(initialHud); setScreen('landing'); };

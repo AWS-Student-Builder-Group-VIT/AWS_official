@@ -5,13 +5,9 @@ import awsIcon from '../../assets/aws_icon.jpeg';
 import {
   MiniMysteryBox,
   MiniChaosMysteryBox,
-  FadeInSection,
-  SectionLabel,
-  SectionTitle,
-  SectionSub,
   Divider,
 } from './components';
-import { SHOP_ITEMS, POINTS, CHAOS_EVENTS } from './data';
+import { SHOP_ITEMS, POINTS } from './data';
 import SpinWheel from './components/SpinWheel';
 
 const TEAM_STORAGE_KEY = 'mystery-box-hackathon-team';
@@ -40,27 +36,7 @@ export default function MysteryBoxDashboard() {
   const [isOpeningLocal, setIsOpeningLocal] = useState(false);
   const [prevIsOpened, setPrevIsOpened] = useState(false);
 
-  // Chaos Box specific states
-  const [isChaosOpeningLocal, setIsChaosOpeningLocal] = useState(false);
-  const [prevIsChaosOpened, setPrevIsChaosOpened] = useState(false);
-
-  // Simulating 5 hours pass
-  const [isChaosSimulated, setIsChaosSimulated] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem('mystery-box-chaos-simulated') === 'true';
-  });
-
-  // Countdown timer ticking state
-  const [currentTime, setCurrentTime] = useState(Date.now());
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Shop state: track purchased items locally in localStorage
+  // Shop state mirrors the server-owned inventory for rendering only.
   const [ownedItems, setOwnedItems] = useState(() => {
     if (typeof window === 'undefined') return [];
     try {
@@ -96,37 +72,36 @@ export default function MysteryBoxDashboard() {
     };
   }, []);
 
-  // Live polling from server so teammates on other devices/windows appear in real-time
+  // Live polling from the server. The server balance is authoritative, including debits.
   useEffect(() => {
     if (!team?.code) return;
     const fetchLatestTeam = async () => {
       try {
-          const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
-          const res = await fetch(`/api/mystery-box/teams/${team.code}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
+        const res = await fetch(`/api/mystery-box/teams/${team.code}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         if (res.ok) {
           const freshTeam = await res.json();
           if (freshTeam && freshTeam.code) {
-            setTeam(prev => {
-              if (!prev) return freshTeam;
-              return {
-                ...freshTeam,
-                isOpened: freshTeam.isOpened || prev.isOpened,
-                points: Math.max(freshTeam.points || 0, prev.points || 0),
-              };
-            });
+            setTeam(freshTeam);
+            setOwnedItems(Array.isArray(freshTeam.ownedItems) ? freshTeam.ownedItems : []);
             if (typeof window !== 'undefined') {
               window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(freshTeam));
+              window.localStorage.setItem(OWNED_ITEMS_KEY, JSON.stringify(freshTeam.ownedItems || []));
             }
           }
         }
-      } catch (e) {
+      } catch {
         // quiet catch
       }
     };
 
     fetchLatestTeam();
     const interval = setInterval(fetchLatestTeam, 3000);
-    return () => clearInterval(interval);
+    window.addEventListener('aws-team-score:updated', fetchLatestTeam);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('aws-team-score:updated', fetchLatestTeam);
+    };
   }, [team?.code]);
 
   // Redirect to landing page if not in a team
@@ -140,32 +115,17 @@ export default function MysteryBoxDashboard() {
   // Set up primary box-opening state changes
   useEffect(() => {
     if (team?.isOpened && !prevIsOpened) {
-      setIsOpeningLocal(true);
-      const timer = setTimeout(() => {
+      const startTimer = setTimeout(() => setIsOpeningLocal(true), 0);
+      const finishTimer = setTimeout(() => {
         setIsOpeningLocal(false);
         setPrevIsOpened(true);
       }, 2000);
-      return () => clearTimeout(timer);
-    } else if (!team?.isOpened) {
-      setPrevIsOpened(false);
-      setIsOpeningLocal(false);
+      return () => {
+        clearTimeout(startTimer);
+        clearTimeout(finishTimer);
+      };
     }
   }, [team?.isOpened, prevIsOpened]);
-
-  // Set up chaos box-opening state changes
-  useEffect(() => {
-    if (team?.isChaosOpened && !prevIsChaosOpened) {
-      setIsChaosOpeningLocal(true);
-      const timer = setTimeout(() => {
-        setIsChaosOpeningLocal(false);
-        setPrevIsChaosOpened(true);
-      }, 2000);
-      return () => clearTimeout(timer);
-    } else if (!team?.isChaosOpened) {
-      setPrevIsChaosOpened(false);
-      setIsChaosOpeningLocal(false);
-    }
-  }, [team?.isChaosOpened, prevIsChaosOpened]);
 
   if (!team || !myEmail) {
     return null; // Will redirect in useEffect
@@ -189,151 +149,89 @@ export default function MysteryBoxDashboard() {
   const questionTitle = parsedQuestion?.title || 'Mystery Challenge';
   const questionPoints = parsedQuestion?.points || 100;
 
-  // Chaos Box details & countdown math
-  const registeredAt = team.registeredAt || (Date.now() - 60000);
-  const targetTime = registeredAt + 5 * 60 * 60 * 1000; // 5 hours in ms
-  const isTimeReached = currentTime >= targetTime;
-  const secondsLeft = Math.max(0, Math.floor((targetTime - currentTime) / 1000));
-  const isChaosUnlocked = isTimeReached || isChaosSimulated;
-
-  const formatTime = (secs) => {
-    const h = Math.floor(secs / 3600).toString().padStart(2, '0');
-    const m = Math.floor((secs % 3600) / 60).toString().padStart(2, '0');
-    const s = (secs % 60).toString().padStart(2, '0');
-    return `${h}h ${m}m ${s}s`;
-  };
-
-  const persistTeam = async (nextTeam) => {
+  const persistTeamLocally = (nextTeam) => {
     setTeam(nextTeam);
     if (typeof window !== 'undefined') {
       if (nextTeam) {
         window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(nextTeam));
-        if (nextTeam.code) {
-          try {
-            await fetch('/api/mystery-box/teams/update', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${window.sessionStorage.getItem(HACKATHON_TOKEN_KEY) || ''}` },
-              body: JSON.stringify({
-                code: nextTeam.code,
-                isOpened: nextTeam.isOpened,
-                points: nextTeam.points,
-                ownedItems: nextTeam.ownedItems || ownedItems,
-                chaosEvent: nextTeam.chaosEvent,
-                isChaosOpened: nextTeam.isChaosOpened,
-                isChaosResolved: nextTeam.isChaosResolved,
-              }),
-            });
-          } catch (e) {
-            console.error('Error updating team on server:', e);
-          }
-        }
       } else {
         window.localStorage.removeItem(TEAM_STORAGE_KEY);
       }
     }
   };
 
-  const handleUnveilMysteryTopic = () => {
-    if (!team) return;
-    setIsOpeningLocal(true);
-    const nextPoints = (team.points || 0) + questionPoints;
-    const updatedTeam = {
-      ...team,
-      isOpened: true,
-      points: nextPoints,
-    };
-    persistTeam(updatedTeam);
-    setTimeout(() => {
-      setIsOpeningLocal(false);
-      setPrevIsOpened(true);
-    }, 2000);
+  const runLeaderAction = async (path, body = {}) => {
+    const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
+    const response = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token || ''}` },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Team action failed');
+
+    const refreshed = await fetch(`/api/mystery-box/teams/${team.code}`, {
+      headers: { Authorization: `Bearer ${token || ''}` },
+    });
+    if (!refreshed.ok) throw new Error('Team action completed, but the dashboard could not refresh');
+    const freshTeam = await refreshed.json();
+    persistTeamLocally(freshTeam);
+    const nextOwned = Array.isArray(freshTeam.ownedItems) ? freshTeam.ownedItems : [];
+    setOwnedItems(nextOwned);
+    window.localStorage.setItem(OWNED_ITEMS_KEY, JSON.stringify(nextOwned));
+    return data;
   };
 
-  const handleDisbandOrLeave = () => {
-    const isLeader = team.members?.find((member) => member.isLeader)?.email === myEmail;
-    if (isLeader) {
-      persistTeam(null);
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.removeItem('mystery-box-hackathon-my-email');
-        window.localStorage.removeItem(OWNED_ITEMS_KEY);
-        window.localStorage.removeItem('mystery-box-chaos-simulated');
-      }
-      setMyEmail('');
-    } else {
-      const updatedMembers = (team.members || []).filter((m) => m.email !== myEmail);
-      const updatedTeam = {
-        ...team,
-        members: updatedMembers,
-      };
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(updatedTeam));
-        window.sessionStorage.removeItem('mystery-box-hackathon-my-email');
-      }
-      setMyEmail('');
+  const handleUnveilMysteryTopic = async () => {
+    if (!team || !isCurrentLeader) return;
+    try {
+      setIsOpeningLocal(true);
+      await runLeaderAction(`/api/mystery-box/teams/${team.code}/reveal`);
+      setNotification(`Mystery challenge revealed. +${questionPoints} pts awarded.`);
+      setTimeout(() => setNotification(''), 4000);
+    } catch (error) {
+      setNotification(error.message);
+      setIsOpeningLocal(false);
     }
+  };
+
+  const handleDisbandOrLeave = async () => {
+    const isLeader = team.members?.find((member) => member.isLeader)?.email === myEmail;
+    if (!isLeader) {
+      try {
+        const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
+        const response = await fetch(`/api/mystery-box/teams/${team.code}/leave`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token || ''}` },
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not leave the team');
+      } catch (error) {
+        setNotification(error.message);
+        return;
+      }
+    }
+    persistTeamLocally(null);
+    window.sessionStorage.removeItem('mystery-box-hackathon-my-email');
+    window.sessionStorage.removeItem(HACKATHON_TOKEN_KEY);
+    window.localStorage.removeItem(OWNED_ITEMS_KEY);
+    window.localStorage.removeItem('mystery-box-chaos-simulated');
+    setMyEmail('');
     navigate('/mystery-box-hackathon');
   };
 
   // Point Shop Purchase handler
-  const handlePurchase = (item) => {
+  const handlePurchase = async (item) => {
     const cost = parseInt(item.price);
-    if (isNaN(cost) || (team.points || 0) < cost) return;
-
-    const nextPoints = (team.points || 0) - cost;
-    const nextTeam = { ...team, points: nextPoints };
-    persistTeam(nextTeam);
-
-    const nextOwned = [...ownedItems, item.title];
-    setOwnedItems(nextOwned);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(OWNED_ITEMS_KEY, JSON.stringify(nextOwned));
+    if (!isCurrentLeader || isNaN(cost) || (team.points || 0) < cost) return;
+    try {
+      const itemId = item.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      await runLeaderAction(`/api/mystery-box/teams/${team.code}/purchases`, { itemId });
+      setNotification(`Successfully purchased ${item.title}!`);
+      setTimeout(() => setNotification(''), 4000);
+    } catch (error) {
+      setNotification(error.message);
     }
-
-    setNotification(`Successfully purchased ${item.title}!`);
-    setTimeout(() => setNotification(''), 4000);
-  };
-
-  // Chaos Box Simulation handler
-  const handleSimulateChaosUnlock = () => {
-    setIsChaosSimulated(true);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('mystery-box-chaos-simulated', 'true');
-    }
-    setNotification('Demo: Simulated 5 hours passing. Chaos Mystery Box unlocked!');
-    setTimeout(() => setNotification(''), 4000);
-  };
-
-  // Unveil Chaos Box handler
-  const handleUnveilChaos = () => {
-    if (!team.chaosEvent) {
-      // Pick a random chaos event
-      const randomEvent = CHAOS_EVENTS[Math.floor(Math.random() * CHAOS_EVENTS.length)];
-      const updatedTeam = {
-        ...team,
-        isChaosOpened: true,
-        chaosEvent: randomEvent,
-        isChaosResolved: false,
-      };
-      persistTeam(updatedTeam);
-    } else {
-      const updatedTeam = {
-        ...team,
-        isChaosOpened: true,
-      };
-      persistTeam(updatedTeam);
-    }
-  };
-
-  // Resolve Chaos handler
-  const handleResolveChaos = () => {
-    const updatedTeam = {
-      ...team,
-      isChaosResolved: true,
-      points: (team.points || 0) + 120, // Add 120 bonus points for resolving chaos!
-    };
-    persistTeam(updatedTeam);
-    setNotification('Chaos threat resolved! +120 pts awarded to your team.');
-    setTimeout(() => setNotification(''), 4000);
   };
 
   // Determine user level based on points
@@ -422,7 +320,7 @@ export default function MysteryBoxDashboard() {
             onClick={handleDisbandOrLeave}
             className="w-full bg-red-950/20 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white transition-all py-3 rounded-xl text-xs uppercase font-headline-md tracking-wider cursor-pointer font-bold duration-150"
           >
-            {isCurrentLeader ? 'Disband Team' : 'Leave Team'}
+            {isCurrentLeader ? 'Sign Out' : 'Leave Team'}
           </button>
         </div>
       </aside>
@@ -748,7 +646,7 @@ export default function MysteryBoxDashboard() {
                   {SHOP_ITEMS.map((item, i) => {
                     const priceVal = parseInt(item.price);
                     const isOwned = ownedItems.includes(item.title);
-                    const canAfford = points >= priceVal;
+                    const canAfford = isCurrentLeader && points >= priceVal;
 
                     return (
                       <div
@@ -795,7 +693,7 @@ export default function MysteryBoxDashboard() {
                                   : 'bg-white/5 text-on-surface-variant/40 cursor-not-allowed'
                               }`}
                             >
-                              {canAfford ? 'Purchase Advantage' : 'Not Enough Points'}
+                              {canAfford ? 'Purchase Advantage' : isCurrentLeader ? 'Not Enough Points' : 'Leader Only'}
                             </button>
                           )}
                         </div>
