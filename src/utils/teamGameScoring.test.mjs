@@ -34,6 +34,25 @@ test('practice results and unscored games cannot produce a submission', () => {
   assert.equal(SCORED_TEAM_GAMES.length, 12);
 });
 
+test('public game routes do not submit without an official attempt', async () => {
+  const localStorage = memoryStorage();
+  const sessionStorage = memoryStorage();
+  localStorage.setItem('mystery-box-hackathon-team', JSON.stringify({ code: 'TEAM12' }));
+  sessionStorage.setItem('mystery-box-hackathon-token', 'token');
+  global.window = { localStorage, sessionStorage, dispatchEvent() {} };
+
+  let calls = 0;
+  global.fetch = async () => { calls += 1; return { ok: true, json: async () => ({}) }; };
+  const result = await completeTeamGame('wordle', null, { solved: true });
+
+  assert.equal(result.queued, true);
+  assert.equal(calls, 0);
+  assert.match(localStorage.getItem('aws-team-score-outbox:v1'), /pending/);
+
+  delete global.fetch;
+  delete global.window;
+});
+
 test('queues failed completions and retries them when the same attempt resumes', async () => {
   const localStorage = memoryStorage();
   const sessionStorage = memoryStorage();

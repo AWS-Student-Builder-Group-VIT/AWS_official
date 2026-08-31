@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { calculateGamePoints, isScoredGame, SCORING_VERSION } from './gameScoring.js';
 
 const SHOP_ITEMS = Object.freeze({
+  'change-topic': { title: 'Change Challenge Topic', price: 100 },
   'mentor-help': { title: 'Mentor Help', price: 150 },
   'hint-card': { title: 'Hint Card', price: 80 },
   'technical-review': { title: 'Technical Review', price: 100 },
@@ -22,25 +23,37 @@ const CHAOS_EVENTS = Object.freeze([
 ]);
 
 const MYSTERY_QUESTIONS = Object.freeze([
-  { title: 'Serverless Student Portal', desc: 'Design a serverless, highly-scalable backend on AWS (Lambda, API Gateway, DynamoDB) that allows student clubs to manage events, registrations, and announcements with zero server costs.', points: 150 },
-  { title: 'AWS Cost-Optimizer Dashboard', desc: 'Create a dashboard app that analyzes AWS billing reports to find idle EC2 instances, underutilized S3 buckets, and provides actionable recommendations to save costs.', points: 120 },
-  { title: 'AI Study Companion', desc: 'Build a web app using Amazon Bedrock and AWS Lambda that allows students to upload syllabus docs or notes and automatically generates interactive quizzes and flashcards.', points: 180 },
-  { title: 'Cloud Resume Builder with CI/CD', desc: 'Design a web app that helps students build their resume and deploys it automatically as a static website on AWS S3/CloudFront, integrated with a mock GitHub Action pipeline.', points: 100 },
-  { title: 'Real-time Collaborative Whiteboard', desc: 'Develop a real-time collaborative whiteboard app using AWS AppSync or WebSockets that allows student teams to map out architectural diagrams synchronously.', points: 160 },
-  { title: 'Smart Campus Navigation Engine', desc: 'Build a campus guide prototype using AWS Location Service and Amazon Lex that helps new students navigate a campus, find classrooms, and ask assistant bots for help.', points: 140 },
-  { title: 'IoT Smart Energy Monitor', desc: 'Design a simulated IoT dashboard using AWS IoT Core that ingests temperature and power data from smart classrooms, visualizes it, and alerts admins when energy waste is detected.', points: 130 },
-  { title: 'Automated Code Debugger Bot', desc: 'Develop an automated code reviewer tool that integrates with a Git repo, runs code analysis via Amazon CodeGuru or Bedrock, and leaves helpful debugging comments on student pull requests.', points: 170 },
-  { title: 'IVS Stream Hub', desc: 'Create a low-latency streaming hub using Amazon IVS that allows developers to stream technical workshops and embed interactive live chat polls.', points: 150 },
-  { title: 'Attendance via Face Recognition', desc: 'Build a fast attendance system prototype that allows event organizers to take a photo of attendees and verify their registration in real-time using Amazon Rekognition.', points: 160 },
+  { id: 'easy-1', title: 'Cloud Resume Builder with CI/CD', difficulty: 'Easy', points: 100, desc: 'Design a web app that helps students build their resume and deploys it automatically as a static website on AWS S3/CloudFront, integrated with a mock GitHub Action pipeline.', tags: ['S3', 'CloudFront', 'GitHub Actions'] },
+  { id: 'easy-2', title: 'Lost & Found Intelligent Matcher', difficulty: 'Easy', points: 100, desc: 'Build a campus lost & found portal using DynamoDB and S3 for photo uploads with keyword tag searching and verification claims.', tags: ['DynamoDB', 'S3', 'API Gateway'] },
+  { id: 'easy-3', title: 'Static Portfolio with Serverless Contact Form', difficulty: 'Easy', points: 100, desc: 'Create a responsive developer portfolio hosted on S3 and CloudFront with an API Gateway + SES/Lambda backend to process and email incoming contact inquiries.', tags: ['S3', 'Lambda', 'SES'] },
+  { id: 'easy-4', title: 'AWS Cost-Optimizer Dashboard', difficulty: 'Easy', points: 100, desc: 'Create a dashboard app that analyzes mock AWS billing reports to find idle EC2 instances, underutilized S3 buckets, and provides actionable recommendations to save costs.', tags: ['CloudWatch', 'Cost Explorer', 'React'] },
+  { id: 'easy-5', title: 'Serverless URL Shortener & Analytics', difficulty: 'Easy', points: 100, desc: 'Build a high-performance URL shortener with click analytics and geolocation counters using AWS Lambda, DynamoDB, and CloudFront edge routing.', tags: ['Lambda', 'DynamoDB', 'CloudFront'] },
+  { id: 'med-1', title: 'Smart Campus Navigation Engine', difficulty: 'Medium', points: 140, desc: 'Build a campus guide prototype using AWS Location Service and Amazon Lex that helps new students navigate a campus, find classrooms, and ask assistant bots for directions.', tags: ['Location Service', 'Amazon Lex', 'Lambda'] },
+  { id: 'med-2', title: 'Serverless Student Club Portal', difficulty: 'Medium', points: 140, desc: 'Design a serverless, highly-scalable backend on AWS (Lambda, API Gateway, DynamoDB) that allows student clubs to manage events, registrations, and announcements with zero server costs.', tags: ['Lambda', 'DynamoDB', 'API Gateway', 'Cognito'] },
+  { id: 'med-3', title: 'IVS Live Stream Hub with Interactive Chat', difficulty: 'Medium', points: 140, desc: 'Create a low-latency streaming hub using Amazon IVS (Interactive Video Service) that allows developers to stream technical workshops and embed interactive live chat polls.', tags: ['Amazon IVS', 'WebSockets', 'Lambda'] },
+  { id: 'med-4', title: 'IoT Smart Energy Classroom Monitor', difficulty: 'Medium', points: 140, desc: 'Design a simulated IoT dashboard using AWS IoT Core that ingests temperature and power data from smart classrooms, visualizes it, and alerts admins when energy waste is detected.', tags: ['IoT Core', 'DynamoDB', 'SNS'] },
+  { id: 'med-5', title: 'Event Ticketing with Dynamic Queue', difficulty: 'Medium', points: 140, desc: 'Build an event ticketing portal with surge seat reservation and queue management using SQS, Lambda, and DynamoDB transactions to prevent double-booking.', tags: ['SQS', 'Lambda', 'DynamoDB'] },
+  { id: 'hard-1', title: 'AI Study Companion with Bedrock', difficulty: 'Hard', points: 180, desc: 'Build a web app using Amazon Bedrock and AWS Lambda that allows students to upload syllabus docs or notes and automatically generates interactive quizzes, mind maps, and flashcards.', tags: ['Amazon Bedrock', 'Lambda', 'S3', 'Vector DB'] },
+  { id: 'hard-2', title: 'Automated Code Reviewer & Debugger Bot', difficulty: 'Hard', points: 180, desc: 'Develop an automated code reviewer tool that integrates with a Git repo, runs code analysis via Amazon CodeGuru or Bedrock, and leaves helpful debugging comments on pull requests.', tags: ['Amazon Bedrock', 'CodeGuru', 'Lambda', 'GitHub API'] },
+  { id: 'hard-3', title: 'Biometric Attendance via Face Recognition', difficulty: 'Hard', points: 180, desc: 'Build a fast attendance system prototype that allows event organizers to take a photo of attendees and verify their registration in real-time using Amazon Rekognition.', tags: ['Rekognition', 'S3', 'Lambda', 'DynamoDB'] },
+  { id: 'hard-4', title: 'Real-time Collaborative Architecture Whiteboard', difficulty: 'Hard', points: 180, desc: 'Develop a real-time collaborative whiteboard app using AWS AppSync or WebSockets that allows student teams to map out architectural diagrams synchronously with live cursor tracking.', tags: ['AppSync', 'GraphQL', 'WebSockets', 'DynamoDB'] },
+  { id: 'hard-5', title: 'Autonomous Cloud Security Incident Responder', difficulty: 'Hard', points: 180, desc: 'Design an AI-driven SecOps bot that monitors CloudTrail & GuardDuty events, diagnoses threats via Bedrock, and automatically generates mitigation Lambda triggers to isolate compromised resources.', tags: ['GuardDuty', 'CloudTrail', 'Bedrock', 'Step Functions'] },
 ]);
+
+const TOPIC_SWAP_COST = 100;
+const DEFAULT_MAX_GAME_ATTEMPTS = 5;
 
 export function pickMysteryQuestion(random = Math.random) {
   const index = Math.min(MYSTERY_QUESTIONS.length - 1, Math.floor(random() * MYSTERY_QUESTIONS.length));
   return { ...MYSTERY_QUESTIONS[index] };
 }
 
+export function listMysteryQuestions() {
+  return MYSTERY_QUESTIONS.map((question) => ({ ...question, tags: [...(question.tags || [])] }));
+}
+
 export function normalizeTeamCode(value) {
-  const code = String(value || '').trim().toUpperCase();
+  const code = String(value || '').trim().replace(/^#+/, '').toUpperCase();
   if (!/^[A-Z0-9]{4,16}$/.test(code)) throw new Error('A valid team code is required');
   return code;
 }
@@ -61,8 +74,48 @@ export function validateAdminAdjustment(input = {}) {
   return { delta, reason };
 }
 
+export function validateGameMode(input = {}) {
+  if (typeof input.enabled !== 'boolean') throw new Error('Game mode enabled must be a boolean');
+  return input.enabled;
+}
+
+export function summarizeTeamGameUsage({ attempts = [], maxAttempts = DEFAULT_MAX_GAME_ATTEMPTS } = {}) {
+  const parsedMax = Number(maxAttempts);
+  const normalizedMax = Math.max(0, Math.trunc(Number.isFinite(parsedMax) ? parsedMax : DEFAULT_MAX_GAME_ATTEMPTS));
+  const usedAttempts = attempts.length;
+  const completedAttempts = attempts.filter((attempt) => attempt.status === 'completed').length;
+  return {
+    maxAttempts: normalizedMax,
+    usedAttempts,
+    remainingAttempts: Math.max(0, normalizedMax - usedAttempts),
+    completedAttempts,
+    activeAttempt: attempts.find((attempt) => attempt.status === 'active') || null,
+  };
+}
+
+export function canStartOfficialGame({ attempts = [], maxAttempts = DEFAULT_MAX_GAME_ATTEMPTS, gamesEnabled = false } = {}) {
+  if (!gamesEnabled) return { allowed: false, reason: 'game-mode-disabled' };
+  const usage = summarizeTeamGameUsage({ attempts, maxAttempts });
+  if (usage.usedAttempts >= usage.maxAttempts && !usage.activeAttempt) return { allowed: false, reason: 'game-limit-reached' };
+  return { allowed: true };
+}
+
+export function getTopicSwapQuote({ currentTopic, targetTopic, teamPoints = 0, hasChangedQuestion = false } = {}) {
+  const cost = TOPIC_SWAP_COST;
+  if (hasChangedQuestion) return { cost, allowed: false, reason: 'topic-swap-used' };
+  if (!currentTopic?.id || !targetTopic?.id) return { cost, allowed: false, reason: 'topic-required' };
+  if (currentTopic.id === targetTopic.id) return { cost, allowed: false, reason: 'same-topic' };
+  if (String(currentTopic.difficulty || '').toLowerCase() !== String(targetTopic.difficulty || '').toLowerCase()) {
+    return { cost, allowed: false, reason: 'same-difficulty-required' };
+  }
+  if (Number(teamPoints || 0) < cost) return { cost, allowed: false, reason: 'insufficient-points' };
+  return { cost, allowed: true };
+}
+
 export async function initializeHackathonScoring(pool) {
   await pool.query(`
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS max_game_attempts INTEGER NOT NULL DEFAULT 5;
+
     CREATE TABLE IF NOT EXISTS hackathon_team_members (
       id BIGSERIAL PRIMARY KEY,
       team_id INTEGER NOT NULL REFERENCES hackathon_teams(id) ON DELETE CASCADE,
@@ -79,6 +132,7 @@ export async function initializeHackathonScoring(pool) {
       id VARCHAR(64) PRIMARY KEY,
       team_id INTEGER NOT NULL REFERENCES hackathon_teams(id) ON DELETE CASCADE,
       game_slug VARCHAR(64) NOT NULL,
+      slot_number INTEGER,
       status VARCHAR(16) NOT NULL DEFAULT 'active' CHECK (status IN ('active','completed','abandoned')),
       started_by_google_sub VARCHAR(255) NOT NULL,
       completed_by_google_sub VARCHAR(255),
@@ -86,9 +140,13 @@ export async function initializeHackathonScoring(pool) {
       awarded_points INTEGER NOT NULL DEFAULT 0,
       scoring_version INTEGER NOT NULL DEFAULT 1,
       started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      completed_at TIMESTAMPTZ,
-      UNIQUE(team_id, game_slug)
+      completed_at TIMESTAMPTZ
     );
+    ALTER TABLE team_game_attempts ADD COLUMN IF NOT EXISTS slot_number INTEGER;
+    ALTER TABLE team_game_attempts DROP CONSTRAINT IF EXISTS team_game_attempts_team_id_game_slug_key;
+    CREATE INDEX IF NOT EXISTS idx_team_game_attempts_team_time ON team_game_attempts(team_id, started_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_team_game_attempts_team_slot ON team_game_attempts(team_id, slot_number) WHERE slot_number IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_team_game_attempts_one_active ON team_game_attempts(team_id) WHERE status = 'active';
 
     CREATE TABLE IF NOT EXISTS team_point_ledger (
       id BIGSERIAL PRIMARY KEY,
@@ -109,6 +167,15 @@ export async function initializeHackathonScoring(pool) {
       key VARCHAR(128) PRIMARY KEY,
       applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS hackathon_event_settings (
+      key VARCHAR(64) PRIMARY KEY,
+      value JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    INSERT INTO hackathon_event_settings (key, value)
+    VALUES ('games_enabled', 'false'::jsonb)
+    ON CONFLICT (key) DO NOTHING;
   `);
 
   await pool.query(`
@@ -140,6 +207,18 @@ export async function initializeHackathonScoring(pool) {
         INSERT INTO hackathon_scoring_migrations (key) VALUES ('v1-opening-balances');
       END IF;
     END $$;
+  `);
+
+  await pool.query(`
+    WITH numbered AS (
+      SELECT id, ROW_NUMBER() OVER (PARTITION BY team_id ORDER BY started_at, id) AS rn
+      FROM team_game_attempts
+      WHERE slot_number IS NULL
+    )
+    UPDATE team_game_attempts a
+    SET slot_number = numbered.rn
+    FROM numbered
+    WHERE a.id = numbered.id;
   `);
 }
 
@@ -228,6 +307,77 @@ async function appendLedger(client, { team, sourceType, sourceRef, delta, reason
   return { applied: true, balance, entry: inserted.rows[0] };
 }
 
+async function getGamesEnabled(client) {
+  const result = await client.query("SELECT value FROM hackathon_event_settings WHERE key='games_enabled'");
+  return result.rows[0]?.value === true;
+}
+
+async function listTeamAttempts(client, teamId) {
+  const result = await client.query(
+    `SELECT id, game_slug, slot_number, status, started_by_google_sub, completed_by_google_sub,
+            awarded_points, scoring_version, result_payload, started_at, completed_at
+     FROM team_game_attempts
+     WHERE team_id=$1
+     ORDER BY slot_number ASC, started_at ASC`,
+    [teamId],
+  );
+  return result.rows;
+}
+
+function formatAttempt(row) {
+  if (!row) return null;
+  return {
+    attemptId: row.id,
+    gameSlug: row.game_slug,
+    slotNumber: row.slot_number,
+    status: row.status,
+    startedByGoogleSub: row.started_by_google_sub,
+    completedByGoogleSub: row.completed_by_google_sub,
+    points: Number(row.awarded_points || 0),
+    scoringVersion: row.scoring_version,
+    result: row.result_payload,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+  };
+}
+
+export async function applyAdminAdjustment(pool, { code, delta, reason, actor }) {
+  const adjustment = validateAdminAdjustment({ delta, reason });
+  return transact(pool, async (client) => {
+    const teamResult = await client.query('SELECT * FROM hackathon_teams WHERE code=$1 FOR UPDATE', [normalizeTeamCode(code)]);
+    if (!teamResult.rows.length) { const error = new Error('Team not found'); error.status = 404; throw error; }
+    const team = teamResult.rows[0];
+    const sourceRef = randomUUID();
+    const ledger = await appendLedger(client, {
+      team,
+      sourceType: 'admin',
+      sourceRef,
+      delta: adjustment.delta,
+      reason: adjustment.reason,
+      actor: actor || { sub: 'admin:organizer' },
+    });
+    return { adjustmentId: sourceRef, balance: ledger.balance, delta: adjustment.delta };
+  });
+}
+
+async function getTeamGameSummary(client, team) {
+  const attempts = await listTeamAttempts(client, team.id);
+  const usage = summarizeTeamGameUsage({ attempts, maxAttempts: team.max_game_attempts });
+  return {
+    gamesEnabled: await getGamesEnabled(client),
+    maxAttempts: usage.maxAttempts,
+    usedAttempts: usage.usedAttempts,
+    remainingAttempts: usage.remainingAttempts,
+    completedAttempts: usage.completedAttempts,
+    activeAttempt: formatAttempt(usage.activeAttempt),
+    attempts: attempts.map(formatAttempt),
+  };
+}
+
+function findMysteryQuestionById(id) {
+  return MYSTERY_QUESTIONS.find((question) => question.id === id);
+}
+
 const sendError = (res, error) => {
   const status = error.status || (/required|valid|official|scored|range|integer/i.test(error.message) ? 400 : 500);
   if (status >= 500) console.error('Hackathon scoring error:', error);
@@ -241,19 +391,30 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
       if (!isScoredGame(gameSlug)) return res.status(404).json({ error: 'This game is not scored' });
       const response = await transact(pool, async (client) => {
         const team = await findAuthorizedTeam(client, req.body?.code, req.hackathonUser, { lock: true });
+        const attempts = await listTeamAttempts(client, team.id);
+        const gamesEnabled = await getGamesEnabled(client);
+        const activeAttempt = attempts.find((attempt) => attempt.status === 'active');
+        if (activeAttempt?.game_slug === gameSlug) return { created: false, attempt: activeAttempt, usage: summarizeTeamGameUsage({ attempts, maxAttempts: team.max_game_attempts }) };
+        if (activeAttempt) {
+          const error = new Error(`Resume ${activeAttempt.game_slug} before starting another official game`);
+          error.status = 409;
+          error.reason = 'active-attempt-exists';
+          error.activeAttempt = activeAttempt;
+          throw error;
+        }
+        const decision = canStartOfficialGame({ attempts, maxAttempts: team.max_game_attempts, gamesEnabled });
+        if (!decision.allowed) { const error = new Error(decision.reason === 'game-mode-disabled' ? 'Official game mode is disabled' : 'This team has used all official game plays'); error.status = 409; error.reason = decision.reason; throw error; }
         const attemptId = randomUUID();
+        const slotNumber = attempts.length + 1;
         const inserted = await client.query(
-          `INSERT INTO team_game_attempts (id, team_id, game_slug, started_by_google_sub, scoring_version)
-           VALUES ($1,$2,$3,$4,$5)
-           ON CONFLICT (team_id, game_slug) DO NOTHING RETURNING *`,
-          [attemptId, team.id, gameSlug, req.hackathonUser.sub, SCORING_VERSION],
+          `INSERT INTO team_game_attempts (id, team_id, game_slug, slot_number, started_by_google_sub, scoring_version)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           RETURNING *`,
+          [attemptId, team.id, gameSlug, slotNumber, req.hackathonUser.sub, SCORING_VERSION],
         );
-        if (inserted.rows.length) return { created: true, attempt: inserted.rows[0] };
-        const existing = await client.query('SELECT * FROM team_game_attempts WHERE team_id = $1 AND game_slug = $2', [team.id, gameSlug]);
-        return { created: false, attempt: existing.rows[0] };
+        return { created: true, attempt: inserted.rows[0], usage: summarizeTeamGameUsage({ attempts: [...attempts, inserted.rows[0]], maxAttempts: team.max_game_attempts }) };
       });
-      if (response.attempt.status === 'completed') return res.status(409).json({ error: 'This team has already completed its official attempt', attempt: response.attempt });
-      res.status(response.created ? 201 : 200).json({ attemptId: response.attempt.id, status: response.attempt.status, resumed: !response.created });
+      res.status(response.created ? 201 : 200).json({ ...formatAttempt(response.attempt), resumed: !response.created, usage: response.usage });
     } catch (error) { sendError(res, error); }
   });
 
@@ -264,11 +425,11 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
       const response = await transact(pool, async (client) => {
         const team = await findAuthorizedTeam(client, req.body?.code, req.hackathonUser, { lock: true });
         const attemptResult = await client.query(
-          'SELECT * FROM team_game_attempts WHERE team_id = $1 AND game_slug = $2 FOR UPDATE',
-          [team.id, gameSlug],
+          'SELECT * FROM team_game_attempts WHERE team_id = $1 AND id = $2 AND game_slug = $3 FOR UPDATE',
+          [team.id, req.body?.attemptId, gameSlug],
         );
         const attempt = attemptResult.rows[0];
-        if (!attempt || attempt.id !== req.body?.attemptId) {
+        if (!attempt) {
           const error = new Error('Official game attempt not found'); error.status = 404; throw error;
         }
         if (attempt.status === 'completed') return { duplicate: true, points: attempt.awarded_points, balance: Number(team.points || 0) };
@@ -289,7 +450,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
              result_payload=$2, awarded_points=$3, completed_at=NOW() WHERE id=$4`,
           [req.hackathonUser.sub, JSON.stringify(resultPayload), points, attempt.id],
         );
-        return { duplicate: !ledger.applied, points, balance: ledger.balance };
+        return { duplicate: !ledger.applied, points, balance: ledger.balance, usage: await getTeamGameSummary(client, team) };
       });
       res.json(response);
     } catch (error) { sendError(res, error); }
@@ -300,13 +461,17 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
       const client = await pool.connect();
       try {
         const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser);
-        const [attempts, ledger] = await Promise.all([
-          client.query(`SELECT game_slug AS "gameSlug", status, awarded_points AS points, started_at AS "startedAt", completed_at AS "completedAt" FROM team_game_attempts WHERE team_id=$1 ORDER BY started_at`, [team.id]),
+        const [ledger, gameSummary] = await Promise.all([
           client.query(`SELECT source_type AS "sourceType", source_ref AS "sourceRef", delta, balance_after AS "balanceAfter", reason, created_at AS "createdAt" FROM team_point_ledger WHERE team_id=$1 ORDER BY created_at DESC, id DESC LIMIT 200`, [team.id]),
+          getTeamGameSummary(client, team),
         ]);
-        res.json({ teamCode: team.code, balance: Number(team.points || 0), attempts: attempts.rows, ledger: ledger.rows });
+        res.json({ teamCode: team.code, balance: Number(team.points || 0), ...gameSummary, ledger: ledger.rows });
       } finally { client.release(); }
     } catch (error) { sendError(res, error); }
+  });
+
+  app.get('/api/mystery-box/topics', hackathonAuth, async (req, res) => {
+    res.json({ topics: listMysteryQuestions(), topicSwapCost: TOPIC_SWAP_COST });
   });
 
   app.post('/api/mystery-box/teams/:code/leave', hackathonAuth, async (req, res) => {
@@ -349,6 +514,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
 
   app.post('/api/mystery-box/teams/:code/purchases', hackathonAuth, async (req, res) => {
     try {
+      if (req.body?.itemId === 'change-topic') return res.status(400).json({ error: 'Use the topic swap endpoint to change challenge topic' });
       const item = SHOP_ITEMS[req.body?.itemId];
       if (!item) return res.status(400).json({ error: 'Unknown shop item' });
       const response = await transact(pool, async (client) => {
@@ -359,6 +525,50 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
         const nextOwned = [...owned, item.title];
         await client.query('UPDATE hackathon_teams SET owned_items=$1, updated_at=NOW() WHERE id=$2', [JSON.stringify(nextOwned), team.id]);
         return { balance: ledger.balance, ownedItems: nextOwned };
+      });
+      res.json(response);
+    } catch (error) { sendError(res, error); }
+  });
+
+  app.post('/api/mystery-box/teams/:code/topic-swap', hackathonAuth, async (req, res) => {
+    try {
+      const targetTopic = findMysteryQuestionById(req.body?.topicId);
+      if (!targetTopic) return res.status(400).json({ error: 'Unknown topic selected' });
+      const response = await transact(pool, async (client) => {
+        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
+        const quote = getTopicSwapQuote({
+          currentTopic: team.mystery_question,
+          targetTopic,
+          teamPoints: team.points,
+          hasChangedQuestion: team.has_changed_question,
+        });
+        if (!quote.allowed) {
+          const error = new Error({
+            'topic-swap-used': 'This team has already used its topic swap',
+            'topic-required': 'Current topic is not ready for swapping',
+            'same-topic': 'Choose a different topic',
+            'same-difficulty-required': 'Only same-difficulty topic swaps are allowed',
+            'insufficient-points': 'Team does not have enough points',
+          }[quote.reason] || 'Topic swap is not allowed');
+          error.status = quote.reason === 'insufficient-points' ? 409 : 400;
+          throw error;
+        }
+        const ledger = await appendLedger(client, {
+          team,
+          sourceType: 'topic-swap',
+          sourceRef: randomUUID(),
+          delta: -quote.cost,
+          reason: `Changed challenge topic to ${targetTopic.title}`,
+          actor: req.hackathonUser,
+          metadata: { fromTopicId: team.mystery_question?.id, toTopicId: targetTopic.id, cost: quote.cost },
+        });
+        await client.query(
+          `UPDATE hackathon_teams
+           SET mystery_question=$1, has_changed_question=TRUE, updated_at=NOW()
+           WHERE id=$2`,
+          [JSON.stringify(targetTopic), team.id],
+        );
+        return { balance: ledger.balance, topic: targetTopic, cost: quote.cost, hasChangedQuestion: true };
       });
       res.json(response);
     } catch (error) { sendError(res, error); }
@@ -393,16 +603,47 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
 
   app.post('/api/admin/mystery-box/teams/:code/adjustments', adminMiddleware, async (req, res) => {
     try {
-      const adjustment = validateAdminAdjustment(req.body);
-      const response = await transact(pool, async (client) => {
-        const teamResult = await client.query('SELECT * FROM hackathon_teams WHERE code=$1 FOR UPDATE', [normalizeTeamCode(req.params.code)]);
-        if (!teamResult.rows.length) { const error = new Error('Team not found'); error.status = 404; throw error; }
-        const team = teamResult.rows[0];
-        const sourceRef = randomUUID();
-        const ledger = await appendLedger(client, { team, sourceType: 'admin', sourceRef, delta: adjustment.delta, reason: adjustment.reason, actor: { sub: `admin:${req.admin?.role || 'organizer'}` } });
-        return { adjustmentId: sourceRef, balance: ledger.balance, delta: adjustment.delta };
+      const response = await applyAdminAdjustment(pool, {
+        code: req.params.code,
+        delta: req.body?.delta,
+        reason: req.body?.reason,
+        actor: { sub: `admin:${req.admin?.role || 'organizer'}` },
       });
       res.status(201).json(response);
+    } catch (error) { sendError(res, error); }
+  });
+
+  app.get('/api/admin/mystery-box/games-mode', adminMiddleware, async (req, res) => {
+    try {
+      const client = await pool.connect();
+      try { res.json({ enabled: await getGamesEnabled(client) }); }
+      finally { client.release(); }
+    } catch (error) { sendError(res, error); }
+  });
+
+  app.post('/api/admin/mystery-box/games-mode', adminMiddleware, async (req, res) => {
+    try {
+      const enabled = validateGameMode(req.body);
+      await pool.query(
+        `INSERT INTO hackathon_event_settings (key, value, updated_at)
+         VALUES ('games_enabled', $1::jsonb, NOW())
+         ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW()`,
+        [JSON.stringify(enabled)],
+      );
+      res.json({ enabled });
+    } catch (error) { sendError(res, error); }
+  });
+
+  app.post('/api/admin/mystery-box/teams/:code/games-limit', adminMiddleware, async (req, res) => {
+    try {
+      const maxAttempts = Number(req.body?.maxAttempts);
+      if (!Number.isInteger(maxAttempts) || maxAttempts < 0 || maxAttempts > 50) return res.status(400).json({ error: 'Max game attempts must be an integer from 0 to 50' });
+      const result = await pool.query(
+        `UPDATE hackathon_teams SET max_game_attempts=$1, updated_at=NOW() WHERE code=$2 RETURNING code, max_game_attempts`,
+        [maxAttempts, normalizeTeamCode(req.params.code)],
+      );
+      if (!result.rows.length) return res.status(404).json({ error: 'Team not found' });
+      res.json({ code: result.rows[0].code, maxAttempts: result.rows[0].max_game_attempts });
     } catch (error) { sendError(res, error); }
   });
 

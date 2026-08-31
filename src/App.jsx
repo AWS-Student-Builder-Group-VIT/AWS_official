@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate, useParams } from 'react-router-dom';
 import AwsStudentBuilderLoader from './components/AwsStudentBuilderLoader';
 import MobilePreloader from './components/MobilePreloader';
 import Hero from './components/Hero';
@@ -75,12 +75,13 @@ function HomePage() {
   );
 }
 
-function GameRoute({ Component, gameSlug }) {
+function GameRoute({ Component, gameSlug, official = false }) {
   const navigate = useNavigate();
   const [teamGameAttempt, setTeamGameAttempt] = useState(null);
   const attemptRef = useRef(null);
 
   useEffect(() => {
+    if (!official) return undefined;
     let active = true;
     startTeamGame(gameSlug).then((attempt) => {
       if (!active) return;
@@ -88,23 +89,33 @@ function GameRoute({ Component, gameSlug }) {
       setTeamGameAttempt(attempt);
     });
     return () => { active = false; };
-  }, [gameSlug]);
+  }, [gameSlug, official]);
 
   const handleComplete = useCallback((result) => {
+    if (!official) return Promise.resolve({ submitted: false });
     return completeTeamGame(gameSlug, attemptRef.current, result);
-  }, [gameSlug]);
+  }, [gameSlug, official]);
 
-  if (SCORED_TEAM_GAMES.includes(gameSlug) && teamGameAttempt === null) {
+  if (official && SCORED_TEAM_GAMES.includes(gameSlug) && teamGameAttempt === null) {
     return <main className="min-h-screen bg-[#080b11] text-white grid place-items-center p-6"><p>Checking official team attempt…</p></main>;
   }
-  if (teamGameAttempt?.locked) {
+  if (official && (teamGameAttempt?.locked || teamGameAttempt?.enabled === false)) {
     return (
       <main className="min-h-screen bg-[#080b11] text-white grid place-items-center p-6 text-center">
-        <div><p className="text-[#ff9900] uppercase tracking-widest">Official attempt locked</p><h1 className="text-3xl font-bold mb-4">Your team already completed this game.</h1><button className="px-5 py-3 bg-[#ff9900] text-black font-bold rounded" onClick={() => navigate('/games')}>Back to games</button></div>
+        <div><p className="text-[#ff9900] uppercase tracking-widest">Official game unavailable</p><h1 className="text-3xl font-bold mb-4">{teamGameAttempt.error || 'Your team cannot start another official game right now.'}</h1><button className="px-5 py-3 bg-[#ff9900] text-black font-bold rounded" onClick={() => navigate('/mystery-box-hackathon/dashboard')}>Back to dashboard</button></div>
       </main>
     );
   }
-  return <Component onComplete={handleComplete} teamGameAttempt={teamGameAttempt} onExit={() => navigate('/games')} />;
+  return <Component onComplete={official ? handleComplete : undefined} teamGameAttempt={official ? teamGameAttempt : null} onExit={() => navigate(official ? '/mystery-box-hackathon/dashboard' : '/games')} />;
+}
+
+function OfficialGameRoute() {
+  const { gameSlug } = useParams();
+  const Component = gameComponents[gameSlug];
+  if (!Component || !SCORED_TEAM_GAMES.includes(gameSlug)) {
+    return <main className="min-h-screen bg-[#080b11] text-white grid place-items-center p-6"><p>Official game not found.</p></main>;
+  }
+  return <GameRoute Component={Component} gameSlug={gameSlug} official />;
 }
 
 const gameComponents = {
@@ -294,6 +305,7 @@ export default function App() {
           <Route path="/account" element={<AccountPage />} />
           <Route path="/mystery-box-hackathon" element={<MysteryBoxHackathon />} />
           <Route path="/mystery-box-hackathon/dashboard" element={<MysteryBoxDashboard />} />
+          <Route path="/mystery-box-hackathon/games/:gameSlug" element={<OfficialGameRoute />} />
           <Route path="/games" element={<GamesPage />} />
           {games.map((game) => <Route key={game.slug} path={game.path} element={<GameRoute Component={gameComponents[game.slug]} gameSlug={game.slug} />} />)}
         </Routes>

@@ -5,10 +5,12 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import pool from './db.js';
 import {
+  applyAdminAdjustment,
   initializeHackathonScoring,
   listHackathonMembers,
   pickMysteryQuestion,
   registerHackathonScoringRoutes,
+  normalizeTeamCode,
   upsertHackathonMember,
 } from './hackathonScoring.js';
 import dotenv from 'dotenv';
@@ -77,7 +79,22 @@ function hackathonAuth(req, res, next) {
   catch { res.status(401).json({ error: 'Hackathon session expired. Sign in with Google again.' }); }
 }
 
-const formatHackathonTeam = (row, members = row.members || []) => ({ code: row.code, teamName: row.team_name, mysteryQuestion: row.mystery_question, isOpened: row.is_opened, points: row.points, chaosEvent: row.chaos_event, isChaosOpened: row.is_chaos_opened, isChaosResolved: row.is_chaos_resolved, ownedItems: row.owned_items || [], members, registeredAt: new Date(row.created_at).getTime() });
+const formatHackathonTeam = (row, members = row.members || []) => ({
+  code: row.code,
+  teamName: row.team_name,
+  mysteryQuestion: row.mystery_question,
+  isOpened: row.is_opened,
+  points: row.points || 0,
+  chaosEvent: row.chaos_event,
+  isChaosOpened: row.is_chaos_opened,
+  isChaosResolved: row.is_chaos_resolved,
+  ownedItems: row.owned_items || [],
+  members,
+  hasChangedQuestion: row.has_changed_question || false,
+  maxGameAttempts: row.max_game_attempts ?? 5,
+  registeredAt: new Date(row.created_at).getTime(),
+  updatedAt: new Date(row.updated_at).getTime(),
+});
 
 async function withTransaction(operation) {
   const client = await pool.connect();
@@ -163,13 +180,38 @@ async function initDb() {
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS is_chaos_resolved BOOLEAN DEFAULT FALSE;
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS owned_items JSONB DEFAULT '[]'::jsonb;
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS members JSONB DEFAULT '[]'::jsonb;
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS has_changed_question BOOLEAN DEFAULT FALSE;
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS max_game_attempts INTEGER NOT NULL DEFAULT 5;
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+    CREATE TABLE IF NOT EXISTS hackathon_activity_logs (
+      id SERIAL PRIMARY KEY,
+      team_code VARCHAR(16),
+      team_name VARCHAR(128),
+      event_type VARCHAR(64),
+      message TEXT,
+      details JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `).catch(err => console.log('ALTER columns for hackathon_teams error:', err.message));
   await initializeHackathonScoring(pool);
   console.log('Database tables ready');
 }
 initDb().catch(console.error);
+
+// ── Activity Logger Helper ────────────────────────────────────
+async function logHackathonActivity(teamCode, teamName, eventType, message, details = {}) {
+  try {
+    await pool.query(
+      `INSERT INTO hackathon_activity_logs (team_code, team_name, event_type, message, details)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [teamCode || 'SYSTEM', teamName || 'Unknown Squad', eventType || 'ACTION', message, JSON.stringify(details)]
+    );
+  } catch (e) {
+    console.error('Error logging hackathon activity:', e.message);
+  }
+}
 
 // ── Mystery Box Hackathon Team Endpoints ──────────────────────
 app.post('/api/mystery-box/session', async (req, res) => {
@@ -190,11 +232,9 @@ app.post('/api/mystery-box/teams/create', hackathonAuth, async (req, res) => {
     }
 
     const upperCode = code.toUpperCase().trim();
-
-    // Check if team with this code exists
     const existing = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [upperCode]);
     if (existing.rows.length > 0) {
-      return res.status(400).json({ error: 'A team with this code already exists. Please try again.' });
+      return res.status(400).json({ error: 'Team code already exists' });
     }
 
     const mysteryQuestion = pickMysteryQuestion();
@@ -209,53 +249,70 @@ app.post('/api/mystery-box/teams/create', hackathonAuth, async (req, res) => {
       await upsertHackathonMember(client, { teamId: created.id, email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: true });
       return { row: created, members: await listHackathonMembers(client, created.id) };
     });
+    void logHackathonActivity(upperCode, teamName, 'TEAM_CREATED', `Squad "${teamName}" registered with code #${upperCode}`, { membersCount: members.length });
     res.status(201).json({ success: true, team: formatHackathonTeam(row, members) });
   } catch (error) {
     console.error('Create team error:', error);
-    res.status(500).json({ error: 'Failed to create team in database' });
+    res.status(500).json({ error: 'Failed to create team' });
   }
 });
 
 app.post('/api/mystery-box/teams/join', hackathonAuth, async (req, res) => {
   try {
-    const { teamCode, regNo } = req.body;
-    if (!teamCode || !regNo) {
-      return res.status(400).json({ error: 'Missing team code or member details' });
+    const { code, teamCode, member, regNo } = req.body;
+    const searchCode = normalizeTeamCode(code || teamCode || '');
+    if (!searchCode) {
+      return res.status(400).json({ error: 'Team code is required' });
     }
 
-    const upperCode = teamCode.toUpperCase().trim();
-    const result = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [upperCode]);
+    const result = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [searchCode]);
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'That team code does not exist. Please check the code or ask the leader.' });
+      return res.status(404).json({ error: 'Team code not found' });
     }
 
     const row = result.rows[0];
-    let members = Array.isArray(row.members) ? row.members : [];
+    let currentMembers = Array.isArray(row.members) ? row.members : [];
     
-    // Check if member already in team
-    const existingIndex = members.findIndex(m => m.googleSub === req.hackathonUser.sub || m.email?.toLowerCase() === req.hackathonUser.email);
+    let joinMember = member;
+    if (!joinMember && req.hackathonUser) {
+      joinMember = { email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo || '').toUpperCase(), isLeader: false };
+    }
+
+    if (!joinMember || !joinMember.email) {
+      return res.status(400).json({ error: 'Member email is required to join team' });
+    }
+
+    // Check if already in team
+    const existingIndex = currentMembers.findIndex(m => (m.email && m.email.toLowerCase() === joinMember.email.toLowerCase()) || (m.googleSub && joinMember.googleSub && m.googleSub === joinMember.googleSub));
     if (existingIndex >= 0) {
-      members[existingIndex] = { ...members[existingIndex], email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase() };
+      currentMembers[existingIndex] = { ...currentMembers[existingIndex], ...joinMember };
     } else {
-      members.push({ email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: false });
+      currentMembers.push({ ...joinMember, isLeader: false });
     }
 
     const { updatedRow, normalizedMembers } = await withTransaction(async (client) => {
-      const updateResult = await client.query(
+      const updateRes = await client.query(
         `UPDATE hackathon_teams
          SET members = $1, updated_at = NOW()
          WHERE code = $2
          RETURNING *`,
-        [JSON.stringify(members), upperCode]
+        [JSON.stringify(currentMembers), searchCode]
       );
-      const updated = updateResult.rows[0];
-      await upsertHackathonMember(client, { teamId: updated.id, email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: false });
+      const updated = updateRes.rows[0];
+      await upsertHackathonMember(client, {
+        teamId: updated.id,
+        email: req.hackathonUser.email,
+        googleSub: req.hackathonUser.sub,
+        regNo: String(regNo || '').toUpperCase(),
+        isLeader: false,
+      });
       return { updatedRow: updated, normalizedMembers: await listHackathonMembers(client, updated.id) };
     });
+    void logHackathonActivity(searchCode, updatedRow.team_name, 'MEMBER_JOINED', `${joinMember.name || joinMember.email} joined squad "${updatedRow.team_name}"`, { email: joinMember.email });
     res.json({ success: true, team: formatHackathonTeam(updatedRow, normalizedMembers) });
   } catch (error) {
     console.error('Join team error:', error);
-    res.status(500).json({ error: 'Failed to join team in database' });
+    res.status(500).json({ error: 'Failed to join team' });
   }
 });
 
@@ -266,6 +323,7 @@ app.get('/api/mystery-box/teams/:code', hackathonAuth, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Team not found' });
     }
+
     const row = result.rows[0];
     let members = await listHackathonMembers(pool, row.id);
     const member = members.find((entry) => entry.googleSub === req.hackathonUser.sub || (!entry.googleSub && entry.email?.toLowerCase() === req.hackathonUser.email));
@@ -276,12 +334,22 @@ app.get('/api/mystery-box/teams/:code', hackathonAuth, async (req, res) => {
     }
     res.json(formatHackathonTeam(row, members));
   } catch (error) {
-    console.error('Fetch team error:', error);
-    res.status(500).json({ error: 'Failed to fetch team' });
+    console.error('Get team error:', error);
+    res.status(500).json({ error: 'Failed to retrieve team' });
   }
 });
 
 registerHackathonScoringRoutes(app, { pool, hackathonAuth, adminMiddleware });
+
+app.post('/api/mystery-box/activity/log', async (req, res) => {
+  try {
+    const { code, teamName, eventType, message, details } = req.body;
+    await logHackathonActivity(code, teamName, eventType, message, details);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to record activity log' });
+  }
+});
 
 // ── Register ─────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
@@ -592,6 +660,205 @@ app.post('/api/admin/quiz-control', adminMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Quiz control error:', error);
     res.status(500).json({ error: 'Failed to update quiz status' });
+  }
+});
+
+// ── Mystery Box Hackathon — Admin Operations ──────────────────
+app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, code, team_name, mystery_question, is_opened, points,
+             members, chaos_event, is_chaos_opened, is_chaos_resolved,
+             owned_items, has_changed_question, max_game_attempts, created_at, updated_at,
+             COALESCE((
+               SELECT jsonb_agg(jsonb_build_object(
+                 'attemptId', a.id,
+                 'gameSlug', a.game_slug,
+                 'slotNumber', a.slot_number,
+                 'status', a.status,
+                 'points', a.awarded_points,
+                 'startedAt', a.started_at,
+                 'completedAt', a.completed_at
+               ) ORDER BY a.slot_number ASC, a.started_at ASC)
+               FROM team_game_attempts a
+               WHERE a.team_id = hackathon_teams.id
+             ), '[]'::jsonb) AS game_attempts
+      FROM hackathon_teams
+      ORDER BY points DESC, created_at DESC
+    `);
+    const formatted = result.rows.map(row => ({
+      id: row.id,
+      code: row.code,
+      teamName: row.team_name,
+      mysteryQuestion: row.mystery_question,
+      isOpened: row.is_opened,
+      points: row.points || 0,
+      members: row.members || [],
+      chaosEvent: row.chaos_event,
+      isChaosOpened: row.is_chaos_opened,
+      isChaosResolved: row.is_chaos_resolved,
+      ownedItems: row.owned_items || [],
+      hasChangedQuestion: row.has_changed_question || false,
+      maxGameAttempts: row.max_game_attempts ?? 5,
+      gameAttempts: row.game_attempts || [],
+      registeredAt: new Date(row.created_at).getTime(),
+      updatedAt: new Date(row.updated_at).getTime()
+    }));
+    res.json(formatted);
+  } catch (error) {
+    console.error('Admin fetch hackathon teams error:', error);
+    res.status(500).json({ error: 'Failed to fetch hackathon teams' });
+  }
+});
+
+app.post('/api/admin/mystery-box/teams/points', adminMiddleware, async (req, res) => {
+  try {
+    const { code, delta, reason } = req.body;
+    if (!code) return res.status(400).json({ error: 'Team code is required' });
+    const result = await applyAdminAdjustment(pool, {
+      code,
+      delta,
+      reason: reason || `Admin point adjustment (${Number(delta) >= 0 ? '+' : ''}${Number(delta) || 0})`,
+      actor: { sub: `admin:${req.admin?.role || 'organizer'}` },
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Admin update points error:', error);
+    res.status(error.status || 500).json({ error: error.status ? error.message : 'Failed to update team points' });
+  }
+});
+
+app.post('/api/admin/mystery-box/teams/chaos', adminMiddleware, async (req, res) => {
+  try {
+    const { code, isAll, chaosEvent, resolve, isOpened } = req.body;
+
+    if (isAll) {
+      let query, params;
+      if (resolve) {
+        query = `UPDATE hackathon_teams SET is_chaos_resolved = TRUE, updated_at = NOW() RETURNING *`;
+        params = [];
+      } else {
+        query = `UPDATE hackathon_teams
+                 SET is_chaos_opened = COALESCE($1, is_chaos_opened),
+                     chaos_event = COALESCE($2, chaos_event),
+                     is_chaos_resolved = FALSE,
+                     updated_at = NOW() RETURNING *`;
+        params = [isOpened !== undefined ? isOpened : true, chaosEvent ? JSON.stringify(chaosEvent) : null];
+      }
+      const result = await pool.query(query, params);
+      return res.json({ success: true, updatedCount: result.rows.length });
+    }
+
+    if (!code) return res.status(400).json({ error: 'Team code is required' });
+    const upperCode = code.toUpperCase().trim();
+
+    let query, params;
+    if (resolve) {
+      query = `UPDATE hackathon_teams SET is_chaos_resolved = TRUE, updated_at = NOW() WHERE code = $1 RETURNING *`;
+      params = [upperCode];
+    } else {
+      query = `UPDATE hackathon_teams
+               SET is_chaos_opened = COALESCE($1, is_chaos_opened),
+                   chaos_event = COALESCE($2, chaos_event),
+                   is_chaos_resolved = FALSE,
+                   updated_at = NOW()
+               WHERE code = $3 RETURNING *`;
+      params = [isOpened !== undefined ? isOpened : true, chaosEvent ? JSON.stringify(chaosEvent) : null, upperCode];
+    }
+
+    const result = await pool.query(query, params);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
+    res.json({ success: true, team: result.rows[0] });
+  } catch (error) {
+    console.error('Admin chaos control error:', error);
+    res.status(500).json({ error: 'Failed to update chaos state' });
+  }
+});
+
+app.post('/api/admin/mystery-box/teams/reassign', adminMiddleware, async (req, res) => {
+  try {
+    const { code, mysteryQuestion, resetSwapUsed } = req.body;
+    if (!code || !mysteryQuestion) return res.status(400).json({ error: 'Code and mysteryQuestion are required' });
+
+    const upperCode = code.toUpperCase().trim();
+    const result = await pool.query(
+      `UPDATE hackathon_teams
+       SET mystery_question = $1,
+           has_changed_question = CASE WHEN $2 = true THEN FALSE ELSE has_changed_question END,
+           updated_at = NOW()
+       WHERE code = $3
+       RETURNING *`,
+      [JSON.stringify(mysteryQuestion), resetSwapUsed || false, upperCode]
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
+    res.json({ success: true, team: result.rows[0] });
+  } catch (error) {
+    console.error('Admin reassign question error:', error);
+    res.status(500).json({ error: 'Failed to reassign team question' });
+  }
+});
+
+app.post('/api/admin/mystery-box/teams/:code/members/remove', adminMiddleware, async (req, res) => {
+  try {
+    const code = req.params.code;
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Member email is required' });
+    const result = await withTransaction(async (client) => {
+      const teamResult = await client.query('SELECT * FROM hackathon_teams WHERE code=$1 FOR UPDATE', [code.toUpperCase().trim()]);
+      if (!teamResult.rows.length) { const error = new Error('Team not found'); error.status = 404; throw error; }
+      const team = teamResult.rows[0];
+      const members = await listHackathonMembers(client, team.id);
+      const member = members.find((entry) => String(entry.email || '').toLowerCase() === email);
+      if (!member) { const error = new Error('Member not found'); error.status = 404; throw error; }
+      if (member.isLeader) { const error = new Error('Cannot remove the team leader'); error.status = 409; throw error; }
+      await client.query('DELETE FROM hackathon_team_members WHERE team_id=$1 AND LOWER(email)=$2', [team.id, email]);
+      const nextMembers = (Array.isArray(team.members) ? team.members : []).filter((entry) => String(entry.email || '').toLowerCase() !== email);
+      const updated = await client.query(
+        'UPDATE hackathon_teams SET members=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
+        [JSON.stringify(nextMembers), team.id],
+      );
+      return { team: updated.rows[0], removedEmail: email };
+    });
+    void logHackathonActivity(result.team.code, result.team.team_name, 'MEMBER_REMOVED', `${email} removed from squad "${result.team.team_name}" by admin`, { email });
+    res.json({ success: true, team: formatHackathonTeam(result.team, await listHackathonMembers(pool, result.team.id)) });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.status ? error.message : 'Failed to remove member' });
+  }
+});
+
+app.delete('/api/admin/mystery-box/teams/:code', adminMiddleware, async (req, res) => {
+  try {
+    const { code } = req.params;
+    if (!code) return res.status(400).json({ error: 'Team code is required' });
+
+    const upperCode = code.toUpperCase().trim();
+    const result = await pool.query('DELETE FROM hackathon_teams WHERE code = $1 RETURNING *', [upperCode]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
+
+    res.json({ success: true, message: `Team ${upperCode} deleted successfully` });
+  } catch (error) {
+    console.error('Admin delete team error:', error);
+    res.status(500).json({ error: 'Failed to delete team' });
+  }
+});
+
+app.get('/api/admin/mystery-box/activity', adminMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM hackathon_activity_logs ORDER BY created_at DESC LIMIT 80');
+    const formatted = result.rows.map(r => ({
+      id: r.id,
+      teamCode: r.team_code,
+      teamName: r.team_name,
+      eventType: r.event_type,
+      message: r.message,
+      details: r.details || {},
+      createdAt: new Date(r.created_at).getTime()
+    }));
+    res.json(formatted);
+  } catch (error) {
+    console.error('Admin fetch activity error:', error);
+    res.status(500).json({ error: 'Failed to fetch activity logs' });
   }
 });
 

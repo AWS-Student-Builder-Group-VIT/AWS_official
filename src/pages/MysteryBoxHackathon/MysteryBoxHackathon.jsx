@@ -334,7 +334,7 @@ function MysteryBoxHackathonInner() {
 
     const email = googleJoinUser.email.trim().toLowerCase();
     const regNo = joinForm.regNo.trim().toUpperCase();
-    const teamCode = joinForm.teamCode.trim().toUpperCase();
+    const teamCode = joinForm.teamCode.trim().replace(/^#+/, '').toUpperCase();
 
     if (!regNo) {
       setJoinError('Registration number / Student ID is required.');
@@ -691,7 +691,7 @@ function MysteryBoxHackathonInner() {
                   <input
                     type="text"
                     value={joinForm.teamCode}
-                    onChange={(event) => setJoinForm({ ...joinForm, teamCode: event.target.value })}
+                    onChange={(event) => setJoinForm({ ...joinForm, teamCode: event.target.value.replace(/^#+/, '').toUpperCase() })}
                     className="w-full rounded-xl border border-[#ff9900]/30 bg-[#221b16] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#ff9900] focus:ring-2 focus:ring-[#ff9900]/25 uppercase font-mono tracking-wider placeholder:normal-case placeholder:tracking-normal placeholder:font-sans"
                     placeholder="e.g. 7X9K2L"
                     required
