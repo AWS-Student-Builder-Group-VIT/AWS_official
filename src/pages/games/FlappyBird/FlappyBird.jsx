@@ -11,9 +11,9 @@ import useFlappyBird from './useFlappyBird';
 const FONTS_HREF =
   'https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;700;800;900&display=swap';
 
-export default function FlappyBird() {
+export default function FlappyBird({ onComplete }) {
   const canvasRef = useRef(null);
-  useFlappyBird(canvasRef);
+  useFlappyBird(canvasRef, onComplete);
 
   // Load the game fonts once, and clean up on unmount.
   useEffect(() => {

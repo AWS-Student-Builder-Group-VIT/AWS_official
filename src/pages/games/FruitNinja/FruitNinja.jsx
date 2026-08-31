@@ -12,7 +12,7 @@ import useFruitNinja from './useFruitNinja';
 const FONTS_HREF =
   'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@500;600;700&display=swap';
 
-export default function FruitNinja() {
+export default function FruitNinja({ onComplete }) {
   const canvasRef = useRef(null);
 
   // Game state driven by the engine hook
@@ -27,6 +27,7 @@ export default function FruitNinja() {
 
   // Combo text fade-out timer
   const comboTimeout = useRef(null);
+  const completionSent = useRef(false);
   const [comboVisible, setComboVisible] = useState(false);
 
   const onState = useCallback((s) => {
@@ -36,6 +37,11 @@ export default function FruitNinja() {
     if (s.best !== undefined) setBest(s.best);
     if (s.combo !== undefined) setCombo(s.combo);
     if (s.isNewBest !== undefined) setIsNewBest(s.isNewBest);
+    if (s.phase === 'playing') completionSent.current = false;
+    if (s.phase === 'gameover' && !completionSent.current) {
+      completionSent.current = true;
+      onComplete?.({ official: true, score: Number(s.score) || 0 });
+    }
 
     if (s.comboLabel) {
       setComboLabel(s.comboLabel);
@@ -48,7 +54,7 @@ export default function FruitNinja() {
       setFlash(true);
       setTimeout(() => setFlash(false), 500);
     }
-  }, []);
+  }, [onComplete]);
 
   const api = useFruitNinja(canvasRef, onState);
 
