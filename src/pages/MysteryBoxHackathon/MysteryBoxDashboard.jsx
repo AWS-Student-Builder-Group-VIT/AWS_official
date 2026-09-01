@@ -13,10 +13,14 @@ import { games } from '../gamesRegistry';
 import { SCORED_TEAM_GAMES } from '../../utils/teamGameScoring';
 import { fetchMysteryTopics, fetchTeamGameScores, swapTeamTopic } from '../../utils/auth';
 import { getTopicSwapCost } from '../../../shared/topicSwapPricing';
-
-const TEAM_STORAGE_KEY = 'mystery-box-hackathon-team';
-const OWNED_ITEMS_KEY = 'mystery-box-owned-items';
-const HACKATHON_TOKEN_KEY = 'mystery-box-hackathon-token';
+import {
+  HACKATHON_TOKEN_KEY,
+  MEMBER_EMAIL_KEY,
+  OWNED_ITEMS_KEY,
+  TEAM_STORAGE_KEY,
+  consumeTeamRefreshResponse,
+} from './teamSessionSync';
+import { getOfficialGameCardAccess } from './officialGameAccess';
 
 export default function MysteryBoxDashboard() {
   const navigate = useNavigate();
@@ -41,7 +45,7 @@ export default function MysteryBoxDashboard() {
 
   const [myEmail, setMyEmail] = useState(() => {
     if (typeof window === 'undefined') return '';
-    return window.sessionStorage.getItem('mystery-box-hackathon-my-email') || '';
+    return window.sessionStorage.getItem(MEMBER_EMAIL_KEY) || '';
   });
 
   const [isOpeningLocal, setIsOpeningLocal] = useState(false);
@@ -62,6 +66,7 @@ export default function MysteryBoxDashboard() {
   const [notification, setNotification] = useState('');
   const scoredGames = games.filter((game) => SCORED_TEAM_GAMES.includes(game.slug));
   const playedGameSlugs = new Set(gameScores?.playedGameSlugs || []);
+  const officialLimitReached = Boolean(gameScores) && gameScores.remainingAttempts <= 0 && !gameScores.activeAttempt;
 
   // Sync state if localStorage changes in other tabs
   useEffect(() => {
@@ -72,7 +77,7 @@ export default function MysteryBoxDashboard() {
           setTeam(parsed);
           if (!parsed) {
             setMyEmail('');
-            window.sessionStorage.removeItem('mystery-box-hackathon-my-email');
+            window.sessionStorage.removeItem(MEMBER_EMAIL_KEY);
           }
         } catch (e) {
           console.error('Error syncing team storage:', e);
@@ -92,16 +97,26 @@ export default function MysteryBoxDashboard() {
       try {
         const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
         const res = await fetch(`/api/mystery-box/teams/${team.code}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-        if (res.ok) {
-          const freshTeam = await res.json();
-          if (freshTeam && freshTeam.code) {
-            setTeam(freshTeam);
-            setOwnedItems(Array.isArray(freshTeam.ownedItems) ? freshTeam.ownedItems : []);
-            if (typeof window !== 'undefined') {
-              window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(freshTeam));
-              window.localStorage.setItem(OWNED_ITEMS_KEY, JSON.stringify(freshTeam.ownedItems || []));
-            }
-          }
+        const result = await consumeTeamRefreshResponse(res, {
+          localStorage: window.localStorage,
+          sessionStorage: window.sessionStorage,
+        });
+
+        if (result.kind === 'invalidated') {
+          setTeam(null);
+          setMyEmail('');
+          setOwnedItems([]);
+          setGameScores(null);
+          navigate('/mystery-box-hackathon', {
+            replace: true,
+            state: { teamSessionInvalidated: result.reason },
+          });
+          return;
+        }
+
+        if (result.kind === 'updated') {
+          setTeam(result.team);
+          setOwnedItems(result.ownedItems);
         }
       } catch {
         // quiet catch
@@ -115,7 +130,7 @@ export default function MysteryBoxDashboard() {
       clearInterval(interval);
       window.removeEventListener('aws-team-score:updated', fetchLatestTeam);
     };
-  }, [team?.code]);
+  }, [navigate, team?.code]);
 
   useEffect(() => {
     if (!team?.code) return;
@@ -253,7 +268,7 @@ export default function MysteryBoxDashboard() {
       }
     }
     persistTeamLocally(null);
-    window.sessionStorage.removeItem('mystery-box-hackathon-my-email');
+    window.sessionStorage.removeItem(MEMBER_EMAIL_KEY);
     window.sessionStorage.removeItem(HACKATHON_TOKEN_KEY);
     window.localStorage.removeItem(OWNED_ITEMS_KEY);
     window.localStorage.removeItem('mystery-box-chaos-simulated');
@@ -856,25 +871,41 @@ export default function MysteryBoxDashboard() {
                   </div>
                 )}
 
+                {officialLimitReached && (
+                  <div className="mb-6 border border-emerald-500/40 bg-emerald-500/10 rounded-[18px] p-5">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-400 font-label-sm m-0">Practice unlocked</p>
+                    <h4 className="text-lg text-on-surface uppercase tracking-widest mt-2 mb-1">Official game limit completed</h4>
+                    <p className="text-xs text-on-surface-variant m-0">You may continue playing any game in Practice. Practice results award no points and never change your team score.</p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                   {scoredGames.map((game, index) => {
                     const played = playedGameSlugs.has(game.slug);
-                    const blocked = !gameScores?.gamesEnabled || ((gameScores?.remainingAttempts || 0) <= 0 && !gameScores?.activeAttempt);
+                    const access = getOfficialGameCardAccess({
+                      played,
+                      remainingAttempts: gameScores?.remainingAttempts,
+                      gamesEnabled: gameScores?.gamesEnabled,
+                      activeAttempt: gameScores?.activeAttempt,
+                      practicePath: game.path,
+                      officialPath: `/mystery-box-hackathon/games/${game.slug}`,
+                    });
+                    const practice = access.mode === 'practice';
                     return (
                       <article key={game.slug} className={`border rounded-[18px] p-5 flex flex-col min-h-[210px] ${played ? 'border-emerald-500/30 bg-emerald-500/[0.04]' : 'border-primary-container/15 bg-[rgba(255,153,0,0.03)]'}`}>
                         <div className="flex items-start justify-between gap-3">
                           <span className="text-primary-container font-headline-md text-xs">{String(index + 1).padStart(2, '0')}</span>
-                          <span className={`text-[9px] uppercase tracking-widest border px-2 py-1 rounded ${played ? 'text-emerald-400 border-emerald-500/30' : 'text-[#00a8e0] border-[#00a8e0]/30'}`}>{played ? 'Official Completed' : game.status}</span>
+                          <span className={`text-[9px] uppercase tracking-widest border px-2 py-1 rounded ${played || practice ? 'text-emerald-400 border-emerald-500/30' : 'text-[#00a8e0] border-[#00a8e0]/30'}`}>{played ? 'Official Completed' : practice ? 'Practice Only' : game.status}</span>
                         </div>
                         <h4 className="text-base text-on-surface uppercase tracking-wider mt-5 mb-2">{game.title}</h4>
                         <p className="text-xs text-on-surface-variant leading-6 m-0 flex-1">{game.description}</p>
                         <button
                           type="button"
-                          disabled={!played && (blocked || Boolean(gameScores?.activeAttempt))}
-                          onClick={() => navigate(played ? game.path : `/mystery-box-hackathon/games/${game.slug}`)}
-                          className={`mt-5 py-3 rounded-xl text-xs uppercase tracking-widest font-headline-md font-bold border-0 transition-all ${!played && (blocked || gameScores?.activeAttempt) ? 'bg-white/5 text-on-surface-variant/40 cursor-not-allowed' : played ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 cursor-pointer' : 'bg-primary-container text-background hover:bg-primary cursor-pointer'}`}
+                          disabled={access.disabled}
+                          onClick={() => access.path && navigate(access.path)}
+                          className={`mt-5 py-3 rounded-xl text-xs uppercase tracking-widest font-headline-md font-bold border-0 transition-all ${access.disabled ? 'bg-white/5 text-on-surface-variant/40 cursor-not-allowed' : practice ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 cursor-pointer' : 'bg-primary-container text-background hover:bg-primary cursor-pointer'}`}
                         >
-                          {played ? 'Play Again — Practice' : gameScores?.activeAttempt ? 'Resume Active Slot First' : blocked ? 'Unavailable' : 'Play Official Game'}
+                          {access.label}
                         </button>
                       </article>
                     );
