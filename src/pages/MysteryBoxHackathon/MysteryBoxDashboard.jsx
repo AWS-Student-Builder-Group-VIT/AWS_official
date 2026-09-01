@@ -13,10 +13,13 @@ import { games } from '../gamesRegistry';
 import { SCORED_TEAM_GAMES } from '../../utils/teamGameScoring';
 import { fetchMysteryTopics, fetchTeamGameScores, swapTeamTopic } from '../../utils/auth';
 import { getTopicSwapCost } from '../../../shared/topicSwapPricing';
-
-const TEAM_STORAGE_KEY = 'mystery-box-hackathon-team';
-const OWNED_ITEMS_KEY = 'mystery-box-owned-items';
-const HACKATHON_TOKEN_KEY = 'mystery-box-hackathon-token';
+import {
+  HACKATHON_TOKEN_KEY,
+  MEMBER_EMAIL_KEY,
+  OWNED_ITEMS_KEY,
+  TEAM_STORAGE_KEY,
+  consumeTeamRefreshResponse,
+} from './teamSessionSync';
 
 export default function MysteryBoxDashboard() {
   const navigate = useNavigate();
@@ -41,7 +44,7 @@ export default function MysteryBoxDashboard() {
 
   const [myEmail, setMyEmail] = useState(() => {
     if (typeof window === 'undefined') return '';
-    return window.sessionStorage.getItem('mystery-box-hackathon-my-email') || '';
+    return window.sessionStorage.getItem(MEMBER_EMAIL_KEY) || '';
   });
 
   const [isOpeningLocal, setIsOpeningLocal] = useState(false);
@@ -72,7 +75,7 @@ export default function MysteryBoxDashboard() {
           setTeam(parsed);
           if (!parsed) {
             setMyEmail('');
-            window.sessionStorage.removeItem('mystery-box-hackathon-my-email');
+            window.sessionStorage.removeItem(MEMBER_EMAIL_KEY);
           }
         } catch (e) {
           console.error('Error syncing team storage:', e);
@@ -92,16 +95,26 @@ export default function MysteryBoxDashboard() {
       try {
         const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
         const res = await fetch(`/api/mystery-box/teams/${team.code}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-        if (res.ok) {
-          const freshTeam = await res.json();
-          if (freshTeam && freshTeam.code) {
-            setTeam(freshTeam);
-            setOwnedItems(Array.isArray(freshTeam.ownedItems) ? freshTeam.ownedItems : []);
-            if (typeof window !== 'undefined') {
-              window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(freshTeam));
-              window.localStorage.setItem(OWNED_ITEMS_KEY, JSON.stringify(freshTeam.ownedItems || []));
-            }
-          }
+        const result = await consumeTeamRefreshResponse(res, {
+          localStorage: window.localStorage,
+          sessionStorage: window.sessionStorage,
+        });
+
+        if (result.kind === 'invalidated') {
+          setTeam(null);
+          setMyEmail('');
+          setOwnedItems([]);
+          setGameScores(null);
+          navigate('/mystery-box-hackathon', {
+            replace: true,
+            state: { teamSessionInvalidated: result.reason },
+          });
+          return;
+        }
+
+        if (result.kind === 'updated') {
+          setTeam(result.team);
+          setOwnedItems(result.ownedItems);
         }
       } catch {
         // quiet catch
@@ -115,7 +128,7 @@ export default function MysteryBoxDashboard() {
       clearInterval(interval);
       window.removeEventListener('aws-team-score:updated', fetchLatestTeam);
     };
-  }, [team?.code]);
+  }, [navigate, team?.code]);
 
   useEffect(() => {
     if (!team?.code) return;
@@ -253,7 +266,7 @@ export default function MysteryBoxDashboard() {
       }
     }
     persistTeamLocally(null);
-    window.sessionStorage.removeItem('mystery-box-hackathon-my-email');
+    window.sessionStorage.removeItem(MEMBER_EMAIL_KEY);
     window.sessionStorage.removeItem(HACKATHON_TOKEN_KEY);
     window.localStorage.removeItem(OWNED_ITEMS_KEY);
     window.localStorage.removeItem('mystery-box-chaos-simulated');
