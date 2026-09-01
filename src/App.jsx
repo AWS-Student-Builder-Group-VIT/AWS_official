@@ -19,6 +19,7 @@ import GridScanIntro from './components/GridScanIntro';
 import StaggeredMenu from './components/StaggeredMenu';
 import MacbookScrollSection from './components/MacbookScrollSection';
 import awsIcon from './assets/aws_icon.jpeg';
+import OfficialGameReceipt from './components/OfficialGameReceipt';
 
 import AdminPage from './pages/AdminPage';
 import AccountPage from './pages/AccountPage';
@@ -41,7 +42,7 @@ import GunshotRoulette from './pages/games/GunshotRoulette/GunshotRoulette.jsx';
 import HackType from './pages/games/HackType/HackType.jsx';
 import GamesPage from './pages/GamesPage';
 import { games } from './pages/gamesRegistry';
-import { completeTeamGame, SCORED_TEAM_GAMES, startTeamGame } from './utils/teamGameScoring';
+import { buildOfficialGameReceipt, completeTeamGame, SCORED_TEAM_GAMES, startTeamGame } from './utils/teamGameScoring';
 
 /**
  * Detect mobile viewport (≤768px).
@@ -78,7 +79,12 @@ function HomePage() {
 function GameRoute({ Component, gameSlug, official = false }) {
   const navigate = useNavigate();
   const [teamGameAttempt, setTeamGameAttempt] = useState(null);
+  const [receipt, setReceipt] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const attemptRef = useRef(null);
+  const completionPayloadRef = useRef(null);
+  const submissionRef = useRef(null);
+  const retrySubmissionRef = useRef(null);
 
   useEffect(() => {
     if (!official) return undefined;
@@ -86,15 +92,58 @@ function GameRoute({ Component, gameSlug, official = false }) {
     startTeamGame(gameSlug).then((attempt) => {
       if (!active) return;
       attemptRef.current = attempt;
+      retrySubmissionRef.current = attempt.retrySubmission || null;
+      if (attempt.receipt) setReceipt(buildOfficialGameReceipt(gameSlug, attempt.receipt));
       setTeamGameAttempt(attempt);
     });
     return () => { active = false; };
   }, [gameSlug, official]);
 
-  const handleComplete = useCallback((result) => {
+  const handleComplete = useCallback(async (result) => {
     if (!official) return Promise.resolve({ submitted: false });
-    return completeTeamGame(gameSlug, attemptRef.current, result);
+    if (submissionRef.current) return submissionRef.current;
+    completionPayloadRef.current = result;
+    setSubmitting(true);
+    const submission = completeTeamGame(gameSlug, attemptRef.current, result)
+      .then((response) => {
+        setReceipt(buildOfficialGameReceipt(gameSlug, response));
+        return response;
+      })
+      .finally(() => setSubmitting(false));
+    submissionRef.current = submission;
+    return submission;
   }, [gameSlug, official]);
+
+  const retrySubmission = useCallback(async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    const retry = retrySubmissionRef.current
+      || (() => completeTeamGame(gameSlug, attemptRef.current, completionPayloadRef.current));
+    try {
+      const response = await retry();
+      setReceipt(buildOfficialGameReceipt(gameSlug, response));
+      if (response.submitted) retrySubmissionRef.current = null;
+    } finally {
+      submissionRef.current = null;
+      setSubmitting(false);
+    }
+  }, [gameSlug, submitting]);
+
+  const game = games.find((entry) => entry.slug === gameSlug);
+  const dashboardPath = '/mystery-box-hackathon/dashboard?tab=games';
+
+  if (official && (submitting || receipt)) {
+    return (
+      <OfficialGameReceipt
+        gameTitle={game?.title || gameSlug}
+        receipt={receipt}
+        submitting={submitting}
+        onRetry={retrySubmission}
+        onDashboard={() => navigate(dashboardPath)}
+        onPractice={() => navigate(game?.path || `/games/${gameSlug}`)}
+      />
+    );
+  }
 
   if (official && SCORED_TEAM_GAMES.includes(gameSlug) && teamGameAttempt === null) {
     return <main className="min-h-screen bg-[#080b11] text-white grid place-items-center p-6"><p>Checking official team attempt…</p></main>;
@@ -102,11 +151,11 @@ function GameRoute({ Component, gameSlug, official = false }) {
   if (official && (teamGameAttempt?.locked || teamGameAttempt?.enabled === false)) {
     return (
       <main className="min-h-screen bg-[#080b11] text-white grid place-items-center p-6 text-center">
-        <div><p className="text-[#ff9900] uppercase tracking-widest">Official game unavailable</p><h1 className="text-3xl font-bold mb-4">{teamGameAttempt.error || 'Your team cannot start another official game right now.'}</h1><button className="px-5 py-3 bg-[#ff9900] text-black font-bold rounded" onClick={() => navigate('/mystery-box-hackathon/dashboard')}>Back to dashboard</button></div>
+        <div><p className="text-[#ff9900] uppercase tracking-widest">Official game unavailable</p><h1 className="text-3xl font-bold mb-4">{teamGameAttempt.error || 'Your team cannot start another official game right now.'}</h1><button className="px-5 py-3 bg-[#ff9900] text-black font-bold rounded" onClick={() => navigate(dashboardPath)}>Back to dashboard</button></div>
       </main>
     );
   }
-  return <Component onComplete={official ? handleComplete : undefined} teamGameAttempt={official ? teamGameAttempt : null} onExit={() => navigate(official ? '/mystery-box-hackathon/dashboard' : '/games')} />;
+  return <Component onComplete={official ? handleComplete : undefined} teamGameAttempt={official ? teamGameAttempt : null} onExit={() => navigate(official ? dashboardPath : '/games')} />;
 }
 
 function OfficialGameRoute() {

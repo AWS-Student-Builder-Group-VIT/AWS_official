@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { readApiResponse } from '../../utils/apiResponse';
 import { motion } from 'framer-motion';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 
@@ -289,8 +290,9 @@ function MysteryBoxHackathonInner() {
     const newCode = createTeamCode();
     try {
       const session = await fetch('/api/mystery-box/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: googleUser.credential }) });
-      const sessionData = await session.json();
-      if (!session.ok) { setFormError(sessionData.error || 'Google verification failed.'); return; }
+      const sessionResponse = await readApiResponse(session, 'Google verification failed');
+      const sessionData = sessionResponse.data;
+      if (!session.ok) { setFormError(sessionResponse.error); return; }
       window.sessionStorage.setItem(HACKATHON_TOKEN_KEY, sessionData.token);
       const res = await fetch('/api/mystery-box/teams/create', {
         method: 'POST',
@@ -301,9 +303,10 @@ function MysteryBoxHackathonInner() {
           regNo,
         }),
       });
-      const data = await res.json();
+      const apiResponse = await readApiResponse(res, 'Failed to create team');
+      const data = apiResponse.data;
       if (!res.ok) {
-        setFormError(data.error || 'Failed to create team.');
+        setFormError(apiResponse.error);
         return;
       }
 
@@ -319,7 +322,7 @@ function MysteryBoxHackathonInner() {
       navigate('/mystery-box-hackathon/dashboard');
     } catch (err) {
       console.error('Error creating team:', err);
-      setFormError('Could not reach the team server. Please try again; no local team was created.');
+      setFormError(`Could not reach the team server: ${err.message || 'network request failed'}. No local team was created.`);
     }
   };
 
@@ -348,8 +351,9 @@ function MysteryBoxHackathonInner() {
 
     try {
       const session = await fetch('/api/mystery-box/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: googleJoinUser.credential }) });
-      const sessionData = await session.json();
-      if (!session.ok) { setJoinError(sessionData.error || 'Google verification failed.'); return; }
+      const sessionResponse = await readApiResponse(session, 'Google verification failed');
+      const sessionData = sessionResponse.data;
+      if (!session.ok) { setJoinError(sessionResponse.error); return; }
       window.sessionStorage.setItem(HACKATHON_TOKEN_KEY, sessionData.token);
       const res = await fetch('/api/mystery-box/teams/join', {
         method: 'POST',
@@ -360,9 +364,10 @@ function MysteryBoxHackathonInner() {
         }),
       });
 
-      const data = await res.json();
+      const apiResponse = await readApiResponse(res, 'Failed to join team');
+      const data = apiResponse.data;
       if (!res.ok) {
-        setJoinError(data.error || 'That team code does not exist. Please ask your team leader.');
+        setJoinError(apiResponse.error);
         return;
       }
 
@@ -379,7 +384,7 @@ function MysteryBoxHackathonInner() {
       navigate('/mystery-box-hackathon/dashboard');
     } catch (err) {
       console.error('Error joining team:', err);
-      setJoinError('Network error joining team. Please check the code and try again.');
+      setJoinError(`Could not reach the team server: ${err.message || 'network request failed'}. Please try again.`);
     }
   };
 
