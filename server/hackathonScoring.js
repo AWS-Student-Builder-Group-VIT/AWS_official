@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { calculateGamePoints, isScoredGame, SCORING_VERSION } from './gameScoring.js';
+import { getTopicSwapCost, TOPIC_SWAP_PRICING } from '../shared/topicSwapPricing.js';
 
 const SHOP_ITEMS = Object.freeze({
   'change-topic': { title: 'Change Challenge Topic', price: 100 },
@@ -40,7 +41,6 @@ const MYSTERY_QUESTIONS = Object.freeze([
   { id: 'hard-5', title: 'Autonomous Cloud Security Incident Responder', difficulty: 'Hard', points: 180, desc: 'Design an AI-driven SecOps bot that monitors CloudTrail & GuardDuty events, diagnoses threats via Bedrock, and automatically generates mitigation Lambda triggers to isolate compromised resources.', tags: ['GuardDuty', 'CloudTrail', 'Bedrock', 'Step Functions'] },
 ]);
 
-const TOPIC_SWAP_COST = 100;
 const DEFAULT_MAX_GAME_ATTEMPTS = 5;
 
 export function pickMysteryQuestion(random = Math.random) {
@@ -149,13 +149,11 @@ export function findLowestAvailableSlot(attempts = [], maxAttempts = DEFAULT_MAX
 }
 
 export function getTopicSwapQuote({ currentTopic, targetTopic, teamPoints = 0, hasChangedQuestion = false } = {}) {
-  const cost = TOPIC_SWAP_COST;
+  const cost = getTopicSwapCost(currentTopic?.difficulty, targetTopic?.difficulty) ?? TOPIC_SWAP_PRICING.sameTier;
   if (hasChangedQuestion) return { cost, allowed: false, reason: 'topic-swap-used' };
   if (!currentTopic?.id || !targetTopic?.id) return { cost, allowed: false, reason: 'topic-required' };
   if (currentTopic.id === targetTopic.id) return { cost, allowed: false, reason: 'same-topic' };
-  if (String(currentTopic.difficulty || '').toLowerCase() !== String(targetTopic.difficulty || '').toLowerCase()) {
-    return { cost, allowed: false, reason: 'same-difficulty-required' };
-  }
+  if (getTopicSwapCost(currentTopic.difficulty, targetTopic.difficulty) === null) return { cost, allowed: false, reason: 'topic-required' };
   if (Number(teamPoints || 0) < cost) return { cost, allowed: false, reason: 'insufficient-points' };
   return { cost, allowed: true };
 }
@@ -659,7 +657,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
   });
 
   app.get('/api/mystery-box/topics', hackathonAuth, async (req, res) => {
-    res.json({ topics: listMysteryQuestions(), topicSwapCost: TOPIC_SWAP_COST });
+    res.json({ topics: listMysteryQuestions(), topicSwapPricing: TOPIC_SWAP_PRICING });
   });
 
   app.post('/api/mystery-box/teams/:code/leave', hackathonAuth, async (req, res) => {
@@ -735,7 +733,6 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
             'topic-swap-used': 'This team has already used its topic swap',
             'topic-required': 'Current topic is not ready for swapping',
             'same-topic': 'Choose a different topic',
-            'same-difficulty-required': 'Only same-difficulty topic swaps are allowed',
             'insufficient-points': 'Team does not have enough points',
           }[quote.reason] || 'Topic swap is not allowed');
           error.status = quote.reason === 'insufficient-points' ? 409 : 400;
