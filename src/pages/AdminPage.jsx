@@ -12,6 +12,7 @@ import {
   updateAdminTeamPoints,
   updateAdminGameMode,
   updateAdminTeamGameLimit,
+  resetAdminTeamGameAttempt,
   triggerAdminTeamChaos,
   reassignAdminTeamTopic,
   deleteAdminHackathonTeam,
@@ -175,6 +176,7 @@ function Dashboard({ token, onLogout }) {
   const [gameModeEnabled, setGameModeEnabled] = useState(false);
   const [gameLimitTeam, setGameLimitTeam] = useState(null);
   const [gameLimitInput, setGameLimitInput] = useState('5');
+  const [gameResetReason, setGameResetReason] = useState('');
 
   const [notification, setNotification] = useState('');
 
@@ -366,8 +368,8 @@ function Dashboard({ token, onLogout }) {
   const handleGameLimitSubmit = async () => {
     if (!gameLimitTeam) return;
     const maxAttempts = parseInt(gameLimitInput, 10);
-    if (!Number.isInteger(maxAttempts) || maxAttempts < 0 || maxAttempts > 50) {
-      notify('Enter a game limit from 0 to 50.');
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 0 || maxAttempts > 12) {
+      notify('Enter a game limit from 0 to 12.');
       return;
     }
     const res = await updateAdminTeamGameLimit(token, { code: gameLimitTeam.code, maxAttempts });
@@ -377,6 +379,29 @@ function Dashboard({ token, onLogout }) {
       loadHackathonData();
     } else {
       notify(res.error || 'Failed to update game limit');
+    }
+  };
+
+  const handleGameAttemptReset = async (attempt) => {
+    if (!gameLimitTeam || !attempt || attempt.voidedAt) return;
+    const reason = gameResetReason.trim();
+    if (reason.length < 5) {
+      notify('Enter an audit reason of at least 5 characters.');
+      return;
+    }
+    const res = await resetAdminTeamGameAttempt(token, {
+      code: gameLimitTeam.code,
+      gameSlug: attempt.gameSlug,
+      reason,
+    });
+    if (res.ok) {
+      notify(`Voided ${attempt.gameSlug}; ${res.reversedPoints || 0} points reversed.`);
+      setGameResetReason('');
+      setGameLimitTeam(null);
+      loadHackathonData();
+      pollActivities();
+    } else {
+      notify(res.error || 'Failed to reset official game attempt');
     }
   };
 
@@ -834,7 +859,7 @@ function Dashboard({ token, onLogout }) {
                               <td className="py-3.5 px-4 align-top text-center">
                                 <div className="text-lg font-bold text-[#a8e063]">{t.points || 0} pts</div>
                                 <div className="text-[9px] text-[#00a8e0] mt-1">
-                                  Games: {(t.gameAttempts || []).length}/{t.maxGameAttempts ?? 5}
+                                  Games: {(t.gameAttempts || []).filter((attempt) => !attempt.voidedAt).length}/{t.maxGameAttempts ?? 5}
                                 </div>
                                 {t.ownedItems && t.ownedItems.length > 0 && (
                                   <div className="text-[9px] text-[#FF9900] mt-1 truncate max-w-[140px] mx-auto" title={t.ownedItems.join(', ')}>
@@ -1221,7 +1246,7 @@ function Dashboard({ token, onLogout }) {
               <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-center">
                 <div className="text-[10px] text-[#dbc2ad] uppercase">Official Games</div>
                 <div className="text-sm font-bold text-[#00a8e0] mt-1">
-                  {(inspectTeam.gameAttempts || []).length}/{inspectTeam.maxGameAttempts ?? 5}
+                  {(inspectTeam.gameAttempts || []).filter((attempt) => !attempt.voidedAt).length}/{inspectTeam.maxGameAttempts ?? 5}
                 </div>
               </div>
             </div>
@@ -1434,14 +1459,14 @@ function Dashboard({ token, onLogout }) {
             <div className="p-3 bg-white/5 border border-white/10 rounded mb-4">
               <div className="text-[10px] text-[#dbc2ad] uppercase">Team:</div>
               <div className="text-sm font-bold text-white">{gameLimitTeam.teamName} (#{gameLimitTeam.code})</div>
-              <div className="text-xs text-[#00a8e0] mt-1">Used Games: {(gameLimitTeam.gameAttempts || []).length}/{gameLimitTeam.maxGameAttempts ?? 5}</div>
+              <div className="text-xs text-[#00a8e0] mt-1">Used Games: {(gameLimitTeam.gameAttempts || []).filter((attempt) => !attempt.voidedAt).length}/{gameLimitTeam.maxGameAttempts ?? 5}</div>
             </div>
 
             <label className="text-[10px] text-[#dbc2ad] uppercase block mb-2">Max Official Game Plays:</label>
             <input
               type="number"
               min="0"
-              max="50"
+              max="12"
               value={gameLimitInput}
               onChange={e => setGameLimitInput(e.target.value)}
               className="w-full bg-white/5 border border-white/10 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#a8e063] mb-5"
@@ -1449,14 +1474,39 @@ function Dashboard({ token, onLogout }) {
 
             <div className="max-h-44 overflow-y-auto border border-white/10 rounded mb-5">
               {(gameLimitTeam.gameAttempts || []).length ? (gameLimitTeam.gameAttempts || []).map((attempt) => (
-                <div key={attempt.attemptId} className="flex justify-between gap-3 px-3 py-2 text-xs border-b border-white/5">
+                <div key={attempt.attemptId} className="flex items-center justify-between gap-3 px-3 py-2 text-xs border-b border-white/5">
                   <span className="text-[#dbc2ad]">#{attempt.slotNumber} {attempt.gameSlug}</span>
-                  <span className="text-[#FF9900]">{attempt.status} · {attempt.points || 0} pts</span>
+                  <span className={attempt.voidedAt ? 'text-red-300' : 'text-[#FF9900]'}>{attempt.voidedAt ? 'voided' : attempt.status} · {attempt.points || 0} pts</span>
+                  {!attempt.voidedAt && (
+                    <button type="button" onClick={() => handleGameAttemptReset(attempt)} className="px-2 py-1 bg-red-950/40 hover:bg-red-600 border border-red-500/30 text-red-300 hover:text-white text-[10px] uppercase rounded cursor-pointer">Void</button>
+                  )}
                 </div>
               )) : (
                 <div className="px-3 py-4 text-xs text-[#dbc2ad]/60">No official games started yet.</div>
               )}
             </div>
+
+            <label className="text-[10px] text-[#dbc2ad] uppercase block mb-2">Reset audit reason (required before voiding):</label>
+            <input
+              type="text"
+              maxLength="500"
+              value={gameResetReason}
+              onChange={event => setGameResetReason(event.target.value)}
+              placeholder="e.g. Duplicate pre-launch attempt"
+              className="w-full bg-white/5 border border-white/10 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-red-400 mb-5"
+            />
+
+            {(gameLimitTeam.pointLedger || []).some((entry) => ['game-reset', 'game-reversal'].includes(entry.sourceType)) && (
+              <div className="max-h-32 overflow-y-auto border border-white/10 rounded mb-5">
+                {(gameLimitTeam.pointLedger || []).filter((entry) => ['game-reset', 'game-reversal'].includes(entry.sourceType)).map((entry) => (
+                  <div key={`${entry.sourceType}:${entry.sourceRef}`} className="px-3 py-2 text-[10px] border-b border-white/5">
+                    <span className="text-red-300 font-bold">{entry.delta > 0 ? '+' : ''}{entry.delta} pts</span>
+                    <span className="text-[#dbc2ad] ml-2">{entry.reason}</span>
+                    <span className="text-white/40 ml-2">balance {entry.balanceAfter}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="flex gap-3">
               <button

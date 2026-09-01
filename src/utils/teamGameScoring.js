@@ -24,6 +24,20 @@ export function normalizeGameCompletion(gameSlug, payload = {}) {
   return null;
 }
 
+export function buildOfficialGameReceipt(gameSlug, response = {}) {
+  const confirmed = response.submitted === true;
+  return {
+    gameSlug,
+    confirmed,
+    queued: response.queued === true,
+    points: confirmed ? Number(response.points || 0) : 0,
+    balance: confirmed && Number.isFinite(Number(response.balance)) ? Number(response.balance) : null,
+    usedAttempts: confirmed && Number.isFinite(Number(response.usage?.usedAttempts)) ? Number(response.usage.usedAttempts) : null,
+    remainingAttempts: confirmed && Number.isFinite(Number(response.usage?.remainingAttempts)) ? Number(response.usage.remainingAttempts) : null,
+    error: String(response.error || ''),
+  };
+}
+
 function getSession() {
   if (typeof window === 'undefined') return null;
   try {
@@ -114,20 +128,59 @@ export async function startTeamGame(gameSlug) {
     const attempt = { enabled: true, teamCode: session.code, attemptId: data.attemptId, resumed: data.resumed };
     preparePersistedGame(gameSlug, session.code, data.attemptId);
     const attemptPending = readOutbox()[`${session.code}:${gameSlug}:${data.attemptId}`];
-    if (attemptPending?.result) await submitNormalizedResult(gameSlug, attempt, session, attemptPending.result);
+    if (attemptPending?.result) {
+      const retried = await submitNormalizedResult(gameSlug, attempt, session, attemptPending.result);
+      if (retried.submitted) return { enabled: false, locked: true, completed: true, reason: 'game-already-played', receipt: retried };
+      return {
+        ...attempt,
+        enabled: false,
+        pendingSubmission: true,
+        receipt: retried,
+        retrySubmission: () => submitNormalizedResult(gameSlug, attempt, session, attemptPending.result),
+      };
+    }
     const pendingKey = `${session.code}:${gameSlug}:pending`;
     const pending = readOutbox()[pendingKey];
     if (pending?.payload) {
       removeOutboxEntry(pendingKey);
-      await completeTeamGame(gameSlug, attempt, pending.payload);
+      const retried = await completeTeamGame(gameSlug, attempt, pending.payload);
+      if (retried.submitted) return { enabled: false, locked: true, completed: true, reason: 'game-already-played', receipt: retried };
+      return {
+        ...attempt,
+        enabled: false,
+        pendingSubmission: true,
+        receipt: retried,
+        retrySubmission: () => completeTeamGame(gameSlug, attempt, pending.payload),
+      };
     }
     return attempt;
   } catch (error) {
-    if (error.status === 409 && error.data?.attempt) {
+    if (error.status === 409 && error.data?.reason === 'game-already-played' && error.data?.attempt) {
       removeOutboxEntry(`${session.code}:${gameSlug}:pending`);
-      return { enabled: false, locked: true, completed: true, result: error.data.attempt };
+      return {
+        enabled: false,
+        locked: true,
+        completed: true,
+        reason: error.data.reason,
+        result: error.data.attempt,
+        receipt: {
+          submitted: true,
+          duplicate: true,
+          points: Number(error.data.attempt.points || 0),
+          balance: Number(error.data.balance || 0),
+          usage: error.data.usage,
+          attempt: error.data.attempt,
+        },
+      };
     }
-    return { enabled: false, error: error.message };
+    return {
+      enabled: false,
+      error: error.message,
+      reason: error.data?.reason,
+      attempt: error.data?.attempt,
+      usage: error.data?.usage,
+      balance: error.data?.balance,
+    };
   }
 }
 

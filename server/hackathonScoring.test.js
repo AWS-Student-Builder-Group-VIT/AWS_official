@@ -11,6 +11,7 @@ import {
   validateGameCompletion,
   validateGameMode,
 } from './hackathonScoring.js';
+import * as scoring from './hackathonScoring.js';
 
 test('normalizes team codes and rejects malformed codes', () => {
   assert.equal(normalizeTeamCode(' ab12cd '), 'AB12CD');
@@ -49,29 +50,84 @@ test('mystery questions are selected from the server-owned catalog', () => {
   assert.notEqual(first, pickMysteryQuestion(() => 0));
 });
 
-test('team game usage allows repeat games but blocks starts beyond max slots', () => {
+test('team game usage counts distinct non-void attempts and reports played games', () => {
   const attempts = [
-    { game_slug: 'wordle', status: 'completed' },
-    { game_slug: 'wordle', status: 'completed' },
+    { game_slug: 'wordle', status: 'completed', slot_number: 1 },
+    { game_slug: 'wordle', status: 'completed', slot_number: 2, voided_at: '2026-09-01T00:00:00Z' },
     { game_slug: 'morse', status: 'active', id: 'active-1' },
   ];
   assert.deepEqual(summarizeTeamGameUsage({ attempts, maxAttempts: 5 }), {
     maxAttempts: 5,
-    usedAttempts: 3,
-    remainingAttempts: 2,
-    completedAttempts: 2,
+    usedAttempts: 2,
+    remainingAttempts: 3,
+    completedAttempts: 1,
+    playedGameSlugs: ['wordle', 'morse'],
     activeAttempt: attempts[2],
   });
-  assert.deepEqual(canStartOfficialGame({ attempts, maxAttempts: 5, gamesEnabled: true }).allowed, true);
-  assert.deepEqual(canStartOfficialGame({ attempts: attempts.map((attempt) => ({ ...attempt, status: 'completed' })).concat([{ status: 'completed' }, { status: 'completed' }]), maxAttempts: 5, gamesEnabled: true }), {
+});
+
+test('official game starts reject repeats, another active game, and the sixth distinct game', () => {
+  const completed = [{ game_slug: 'wordle', status: 'completed', slot_number: 1 }];
+  assert.deepEqual(canStartOfficialGame({ attempts: completed, maxAttempts: 5, gamesEnabled: true, gameSlug: 'wordle' }), {
+    allowed: false,
+    reason: 'game-already-played',
+    attempt: completed[0],
+  });
+  const active = [...completed, { id: 'active-1', game_slug: 'morse', status: 'active', slot_number: 2 }];
+  assert.deepEqual(canStartOfficialGame({ attempts: active, maxAttempts: 5, gamesEnabled: true, gameSlug: 'pacman' }), {
+    allowed: false,
+    reason: 'active-attempt-exists',
+    attempt: active[1],
+  });
+  const fiveDistinct = ['wordle', 'morse', 'pacman', 'snake', 'fruit-ninja'].map((game_slug, index) => ({
+    game_slug,
+    status: 'completed',
+    slot_number: index + 1,
+  }));
+  assert.deepEqual(canStartOfficialGame({ attempts: fiveDistinct, maxAttempts: 5, gamesEnabled: true, gameSlug: 'flappy-bird' }), {
     allowed: false,
     reason: 'game-limit-reached',
   });
-  assert.deepEqual(canStartOfficialGame({ attempts, maxAttempts: 5, gamesEnabled: false }), {
+  assert.deepEqual(canStartOfficialGame({ attempts: [], maxAttempts: 5, gamesEnabled: false, gameSlug: 'wordle' }), {
     allowed: false,
     reason: 'game-mode-disabled',
   });
-  assert.equal(summarizeTeamGameUsage({ attempts: [], maxAttempts: 0 }).maxAttempts, 0);
+});
+
+test('allocates the lowest slot freed by a voided attempt', () => {
+  assert.equal(scoring.findLowestAvailableSlot([
+    { slot_number: 1, status: 'completed' },
+    { slot_number: 2, status: 'completed', voided_at: '2026-09-01T00:00:00Z' },
+    { slot_number: 3, status: 'completed' },
+  ], 5), 2);
+  assert.equal(scoring.findLowestAvailableSlot([], 0), null);
+});
+
+test('admin game limits are constrained to the twelve scored games', () => {
+  assert.equal(scoring.validateAdminGameLimit(0), 0);
+  assert.equal(scoring.validateAdminGameLimit(12), 12);
+  assert.throws(() => scoring.validateAdminGameLimit(13), /0 to 12/i);
+  assert.throws(() => scoring.validateAdminGameLimit(1.5), /0 to 12/i);
+});
+
+test('game errors preserve structured reason, attempt, usage, and balance', () => {
+  const error = new Error('Resume the active game');
+  error.reason = 'active-attempt-exists';
+  error.attempt = { id: 'attempt-1' };
+  error.usage = { remainingAttempts: 4 };
+  error.balance = 110;
+  assert.deepEqual(scoring.buildGameErrorPayload(error), {
+    error: 'Resume the active game',
+    reason: 'active-attempt-exists',
+    attempt: { id: 'attempt-1' },
+    usage: { remainingAttempts: 4 },
+    balance: 110,
+  });
+});
+
+test('attempt reset requires a meaningful audit reason', () => {
+  assert.equal(scoring.validateAttemptResetReason('Duplicate award correction'), 'Duplicate award correction');
+  assert.throws(() => scoring.validateAttemptResetReason('bad'), /audit reason/i);
 });
 
 test('game mode validation accepts explicit admin actions only', () => {

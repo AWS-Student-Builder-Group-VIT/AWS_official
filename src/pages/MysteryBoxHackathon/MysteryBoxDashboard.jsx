@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import awsIcon from '../../assets/aws_icon.jpeg';
 import {
@@ -19,7 +19,8 @@ const HACKATHON_TOKEN_KEY = 'mystery-box-hackathon-token';
 
 export default function MysteryBoxDashboard() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('control'); // 'control', 'shop', 'wheel'
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(() => new URLSearchParams(location.search).get('tab') === 'games' ? 'games' : 'control');
   const [gameScores, setGameScores] = useState(null);
   const [topicModalOpen, setTopicModalOpen] = useState(false);
   const [topics, setTopics] = useState([]);
@@ -58,6 +59,7 @@ export default function MysteryBoxDashboard() {
   // Success message notification state
   const [notification, setNotification] = useState('');
   const scoredGames = games.filter((game) => SCORED_TEAM_GAMES.includes(game.slug));
+  const playedGameSlugs = new Set(gameScores?.playedGameSlugs || []);
 
   // Sync state if localStorage changes in other tabs
   useEffect(() => {
@@ -793,7 +795,7 @@ export default function MysteryBoxDashboard() {
                     <div>
                       <h3 className="text-xl font-headline-md text-on-surface uppercase tracking-widest mt-0 mb-1.5">Official Games</h3>
                       <p className="text-xs text-on-surface-variant m-0 font-body-md max-w-3xl">
-                        Registered team members can play 5 official games total. Repeats are allowed. If you refresh or leave after starting, the same active slot resumes until it is completed.
+                        Registered team members may complete up to {gameScores?.maxAttempts ?? team.maxGameAttempts ?? 5} distinct official games. Each game counts once per team. Refreshing or leaving resumes the active slot; replay buttons open Practice and never award points.
                       </p>
                     </div>
                     <div className={`px-4 py-3 rounded-xl border font-headline-md uppercase text-xs tracking-widest ${gameScores?.gamesEnabled ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-300'}`}>
@@ -834,22 +836,23 @@ export default function MysteryBoxDashboard() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                   {scoredGames.map((game, index) => {
+                    const played = playedGameSlugs.has(game.slug);
                     const blocked = !gameScores?.gamesEnabled || ((gameScores?.remainingAttempts || 0) <= 0 && !gameScores?.activeAttempt);
                     return (
-                      <article key={game.slug} className="border border-primary-container/15 bg-[rgba(255,153,0,0.03)] rounded-[18px] p-5 flex flex-col min-h-[210px]">
+                      <article key={game.slug} className={`border rounded-[18px] p-5 flex flex-col min-h-[210px] ${played ? 'border-emerald-500/30 bg-emerald-500/[0.04]' : 'border-primary-container/15 bg-[rgba(255,153,0,0.03)]'}`}>
                         <div className="flex items-start justify-between gap-3">
                           <span className="text-primary-container font-headline-md text-xs">{String(index + 1).padStart(2, '0')}</span>
-                          <span className="text-[9px] uppercase tracking-widest text-[#00a8e0] border border-[#00a8e0]/30 px-2 py-1 rounded">{game.status}</span>
+                          <span className={`text-[9px] uppercase tracking-widest border px-2 py-1 rounded ${played ? 'text-emerald-400 border-emerald-500/30' : 'text-[#00a8e0] border-[#00a8e0]/30'}`}>{played ? 'Official Completed' : game.status}</span>
                         </div>
                         <h4 className="text-base text-on-surface uppercase tracking-wider mt-5 mb-2">{game.title}</h4>
                         <p className="text-xs text-on-surface-variant leading-6 m-0 flex-1">{game.description}</p>
                         <button
                           type="button"
-                          disabled={blocked || Boolean(gameScores?.activeAttempt)}
-                          onClick={() => navigate(`/mystery-box-hackathon/games/${game.slug}`)}
-                          className={`mt-5 py-3 rounded-xl text-xs uppercase tracking-widest font-headline-md font-bold border-0 transition-all ${blocked || gameScores?.activeAttempt ? 'bg-white/5 text-on-surface-variant/40 cursor-not-allowed' : 'bg-primary-container text-background hover:bg-primary cursor-pointer'}`}
+                          disabled={!played && (blocked || Boolean(gameScores?.activeAttempt))}
+                          onClick={() => navigate(played ? game.path : `/mystery-box-hackathon/games/${game.slug}`)}
+                          className={`mt-5 py-3 rounded-xl text-xs uppercase tracking-widest font-headline-md font-bold border-0 transition-all ${!played && (blocked || gameScores?.activeAttempt) ? 'bg-white/5 text-on-surface-variant/40 cursor-not-allowed' : played ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 cursor-pointer' : 'bg-primary-container text-background hover:bg-primary cursor-pointer'}`}
                         >
-                          {gameScores?.activeAttempt ? 'Resume Active Slot First' : blocked ? 'Unavailable' : 'Play Official Game'}
+                          {played ? 'Play Again — Practice' : gameScores?.activeAttempt ? 'Resume Active Slot First' : blocked ? 'Unavailable' : 'Play Official Game'}
                         </button>
                       </article>
                     );
@@ -863,7 +866,7 @@ export default function MysteryBoxDashboard() {
                       {gameScores.attempts.map((attempt) => (
                         <div key={attempt.attemptId} className="flex justify-between gap-3 text-xs border-b border-white/5 pb-2">
                           <span className="text-on-surface-variant">#{attempt.slotNumber} {games.find((game) => game.slug === attempt.gameSlug)?.title || attempt.gameSlug}</span>
-                          <span className="text-primary-container font-bold">{attempt.status} · {attempt.points || 0} pts</span>
+                          <span className={`font-bold ${attempt.voidedAt ? 'text-red-300' : 'text-primary-container'}`}>{attempt.voidedAt ? `voided · ${attempt.points || 0} pts reversed` : `${attempt.status} · ${attempt.points || 0} pts`}</span>
                         </div>
                       ))}
                     </div>

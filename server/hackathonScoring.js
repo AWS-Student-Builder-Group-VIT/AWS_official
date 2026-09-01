@@ -79,25 +79,73 @@ export function validateGameMode(input = {}) {
   return input.enabled;
 }
 
+export function validateAdminGameLimit(value) {
+  const maxAttempts = Number(value);
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 0 || maxAttempts > 12) {
+    throw new Error('Max game attempts must be an integer from 0 to 12');
+  }
+  return maxAttempts;
+}
+
+export function validateAttemptResetReason(value) {
+  const reason = String(value || '').trim();
+  if (reason.length < 5 || reason.length > 500) throw new Error('A clear audit reason is required');
+  return reason;
+}
+
+export function buildGameErrorPayload(error) {
+  const payload = { error: error.message };
+  if (error.reason) payload.reason = error.reason;
+  if (error.attempt) payload.attempt = error.attempt;
+  if (error.usage) payload.usage = error.usage;
+  if (Number.isFinite(Number(error.balance))) payload.balance = Number(error.balance);
+  return payload;
+}
+
 export function summarizeTeamGameUsage({ attempts = [], maxAttempts = DEFAULT_MAX_GAME_ATTEMPTS } = {}) {
   const parsedMax = Number(maxAttempts);
-  const normalizedMax = Math.max(0, Math.trunc(Number.isFinite(parsedMax) ? parsedMax : DEFAULT_MAX_GAME_ATTEMPTS));
-  const usedAttempts = attempts.length;
-  const completedAttempts = attempts.filter((attempt) => attempt.status === 'completed').length;
+  const normalizedMax = Math.min(12, Math.max(0, Math.trunc(Number.isFinite(parsedMax) ? parsedMax : DEFAULT_MAX_GAME_ATTEMPTS)));
+  const countedAttempts = attempts.filter((attempt) => !attempt.voided_at && !attempt.voidedAt);
+  const usedAttempts = countedAttempts.length;
+  const completedAttempts = countedAttempts.filter((attempt) => attempt.status === 'completed').length;
   return {
     maxAttempts: normalizedMax,
     usedAttempts,
     remainingAttempts: Math.max(0, normalizedMax - usedAttempts),
     completedAttempts,
-    activeAttempt: attempts.find((attempt) => attempt.status === 'active') || null,
+    playedGameSlugs: [...new Set(countedAttempts.map((attempt) => attempt.game_slug || attempt.gameSlug).filter(Boolean))],
+    activeAttempt: countedAttempts.find((attempt) => attempt.status === 'active') || null,
   };
 }
 
-export function canStartOfficialGame({ attempts = [], maxAttempts = DEFAULT_MAX_GAME_ATTEMPTS, gamesEnabled = false } = {}) {
+export function canStartOfficialGame({ attempts = [], maxAttempts = DEFAULT_MAX_GAME_ATTEMPTS, gamesEnabled = false, gameSlug } = {}) {
   if (!gamesEnabled) return { allowed: false, reason: 'game-mode-disabled' };
   const usage = summarizeTeamGameUsage({ attempts, maxAttempts });
-  if (usage.usedAttempts >= usage.maxAttempts && !usage.activeAttempt) return { allowed: false, reason: 'game-limit-reached' };
+  const requestedGame = String(gameSlug || '');
+  if (requestedGame && usage.playedGameSlugs.includes(requestedGame)) {
+    const existingAttempt = attempts.find((attempt) => !attempt.voided_at && !attempt.voidedAt && (attempt.game_slug || attempt.gameSlug) === requestedGame);
+    if (existingAttempt?.status === 'active') {
+      return { allowed: true, resumed: true, attempt: usage.activeAttempt };
+    }
+    return { allowed: false, reason: 'game-already-played', attempt: existingAttempt };
+  }
+  if (usage.activeAttempt) return { allowed: false, reason: 'active-attempt-exists', attempt: usage.activeAttempt };
+  if (usage.usedAttempts >= usage.maxAttempts) return { allowed: false, reason: 'game-limit-reached' };
   return { allowed: true };
+}
+
+export function findLowestAvailableSlot(attempts = [], maxAttempts = DEFAULT_MAX_GAME_ATTEMPTS) {
+  const usage = summarizeTeamGameUsage({ attempts, maxAttempts });
+  const occupied = new Set(
+    attempts
+      .filter((attempt) => !attempt.voided_at && !attempt.voidedAt)
+      .map((attempt) => Number(attempt.slot_number ?? attempt.slotNumber))
+      .filter(Number.isInteger),
+  );
+  for (let slot = 1; slot <= usage.maxAttempts; slot += 1) {
+    if (!occupied.has(slot)) return slot;
+  }
+  return null;
 }
 
 export function getTopicSwapQuote({ currentTopic, targetTopic, teamPoints = 0, hasChangedQuestion = false } = {}) {
@@ -143,10 +191,20 @@ export async function initializeHackathonScoring(pool) {
       completed_at TIMESTAMPTZ
     );
     ALTER TABLE team_game_attempts ADD COLUMN IF NOT EXISTS slot_number INTEGER;
+    ALTER TABLE team_game_attempts ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ;
+    ALTER TABLE team_game_attempts ADD COLUMN IF NOT EXISTS void_reason TEXT;
+    ALTER TABLE team_game_attempts ADD COLUMN IF NOT EXISTS voided_by VARCHAR(255);
     ALTER TABLE team_game_attempts DROP CONSTRAINT IF EXISTS team_game_attempts_team_id_game_slug_key;
     CREATE INDEX IF NOT EXISTS idx_team_game_attempts_team_time ON team_game_attempts(team_id, started_at DESC);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_team_game_attempts_team_slot ON team_game_attempts(team_id, slot_number) WHERE slot_number IS NOT NULL;
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_team_game_attempts_one_active ON team_game_attempts(team_id) WHERE status = 'active';
+    DROP INDEX IF EXISTS idx_team_game_attempts_team_slot;
+    DROP INDEX IF EXISTS idx_team_game_attempts_one_active;
+    DROP INDEX IF EXISTS idx_team_game_attempts_team_game;
+    CREATE UNIQUE INDEX idx_team_game_attempts_team_slot ON team_game_attempts(team_id, slot_number)
+      WHERE slot_number IS NOT NULL AND voided_at IS NULL;
+    CREATE UNIQUE INDEX idx_team_game_attempts_one_active ON team_game_attempts(team_id)
+      WHERE status = 'active' AND voided_at IS NULL;
+    CREATE UNIQUE INDEX idx_team_game_attempts_team_game ON team_game_attempts(team_id, game_slug)
+      WHERE voided_at IS NULL;
 
     CREATE TABLE IF NOT EXISTS team_point_ledger (
       id BIGSERIAL PRIMARY KEY,
@@ -220,6 +278,93 @@ export async function initializeHackathonScoring(pool) {
     FROM numbered
     WHERE a.id = numbered.id;
   `);
+
+  await applyPrelaunchOfficialGameMigration(pool);
+}
+
+export async function applyPrelaunchOfficialGameMigration(pool) {
+  const migrationKey = 'v2-distinct-official-games-prelaunch-reset';
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const marker = await client.query(
+      `INSERT INTO hackathon_scoring_migrations (key) VALUES ($1)
+       ON CONFLICT (key) DO NOTHING RETURNING key`,
+      [migrationKey],
+    );
+    if (!marker.rows.length) {
+      await client.query('COMMIT');
+      return { applied: false };
+    }
+
+    const team12Result = await client.query('SELECT * FROM hackathon_teams WHERE id=12 FOR UPDATE');
+    if (team12Result.rows.length) {
+      const team12 = team12Result.rows[0];
+      const latest = await client.query(
+        'SELECT balance_after FROM team_point_ledger WHERE team_id=12 ORDER BY created_at DESC, id DESC LIMIT 1',
+      );
+      const cachedBalance = Number(team12.points || 0);
+      const ledgerBalance = Number(latest.rows[0]?.balance_after || 0);
+      if (cachedBalance === 110 && ledgerBalance === 160) {
+        await client.query(
+          `INSERT INTO team_point_ledger
+             (team_id, source_type, source_ref, delta, balance_after, reason, actor_google_sub, metadata)
+           VALUES (12, 'reconciliation', $1, -50, 110, $2, 'system:migration-v2', $3)
+           ON CONFLICT (team_id, source_type, source_ref) DO NOTHING`,
+          [migrationKey, 'Pre-launch reconciliation to authoritative displayed balance', JSON.stringify({ previousLedgerBalance: 160, authoritativeBalance: 110 })],
+        );
+      } else if (cachedBalance !== ledgerBalance) {
+        throw new Error(`Team 12 balance changed before ${migrationKey}; refusing unsafe reconciliation`);
+      }
+    }
+
+    const team13Result = await client.query('SELECT * FROM hackathon_teams WHERE id=13 FOR UPDATE');
+    if (team13Result.rows.length) {
+      const team13 = team13Result.rows[0];
+      const approved = [
+        { id: '7a9956d4-b4ff-41a1-a180-b57923a3e666', gameSlug: 'flappy-bird', points: 2 },
+        { id: '74397831-0719-489a-bad0-7575c1aee18f', gameSlug: 'fruit-ninja', points: 30 },
+      ];
+      if (Number(team13.points || 0) !== 82) {
+        throw new Error(`Team 13 balance changed before ${migrationKey}; refusing unsafe reset`);
+      }
+      for (const approvedAttempt of approved) {
+        const attemptResult = await client.query(
+          'SELECT * FROM team_game_attempts WHERE id=$1 AND team_id=13 FOR UPDATE',
+          [approvedAttempt.id],
+        );
+        const attempt = attemptResult.rows[0];
+        if (!attempt || attempt.game_slug !== approvedAttempt.gameSlug || Number(attempt.awarded_points || 0) !== approvedAttempt.points) {
+          throw new Error(`Approved pre-launch attempt ${approvedAttempt.id} no longer matches the audited record`);
+        }
+        const ledger = await appendLedger(client, {
+          team: team13,
+          sourceType: 'game-reversal',
+          sourceRef: approvedAttempt.id,
+          delta: -approvedAttempt.points,
+          reason: `Pre-launch reversal for ${approvedAttempt.gameSlug}`,
+          actor: { sub: 'system:migration-v2' },
+          metadata: { attemptId: approvedAttempt.id, migrationKey },
+        });
+        if (!ledger.applied) throw new Error(`Pre-launch reversal already exists without migration marker for ${approvedAttempt.id}`);
+        await client.query(
+          `UPDATE team_game_attempts
+           SET voided_at=NOW(), void_reason=$1, voided_by='system:migration-v2'
+           WHERE id=$2`,
+          ['Approved pre-launch official-game reset', approvedAttempt.id],
+        );
+      }
+      if (Number(team13.points || 0) !== 50) throw new Error('Team 13 pre-launch reset did not finish at 50 points');
+    }
+
+    await client.query('COMMIT');
+    return { applied: true };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function upsertHackathonMember(client, { teamId, email, googleSub, regNo, isLeader }) {
@@ -315,7 +460,8 @@ async function getGamesEnabled(client) {
 async function listTeamAttempts(client, teamId) {
   const result = await client.query(
     `SELECT id, game_slug, slot_number, status, started_by_google_sub, completed_by_google_sub,
-            awarded_points, scoring_version, result_payload, started_at, completed_at
+            awarded_points, scoring_version, result_payload, started_at, completed_at,
+            voided_at, void_reason, voided_by
      FROM team_game_attempts
      WHERE team_id=$1
      ORDER BY slot_number ASC, started_at ASC`,
@@ -338,6 +484,9 @@ function formatAttempt(row) {
     result: row.result_payload,
     startedAt: row.started_at,
     completedAt: row.completed_at,
+    voidedAt: row.voided_at,
+    voidReason: row.void_reason,
+    voidedBy: row.voided_by,
   };
 }
 
@@ -369,6 +518,7 @@ async function getTeamGameSummary(client, team) {
     usedAttempts: usage.usedAttempts,
     remainingAttempts: usage.remainingAttempts,
     completedAttempts: usage.completedAttempts,
+    playedGameSlugs: usage.playedGameSlugs,
     activeAttempt: formatAttempt(usage.activeAttempt),
     attempts: attempts.map(formatAttempt),
   };
@@ -381,7 +531,9 @@ function findMysteryQuestionById(id) {
 const sendError = (res, error) => {
   const status = error.status || (/required|valid|official|scored|range|integer/i.test(error.message) ? 400 : 500);
   if (status >= 500) console.error('Hackathon scoring error:', error);
-  res.status(status).json({ error: status >= 500 ? 'Hackathon scoring request failed' : error.message });
+  const payload = buildGameErrorPayload(error);
+  if (status >= 500) payload.error = 'Hackathon scoring request failed';
+  res.status(status).json(payload);
 };
 
 export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, adminMiddleware }) {
@@ -393,19 +545,35 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
         const team = await findAuthorizedTeam(client, req.body?.code, req.hackathonUser, { lock: true });
         const attempts = await listTeamAttempts(client, team.id);
         const gamesEnabled = await getGamesEnabled(client);
-        const activeAttempt = attempts.find((attempt) => attempt.status === 'active');
+        const usage = summarizeTeamGameUsage({ attempts, maxAttempts: team.max_game_attempts });
+        const activeAttempt = usage.activeAttempt;
         if (activeAttempt?.game_slug === gameSlug) return { created: false, attempt: activeAttempt, usage: summarizeTeamGameUsage({ attempts, maxAttempts: team.max_game_attempts }) };
-        if (activeAttempt) {
-          const error = new Error(`Resume ${activeAttempt.game_slug} before starting another official game`);
+        const decision = canStartOfficialGame({ attempts, maxAttempts: team.max_game_attempts, gamesEnabled, gameSlug });
+        if (!decision.allowed) {
+          const messages = {
+            'active-attempt-exists': `Resume ${decision.attempt?.game_slug || 'the active game'} before starting another official game`,
+            'game-already-played': 'This team has already completed this official game',
+            'game-mode-disabled': 'Official game mode is disabled',
+            'game-limit-reached': 'This team has used all official game plays',
+          };
+          const error = new Error(messages[decision.reason] || 'Official game cannot be started');
           error.status = 409;
-          error.reason = 'active-attempt-exists';
-          error.activeAttempt = activeAttempt;
+          error.reason = decision.reason;
+          error.attempt = formatAttempt(decision.attempt);
+          error.usage = usage;
+          error.balance = Number(team.points || 0);
           throw error;
         }
-        const decision = canStartOfficialGame({ attempts, maxAttempts: team.max_game_attempts, gamesEnabled });
-        if (!decision.allowed) { const error = new Error(decision.reason === 'game-mode-disabled' ? 'Official game mode is disabled' : 'This team has used all official game plays'); error.status = 409; error.reason = decision.reason; throw error; }
         const attemptId = randomUUID();
-        const slotNumber = attempts.length + 1;
+        const slotNumber = findLowestAvailableSlot(attempts, team.max_game_attempts);
+        if (slotNumber === null) {
+          const error = new Error('This team has used all official game plays');
+          error.status = 409;
+          error.reason = 'game-limit-reached';
+          error.usage = usage;
+          error.balance = Number(team.points || 0);
+          throw error;
+        }
         const inserted = await client.query(
           `INSERT INTO team_game_attempts (id, team_id, game_slug, slot_number, started_by_google_sub, scoring_version)
            VALUES ($1,$2,$3,$4,$5,$6)
@@ -414,7 +582,11 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
         );
         return { created: true, attempt: inserted.rows[0], usage: summarizeTeamGameUsage({ attempts: [...attempts, inserted.rows[0]], maxAttempts: team.max_game_attempts }) };
       });
-      res.status(response.created ? 201 : 200).json({ ...formatAttempt(response.attempt), resumed: !response.created, usage: response.usage });
+      res.status(response.created ? 201 : 200).json({
+        ...formatAttempt(response.attempt),
+        resumed: !response.created,
+        usage: response.usage,
+      });
     } catch (error) { sendError(res, error); }
   });
 
@@ -425,14 +597,23 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
       const response = await transact(pool, async (client) => {
         const team = await findAuthorizedTeam(client, req.body?.code, req.hackathonUser, { lock: true });
         const attemptResult = await client.query(
-          'SELECT * FROM team_game_attempts WHERE team_id = $1 AND id = $2 AND game_slug = $3 FOR UPDATE',
+          'SELECT * FROM team_game_attempts WHERE team_id = $1 AND id = $2 AND game_slug = $3 AND voided_at IS NULL FOR UPDATE',
           [team.id, req.body?.attemptId, gameSlug],
         );
         const attempt = attemptResult.rows[0];
         if (!attempt) {
           const error = new Error('Official game attempt not found'); error.status = 404; throw error;
         }
-        if (attempt.status === 'completed') return { duplicate: true, points: attempt.awarded_points, balance: Number(team.points || 0) };
+        if (attempt.status === 'completed') {
+          const attempts = await listTeamAttempts(client, team.id);
+          return {
+            duplicate: true,
+            points: Number(attempt.awarded_points || 0),
+            balance: Number(team.points || 0),
+            attempt: formatAttempt(attempt),
+            usage: summarizeTeamGameUsage({ attempts, maxAttempts: team.max_game_attempts }),
+          };
+        }
         if (attempt.status !== 'active') { const error = new Error('Official attempt is no longer active'); error.status = 409; throw error; }
 
         const points = calculateGamePoints(gameSlug, resultPayload);
@@ -445,12 +626,19 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
           actor: req.hackathonUser,
           metadata: { gameSlug, scoringVersion: SCORING_VERSION },
         });
-        await client.query(
+        const completed = await client.query(
           `UPDATE team_game_attempts SET status='completed', completed_by_google_sub=$1,
-             result_payload=$2, awarded_points=$3, completed_at=NOW() WHERE id=$4`,
+             result_payload=$2, awarded_points=$3, completed_at=NOW() WHERE id=$4 RETURNING *`,
           [req.hackathonUser.sub, JSON.stringify(resultPayload), points, attempt.id],
         );
-        return { duplicate: !ledger.applied, points, balance: ledger.balance, usage: await getTeamGameSummary(client, team) };
+        const attempts = await listTeamAttempts(client, team.id);
+        return {
+          duplicate: !ledger.applied,
+          points,
+          balance: ledger.balance,
+          attempt: formatAttempt(completed.rows[0]),
+          usage: summarizeTeamGameUsage({ attempts, maxAttempts: team.max_game_attempts }),
+        };
       });
       res.json(response);
     } catch (error) { sendError(res, error); }
@@ -636,8 +824,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
 
   app.post('/api/admin/mystery-box/teams/:code/games-limit', adminMiddleware, async (req, res) => {
     try {
-      const maxAttempts = Number(req.body?.maxAttempts);
-      if (!Number.isInteger(maxAttempts) || maxAttempts < 0 || maxAttempts > 50) return res.status(400).json({ error: 'Max game attempts must be an integer from 0 to 50' });
+      const maxAttempts = validateAdminGameLimit(req.body?.maxAttempts);
       const result = await pool.query(
         `UPDATE hackathon_teams SET max_game_attempts=$1, updated_at=NOW() WHERE code=$2 RETURNING code, max_game_attempts`,
         [maxAttempts, normalizeTeamCode(req.params.code)],
@@ -649,19 +836,45 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
 
   app.post('/api/admin/mystery-box/teams/:code/games/:gameSlug/reset', adminMiddleware, async (req, res) => {
     try {
-      const reason = String(req.body?.reason || '').trim();
-      if (reason.length < 5) return res.status(400).json({ error: 'An audit reason is required' });
+      const reason = validateAttemptResetReason(req.body?.reason);
       const response = await transact(pool, async (client) => {
-        const teamResult = await client.query('SELECT id FROM hackathon_teams WHERE code=$1 FOR UPDATE', [normalizeTeamCode(req.params.code)]);
+        const teamResult = await client.query('SELECT * FROM hackathon_teams WHERE code=$1 FOR UPDATE', [normalizeTeamCode(req.params.code)]);
         if (!teamResult.rows.length) { const error = new Error('Team not found'); error.status = 404; throw error; }
-        const deleted = await client.query(`DELETE FROM team_game_attempts WHERE team_id=$1 AND game_slug=$2 AND status IN ('active','abandoned') RETURNING id`, [teamResult.rows[0].id, req.params.gameSlug]);
-        if (!deleted.rows.length) { const error = new Error('No resettable attempt found'); error.status = 409; throw error; }
-        await client.query(
-          `INSERT INTO team_point_ledger (team_id, source_type, source_ref, delta, balance_after, reason, actor_google_sub, metadata)
-           SELECT id, 'admin-reset', $2, 0, points, $3, $4, $5 FROM hackathon_teams WHERE id=$1`,
-          [teamResult.rows[0].id, deleted.rows[0].id, reason, `admin:${req.admin?.role || 'organizer'}`, JSON.stringify({ gameSlug: req.params.gameSlug })],
+        const team = teamResult.rows[0];
+        const attemptResult = await client.query(
+          `SELECT * FROM team_game_attempts
+           WHERE team_id=$1 AND game_slug=$2 AND voided_at IS NULL
+           ORDER BY started_at DESC LIMIT 1 FOR UPDATE`,
+          [team.id, req.params.gameSlug],
         );
-        return { reset: true, attemptId: deleted.rows[0].id };
+        const attempt = attemptResult.rows[0];
+        if (!attempt) { const error = new Error('No resettable attempt found'); error.status = 409; throw error; }
+        const reversal = attempt.status === 'completed' ? -Number(attempt.awarded_points || 0) : 0;
+        const actor = { sub: `admin:${req.admin?.role || 'organizer'}` };
+        const ledger = await appendLedger(client, {
+          team,
+          sourceType: 'game-reset',
+          sourceRef: attempt.id,
+          delta: reversal,
+          reason,
+          actor,
+          metadata: { gameSlug: req.params.gameSlug, previousStatus: attempt.status, awardedPoints: Number(attempt.awarded_points || 0) },
+        });
+        await client.query(
+          `UPDATE team_game_attempts
+           SET status=CASE WHEN status='active' THEN 'abandoned' ELSE status END,
+               voided_at=NOW(), void_reason=$1, voided_by=$2
+           WHERE id=$3`,
+          [reason, actor.sub, attempt.id],
+        );
+        const attempts = await listTeamAttempts(client, team.id);
+        return {
+          reset: true,
+          attemptId: attempt.id,
+          reversedPoints: Math.abs(reversal),
+          balance: ledger.balance,
+          usage: summarizeTeamGameUsage({ attempts, maxAttempts: team.max_game_attempts }),
+        };
       });
       res.json(response);
     } catch (error) { sendError(res, error); }

@@ -198,7 +198,7 @@ async function initDb() {
   await initializeHackathonScoring(pool);
   console.log('Database tables ready');
 }
-initDb().catch(console.error);
+export const dbReady = initDb();
 
 // ── Activity Logger Helper ────────────────────────────────────
 async function logHackathonActivity(teamCode, teamName, eventType, message, details = {}) {
@@ -678,11 +678,26 @@ app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
                  'status', a.status,
                  'points', a.awarded_points,
                  'startedAt', a.started_at,
-                 'completedAt', a.completed_at
+                 'completedAt', a.completed_at,
+                 'voidedAt', a.voided_at,
+                 'voidReason', a.void_reason,
+                 'voidedBy', a.voided_by
                ) ORDER BY a.slot_number ASC, a.started_at ASC)
                FROM team_game_attempts a
                WHERE a.team_id = hackathon_teams.id
-             ), '[]'::jsonb) AS game_attempts
+             ), '[]'::jsonb) AS game_attempts,
+             COALESCE((
+               SELECT jsonb_agg(jsonb_build_object(
+                 'sourceType', l.source_type,
+                 'sourceRef', l.source_ref,
+                 'delta', l.delta,
+                 'balanceAfter', l.balance_after,
+                 'reason', l.reason,
+                 'createdAt', l.created_at
+               ) ORDER BY l.created_at DESC, l.id DESC)
+               FROM team_point_ledger l
+               WHERE l.team_id = hackathon_teams.id
+             ), '[]'::jsonb) AS point_ledger
       FROM hackathon_teams
       ORDER BY points DESC, created_at DESC
     `);
@@ -701,6 +716,7 @@ app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
       hasChangedQuestion: row.has_changed_question || false,
       maxGameAttempts: row.max_game_attempts ?? 5,
       gameAttempts: row.game_attempts || [],
+      pointLedger: row.point_ledger || [],
       registeredAt: new Date(row.created_at).getTime(),
       updatedAt: new Date(row.updated_at).getTime()
     }));
@@ -888,23 +904,27 @@ if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
 }
 
 if (!process.env.VERCEL) {
-  const server = app.listen(PORT, () => {
+  dbReady.then(() => {
+    const server = app.listen(PORT, () => {
     console.log('\n┌──────────────────────────────────────────┐');
     console.log(`│  ✅ Backend running  →  http://localhost:${PORT}  │`);
     console.log('│  📡 Database        →  Neon PostgreSQL    │');
     console.log('│  🔑 Admin login     →  /admin              │');
     console.log('│  ❤️  Health check   →  /api/health         │');
     console.log('└──────────────────────────────────────────┘\n');
-  });
+    });
 
-  server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.error(`\n❌ Port ${PORT} is already in use. Kill the process using it and restart.\n`);
-      console.error('   Run: kill -9 $(lsof -ti:5000)');
-    } else {
-      console.error('❌ Server error:', err);
-    }
-    process.exit(1);
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`\n❌ Port ${PORT} is already in use. Kill the process using it and restart.\n`);
+      } else {
+        console.error('❌ Server error:', err);
+      }
+      process.exit(1);
+    });
+  }).catch((error) => {
+    console.error('❌ Database initialization failed:', error);
+    process.exitCode = 1;
   });
 }
 

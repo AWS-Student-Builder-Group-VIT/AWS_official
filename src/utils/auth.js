@@ -243,12 +243,12 @@ export async function fetchAdminHackathonTeams(adminToken) {
 }
 
 /** Update / Inject points for a team */
-export async function updateAdminTeamPoints(adminToken, { code, delta, setPoints }) {
+export async function updateAdminTeamPoints(adminToken, { code, delta }) {
   try {
     const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/points`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-      body: JSON.stringify({ code, delta, setPoints, reason: `Admin adjusted team points by ${Number(delta) >= 0 ? '+' : ''}${Number(delta) || 0}` })
+      body: JSON.stringify({ code, delta, reason: `Admin adjusted team points by ${Number(delta) >= 0 ? '+' : ''}${Number(delta) || 0}` })
     });
     const data = await res.json();
     return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
@@ -289,6 +289,20 @@ export async function updateAdminTeamGameLimit(adminToken, { code, maxAttempts }
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
       body: JSON.stringify({ maxAttempts })
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
+  } catch {
+    return { ok: false, error: 'Network error' };
+  }
+}
+
+export async function resetAdminTeamGameAttempt(adminToken, { code, gameSlug, reason }) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/${code}/games/${gameSlug}/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ reason })
     });
     const data = await res.json();
     return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
