@@ -136,7 +136,7 @@ test('game mode validation accepts explicit admin actions only', () => {
   assert.throws(() => validateGameMode({ enabled: 'true' }), /boolean/i);
 });
 
-test('topic swap quotes enforce same-tier one-time leader purchase', () => {
+test('topic swap quotes price upgrades, same-tier moves, and downgrades', () => {
   const current = { id: 'easy-1', difficulty: 'Easy', points: 100 };
   const target = { id: 'easy-2', difficulty: 'Easy', points: 100 };
   assert.deepEqual(getTopicSwapQuote({ currentTopic: current, targetTopic: target, teamPoints: 100, hasChangedQuestion: false }), {
@@ -148,10 +148,15 @@ test('topic swap quotes enforce same-tier one-time leader purchase', () => {
     allowed: false,
     reason: 'insufficient-points',
   });
-  assert.deepEqual(getTopicSwapQuote({ currentTopic: current, targetTopic: { id: 'med-1', difficulty: 'Medium' }, teamPoints: 200, hasChangedQuestion: false }), {
-    cost: 100,
+  assert.deepEqual(getTopicSwapQuote({ currentTopic: current, targetTopic: { id: 'med-1', difficulty: 'Medium' }, teamPoints: 75, hasChangedQuestion: false }), { cost: 75, allowed: true });
+  assert.deepEqual(getTopicSwapQuote({ currentTopic: current, targetTopic: { id: 'hard-1', difficulty: 'Hard' }, teamPoints: 50, hasChangedQuestion: false }), { cost: 50, allowed: true });
+  assert.deepEqual(getTopicSwapQuote({ currentTopic: { id: 'med-1', difficulty: 'Medium' }, targetTopic: { id: 'hard-1', difficulty: 'Hard' }, teamPoints: 50, hasChangedQuestion: false }), { cost: 50, allowed: true });
+  assert.deepEqual(getTopicSwapQuote({ currentTopic: { id: 'hard-1', difficulty: 'Hard' }, targetTopic: { id: 'med-1', difficulty: 'Medium' }, teamPoints: 125, hasChangedQuestion: false }), { cost: 125, allowed: true });
+  assert.deepEqual(getTopicSwapQuote({ currentTopic: { id: 'hard-1', difficulty: 'Hard' }, targetTopic: current, teamPoints: 150, hasChangedQuestion: false }), { cost: 150, allowed: true });
+  assert.deepEqual(getTopicSwapQuote({ currentTopic: { id: 'med-1', difficulty: 'Medium' }, targetTopic: current, teamPoints: 149, hasChangedQuestion: false }), {
+    cost: 150,
     allowed: false,
-    reason: 'same-difficulty-required',
+    reason: 'insufficient-points',
   });
   assert.deepEqual(getTopicSwapQuote({ currentTopic: current, targetTopic: current, teamPoints: 200, hasChangedQuestion: false }), {
     cost: 100,

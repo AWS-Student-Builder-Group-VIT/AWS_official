@@ -1,5 +1,8 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { WHEEL_SEGMENTS } from '../data';
+import { createSpinOutcome } from './spinWheelLogic';
+
+const SPIN_DURATION_MS = 1600;
 
 /* ═══════════════════════════════════════════════════════════
    WHEEL COMPONENT — Mystery Box Hackathon
@@ -15,6 +18,7 @@ export default function SpinWheel() {
   const [totalRotation, setTotalRotation] = useState(0);
   const [result, setResult] = useState('');
   const wheelRef = useRef(null);
+  const resultTimerRef = useRef(null);
 
   const cx = 140, cy = 140, r = 120;
   const total = WHEEL_SEGMENTS.length;
@@ -40,22 +44,20 @@ export default function SpinWheel() {
     );
   });
 
+  useEffect(() => () => clearTimeout(resultTimerRef.current), []);
+
   const spin = () => {
     if (spinning) return;
     setSpinning(true);
     setResult('Spinning...');
-    const extra = 360 * 8 + Math.random() * 360;
-    const newTotal = totalRotation + extra;
-    setTotalRotation(newTotal);
+    const outcome = createSpinOutcome({ segmentCount: total, currentRotation: totalRotation });
+    setTotalRotation(outcome.rotation);
 
-    setTimeout(() => {
-      const norm = ((newTotal % 360) + 360) % 360;
-      const ptr = (360 - norm + 90) % 360;
-      const idx = Math.floor(ptr / step) % total;
-      const seg = WHEEL_SEGMENTS[idx];
+    resultTimerRef.current = setTimeout(() => {
+      const seg = WHEEL_SEGMENTS[outcome.selectedIndex];
       setResult(seg.label.includes('Luck') ? '😅 Better luck next time!' : `🎉 You won: ${seg.label}!`);
       setSpinning(false);
-    }, 3100);
+    }, SPIN_DURATION_MS + 50);
   };
 
   return (
@@ -68,7 +70,7 @@ export default function SpinWheel() {
           viewBox="0 0 280 280"
           width="280" height="280"
           style={{
-            transition: 'transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99)',
+            transition: `transform ${SPIN_DURATION_MS}ms cubic-bezier(0.17, 0.67, 0.12, 0.99)`,
             transform: `rotate(${totalRotation}deg)`,
           }}
         >
@@ -80,9 +82,10 @@ export default function SpinWheel() {
       </div>
       <button
         onClick={spin}
+        disabled={spinning}
         className="bg-primary-container text-background px-9 py-3.5 font-headline-md text-label-md uppercase tracking-widest font-bold transition-transform active:scale-[0.97] cursor-pointer border-0 hover:bg-primary"
       >
-        🎰 Spin (1 Token)
+        {spinning ? 'Spinning…' : '🎰 Spin (1 Token)'}
       </button>
       <div className="flex items-center gap-2 bg-white/[0.03] border border-white/10 px-4 py-2.5 text-[13px] text-on-surface-variant font-label-sm">
         🪙 Earn tokens via quizzes, challenges, milestones &amp; bonus tasks

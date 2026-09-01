@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import pool from './db.js';
+import { initializeVersionedSchema } from './databaseInitialization.js';
 import {
   applyAdminAdjustment,
   initializeHackathonScoring,
@@ -112,7 +113,7 @@ async function withTransaction(operation) {
 }
 
 // ── Init quiz_scores table ────────────────────────────────────
-async function initDb() {
+async function runDatabaseMigrations() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS quiz_scores (
       id           SERIAL PRIMARY KEY,
@@ -196,7 +197,15 @@ async function initDb() {
     );
   `).catch(err => console.log('ALTER columns for hackathon_teams error:', err.message));
   await initializeHackathonScoring(pool);
-  console.log('Database tables ready');
+}
+
+async function initDb() {
+  const result = await initializeVersionedSchema({
+    pool,
+    version: 'v3-runtime-schema-ready',
+    migrate: runDatabaseMigrations,
+  });
+  console.log(result.migrated ? 'Database tables ready' : 'Database schema already ready');
 }
 export const dbReady = initDb();
 

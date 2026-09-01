@@ -12,6 +12,7 @@ import SpinWheel from './components/SpinWheel';
 import { games } from '../gamesRegistry';
 import { SCORED_TEAM_GAMES } from '../../utils/teamGameScoring';
 import { fetchMysteryTopics, fetchTeamGameScores, swapTeamTopic } from '../../utils/auth';
+import { getTopicSwapCost } from '../../../shared/topicSwapPricing';
 
 const TEAM_STORAGE_KEY = 'mystery-box-hackathon-team';
 const OWNED_ITEMS_KEY = 'mystery-box-owned-items';
@@ -24,8 +25,9 @@ export default function MysteryBoxDashboard() {
   const [gameScores, setGameScores] = useState(null);
   const [topicModalOpen, setTopicModalOpen] = useState(false);
   const [topics, setTopics] = useState([]);
-  const [topicSwapCost, setTopicSwapCost] = useState(100);
   const [selectedTopicId, setSelectedTopicId] = useState('');
+  const [topicsLoading, setTopicsLoading] = useState(false);
+  const [topicSwapPending, setTopicSwapPending] = useState(false);
 
   const [team, setTeam] = useState(() => {
     if (typeof window === 'undefined') return null;
@@ -196,15 +198,28 @@ export default function MysteryBoxDashboard() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Team action failed');
 
-    const refreshed = await fetch(`/api/mystery-box/teams/${team.code}`, {
+    const immediateTeam = {
+      ...team,
+      points: Number.isFinite(Number(data.balance)) ? Number(data.balance) : team.points,
+      isOpened: data.isOpened === true ? true : team.isOpened,
+      ownedItems: Array.isArray(data.ownedItems) ? data.ownedItems : team.ownedItems,
+    };
+    persistTeamLocally(immediateTeam);
+    if (Array.isArray(data.ownedItems)) {
+      setOwnedItems(data.ownedItems);
+      window.localStorage.setItem(OWNED_ITEMS_KEY, JSON.stringify(data.ownedItems));
+    }
+
+    void fetch(`/api/mystery-box/teams/${team.code}`, {
       headers: { Authorization: `Bearer ${token || ''}` },
-    });
-    if (!refreshed.ok) throw new Error('Team action completed, but the dashboard could not refresh');
-    const freshTeam = await refreshed.json();
-    persistTeamLocally(freshTeam);
-    const nextOwned = Array.isArray(freshTeam.ownedItems) ? freshTeam.ownedItems : [];
-    setOwnedItems(nextOwned);
-    window.localStorage.setItem(OWNED_ITEMS_KEY, JSON.stringify(nextOwned));
+    }).then(async (refreshed) => {
+      if (!refreshed.ok) return;
+      const freshTeam = await refreshed.json();
+      persistTeamLocally(freshTeam);
+      const nextOwned = Array.isArray(freshTeam.ownedItems) ? freshTeam.ownedItems : [];
+      setOwnedItems(nextOwned);
+      window.localStorage.setItem(OWNED_ITEMS_KEY, JSON.stringify(nextOwned));
+    }).catch(() => {});
     return data;
   };
 
@@ -250,15 +265,17 @@ export default function MysteryBoxDashboard() {
   const handlePurchase = async (item) => {
     if (item.id === 'change-topic' || item.isSpecialSwap) {
       if (!isCurrentLeader || team.hasChangedQuestion) return;
+      setSelectedTopicId('');
+      setTopicModalOpen(true);
+      if (topics.length) return;
+      setTopicsLoading(true);
       const response = await fetchMysteryTopics();
       if (response.ok) {
         setTopics(response.topics || []);
-        setTopicSwapCost(response.topicSwapCost || 100);
-        setSelectedTopicId('');
-        setTopicModalOpen(true);
       } else {
         setNotification(response.error || 'Could not load challenge topics');
       }
+      setTopicsLoading(false);
       return;
     }
     const cost = parseInt(item.price);
@@ -274,16 +291,21 @@ export default function MysteryBoxDashboard() {
   };
 
   const handleConfirmTopicSwap = async () => {
-    if (!selectedTopicId) return;
-    const response = await swapTeamTopic({ code: team.code, topicId: selectedTopicId });
-    if (response.ok) {
-      const freshTeam = { ...team, mysteryQuestion: response.topic, points: response.balance, hasChangedQuestion: true };
-      persistTeamLocally(freshTeam);
-      setTopicModalOpen(false);
-      setNotification(`Challenge topic changed. -${response.cost || topicSwapCost} pts deducted.`);
-      setTimeout(() => setNotification(''), 4000);
-    } else {
-      setNotification(response.error || 'Could not change challenge topic');
+    if (!selectedTopicId || topicSwapPending) return;
+    setTopicSwapPending(true);
+    try {
+      const response = await swapTeamTopic({ code: team.code, topicId: selectedTopicId });
+      if (response.ok) {
+        const freshTeam = { ...team, mysteryQuestion: response.topic, points: response.balance, hasChangedQuestion: true };
+        persistTeamLocally(freshTeam);
+        setTopicModalOpen(false);
+        setNotification(`Challenge topic changed. -${response.cost} pts deducted.`);
+        setTimeout(() => setNotification(''), 4000);
+      } else {
+        setNotification(response.error || 'Could not change challenge topic');
+      }
+    } finally {
+      setTopicSwapPending(false);
     }
   };
 
@@ -700,9 +722,9 @@ export default function MysteryBoxDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                   {SHOP_ITEMS.map((item, i) => {
                     const isTopicSwap = item.id === 'change-topic' || item.isSpecialSwap;
-                    const priceVal = isTopicSwap ? topicSwapCost : parseInt(item.price);
+                    const priceVal = parseInt(item.price);
                     const isOwned = isTopicSwap ? team.hasChangedQuestion : ownedItems.includes(item.title);
-                    const canAfford = isCurrentLeader && points >= priceVal;
+                    const canAfford = isCurrentLeader && (isTopicSwap || points >= priceVal);
 
                     return (
                       <div
@@ -887,17 +909,18 @@ export default function MysteryBoxDashboard() {
             <div>
               <p className="text-[10px] uppercase tracking-[0.2em] text-primary-container font-label-sm m-0">Point Shop Advantage</p>
               <h3 className="text-xl font-headline-md text-on-surface uppercase tracking-widest mt-1 mb-0">Change Challenge Topic</h3>
-              <p className="text-xs text-on-surface-variant mt-2 mb-0">Same-difficulty topic swaps cost {topicSwapCost} points and can be used once per team.</p>
+              <p className="text-xs text-on-surface-variant mt-2 mb-0">One-time leader swap: upgrades cost 50–75 points, same-tier changes cost 100, and downgrades cost 125–150.</p>
             </div>
             <button onClick={() => setTopicModalOpen(false)} className="text-white/60 hover:text-white border-0 bg-transparent cursor-pointer text-lg">✕</button>
           </div>
 
           <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+            {topicsLoading && <p className="text-sm text-primary-container text-center py-10">Loading available topics…</p>}
             {topics.map((topic) => {
               const currentId = parsedQuestion?.id;
-              const sameTier = String(topic.difficulty || '').toLowerCase() === String(parsedQuestion?.difficulty || '').toLowerCase();
               const isCurrent = topic.id === currentId;
-              const canSelect = sameTier && !isCurrent && points >= topicSwapCost && !team.hasChangedQuestion;
+              const swapCost = getTopicSwapCost(parsedQuestion?.difficulty, topic.difficulty);
+              const canSelect = !isCurrent && swapCost !== null && points >= swapCost && !team.hasChangedQuestion;
               const selected = selectedTopicId === topic.id;
               return (
                 <button
@@ -910,13 +933,13 @@ export default function MysteryBoxDashboard() {
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm text-on-surface font-bold">{topic.title}</span>
                     <span className="text-[9px] uppercase tracking-widest text-primary-container border border-primary-container/30 px-2 py-1 rounded">
-                      {topic.difficulty} · {topic.points} pts
+                      {topic.difficulty} · swap {swapCost ?? '—'} pts
                     </span>
                   </div>
                   <p className="text-xs text-on-surface-variant leading-5 mt-2 mb-0">{topic.desc}</p>
                   {!canSelect && (
                     <p className="text-[10px] uppercase tracking-widest text-red-300 mt-2 mb-0">
-                      {isCurrent ? 'Current topic' : !sameTier ? 'Same difficulty only' : team.hasChangedQuestion ? 'Swap already used' : 'Not enough points'}
+                      {isCurrent ? 'Current topic' : team.hasChangedQuestion ? 'Swap already used' : swapCost === null ? 'Unknown difficulty' : `Need ${swapCost} points`}
                     </p>
                   )}
                 </button>
@@ -928,8 +951,8 @@ export default function MysteryBoxDashboard() {
             <button type="button" onClick={() => setTopicModalOpen(false)} className="flex-1 bg-white/5 hover:bg-white/10 text-on-surface-variant py-3 rounded-xl text-xs uppercase font-headline-md tracking-widest font-bold cursor-pointer border-0">
               Cancel
             </button>
-            <button type="button" disabled={!selectedTopicId} onClick={handleConfirmTopicSwap} className="flex-1 bg-primary-container disabled:bg-white/5 disabled:text-on-surface-variant/40 text-background py-3 rounded-xl text-xs uppercase font-headline-md tracking-widest font-bold cursor-pointer border-0">
-              Confirm Swap
+            <button type="button" disabled={!selectedTopicId || topicSwapPending} onClick={handleConfirmTopicSwap} className="flex-1 bg-primary-container disabled:bg-white/5 disabled:text-on-surface-variant/40 text-background py-3 rounded-xl text-xs uppercase font-headline-md tracking-widest font-bold cursor-pointer border-0">
+              {topicSwapPending ? 'Applying Swap…' : selectedTopicId ? `Confirm Swap · ${getTopicSwapCost(parsedQuestion?.difficulty, topics.find((topic) => topic.id === selectedTopicId)?.difficulty)} pts` : 'Confirm Swap'}
             </button>
           </div>
         </div>

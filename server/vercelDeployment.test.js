@@ -27,6 +27,7 @@ test('Vercel exposes one Express catch-all function', async () => {
 
 test('Vercel routes API traffic before the SPA fallback', async () => {
   const config = JSON.parse(await readFile(path.join(root, 'vercel.json'), 'utf8'));
+  assert.deepEqual(config.regions, ['sin1']);
   assert.deepEqual(config.rewrites, [
     { source: '/api/:path*', destination: '/api?__vercel_api_path=:path*' },
     { source: '/(.*)', destination: '/index.html' },
