@@ -43,10 +43,10 @@ test('requires bounded integer admin adjustments and an audit reason', () => {
 test('mystery questions are selected from the server-owned catalog', () => {
   const first = pickMysteryQuestion(() => 0);
   const last = pickMysteryQuestion(() => 0.999999);
-  assert.equal(first.title, 'Cloud Resume Builder with CI/CD');
+  assert.equal(first.title, 'Adaptive Campus Services Concierge');
   assert.equal(first.points, 100);
-  assert.equal(last.title, 'Autonomous Cloud Security Incident Responder');
-  assert.equal(last.points, 180);
+  assert.equal(last.title, 'Inclusive Campus Service Redesign');
+  assert.equal(last.points, 100);
   assert.notEqual(first, pickMysteryQuestion(() => 0));
 });
 
@@ -136,25 +136,15 @@ test('game mode validation accepts explicit admin actions only', () => {
   assert.throws(() => validateGameMode({ enabled: 'true' }), /boolean/i);
 });
 
-test('topic swap quotes price upgrades, same-tier moves, and downgrades', () => {
-  const current = { id: 'easy-1', difficulty: 'Easy', points: 100 };
-  const target = { id: 'easy-2', difficulty: 'Easy', points: 100 };
+test('topic swaps use one fixed price and lock once Chaos Mode is revealed', () => {
+  const current = { id: 'ai-adaptive-campus-concierge', points: 100 };
+  const target = { id: 'fintech-fraud-network-explorer', points: 100 };
   assert.deepEqual(getTopicSwapQuote({ currentTopic: current, targetTopic: target, teamPoints: 100, hasChangedQuestion: false }), {
     cost: 100,
     allowed: true,
   });
   assert.deepEqual(getTopicSwapQuote({ currentTopic: current, targetTopic: target, teamPoints: 99, hasChangedQuestion: false }), {
     cost: 100,
-    allowed: false,
-    reason: 'insufficient-points',
-  });
-  assert.deepEqual(getTopicSwapQuote({ currentTopic: current, targetTopic: { id: 'med-1', difficulty: 'Medium' }, teamPoints: 75, hasChangedQuestion: false }), { cost: 75, allowed: true });
-  assert.deepEqual(getTopicSwapQuote({ currentTopic: current, targetTopic: { id: 'hard-1', difficulty: 'Hard' }, teamPoints: 50, hasChangedQuestion: false }), { cost: 50, allowed: true });
-  assert.deepEqual(getTopicSwapQuote({ currentTopic: { id: 'med-1', difficulty: 'Medium' }, targetTopic: { id: 'hard-1', difficulty: 'Hard' }, teamPoints: 50, hasChangedQuestion: false }), { cost: 50, allowed: true });
-  assert.deepEqual(getTopicSwapQuote({ currentTopic: { id: 'hard-1', difficulty: 'Hard' }, targetTopic: { id: 'med-1', difficulty: 'Medium' }, teamPoints: 125, hasChangedQuestion: false }), { cost: 125, allowed: true });
-  assert.deepEqual(getTopicSwapQuote({ currentTopic: { id: 'hard-1', difficulty: 'Hard' }, targetTopic: current, teamPoints: 150, hasChangedQuestion: false }), { cost: 150, allowed: true });
-  assert.deepEqual(getTopicSwapQuote({ currentTopic: { id: 'med-1', difficulty: 'Medium' }, targetTopic: current, teamPoints: 149, hasChangedQuestion: false }), {
-    cost: 150,
     allowed: false,
     reason: 'insufficient-points',
   });
@@ -168,4 +158,6 @@ test('topic swap quotes price upgrades, same-tier moves, and downgrades', () => 
     allowed: false,
     reason: 'topic-swap-used',
   });
+  assert.deepEqual(getTopicSwapQuote({ currentTopic: current, targetTopic: target, teamPoints: 200, isOpened: false }), { cost: 100, allowed: false, reason: 'topic-not-revealed' });
+  assert.deepEqual(getTopicSwapQuote({ currentTopic: current, targetTopic: target, teamPoints: 200, chaosRevealed: true }), { cost: 100, allowed: false, reason: 'chaos-revealed' });
 });

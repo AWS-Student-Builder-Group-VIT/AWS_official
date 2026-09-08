@@ -12,7 +12,6 @@ import SpinWheel from './components/SpinWheel';
 import { games } from '../gamesRegistry';
 import { SCORED_TEAM_GAMES } from '../../utils/teamGameScoring';
 import { fetchMysteryTopics, fetchTeamGameScores, swapTeamTopic } from '../../utils/auth';
-import { getTopicSwapCost } from '../../../shared/topicSwapPricing';
 import {
   HACKATHON_TOKEN_KEY,
   MEMBER_EMAIL_KEY,
@@ -32,6 +31,7 @@ export default function MysteryBoxDashboard() {
   const [selectedTopicId, setSelectedTopicId] = useState('');
   const [topicsLoading, setTopicsLoading] = useState(false);
   const [topicSwapPending, setTopicSwapPending] = useState(false);
+  const [chaosRevealed, setChaosRevealed] = useState(false);
 
   const [team, setTeam] = useState(() => {
     if (typeof window === 'undefined') return null;
@@ -279,14 +279,26 @@ export default function MysteryBoxDashboard() {
   // Point Shop Purchase handler
   const handlePurchase = async (item) => {
     if (item.id === 'change-topic' || item.isSpecialSwap) {
-      if (!isCurrentLeader || team.hasChangedQuestion) return;
+      if (!isCurrentLeader) return;
+      if (!team.isOpened) {
+        setNotification('Reveal your original challenge before changing it.');
+        return;
+      }
+      if (team.hasChangedQuestion) {
+        setNotification('This team has already used its one challenge swap.');
+        return;
+      }
+      if (team.isChaosOpened) {
+        setNotification('Challenge swaps are locked after Chaos Mode is revealed.');
+        return;
+      }
       setSelectedTopicId('');
       setTopicModalOpen(true);
-      if (topics.length) return;
       setTopicsLoading(true);
       const response = await fetchMysteryTopics();
       if (response.ok) {
         setTopics(response.topics || []);
+        setChaosRevealed(Boolean(response.chaosRevealed));
       } else {
         setNotification(response.error || 'Could not load challenge topics');
       }
@@ -566,6 +578,7 @@ export default function MysteryBoxDashboard() {
                         <h4 className="mt-4 text-lg font-headline-md text-on-surface uppercase tracking-wide">
                           Subject: {questionTitle}
                         </h4>
+                        {parsedQuestion?.track && <p className="text-[10px] uppercase tracking-[0.18em] text-primary-container mt-2 mb-0">Track: {parsedQuestion.track}</p>}
 
                         <div className="mt-3 p-5 rounded-xl border border-primary-container/20 bg-background/60 relative overflow-hidden">
                           <div className="absolute top-0 left-0 w-1 h-full bg-primary-container" />
@@ -593,7 +606,7 @@ export default function MysteryBoxDashboard() {
                     <div className="flex justify-between items-center mb-4">
                       <p className="text-[10px] uppercase tracking-[0.2em] text-red-400 font-label-sm m-0">Chaos Mode Injector</p>
                       <span className="px-2.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider font-label-sm bg-red-500/10 border border-red-500/30 text-red-400">
-                        Admin Controlled
+                        {team.isChaosResolved ? 'Resolved' : team.isChaosOpened ? 'Active' : 'Sealed'}
                       </span>
                     </div>
 
@@ -614,12 +627,13 @@ export default function MysteryBoxDashboard() {
 
                       <div className="mt-5 p-4 rounded-xl border border-red-500/30 bg-red-950/20 max-w-[480px]">
                         <p className="text-[15px] font-headline-md text-red-300 font-bold uppercase tracking-wider m-0">
-                          "Chaos event awaits - Revealed by admins after Round 1"
+                          {team.isChaosOpened && team.chaosEvent ? team.chaosEvent.title : 'Chaos event awaits — revealed by organizers'}
                         </p>
+                        {team.isChaosOpened && team.chaosEvent && <p className="text-xs text-on-surface-variant leading-6 mt-3 mb-0">Required adaptation: {team.chaosEvent.desc}</p>}
                       </div>
 
                       <p className="text-xs text-on-surface-variant max-w-[420px] mt-3 mb-0">
-                        Stay tuned. When Round 1 concludes, event organizers will trigger the live system disruption for all qualified teams.
+                        {team.isChaosResolved ? 'The organizer has marked this adaptation as resolved. Keep the requirement visible in your final build.' : team.isChaosOpened ? 'Chaos Mode is active. Incorporate this required adaptation into your solution.' : 'Stay tuned. Organizers will reveal one curated adaptation for every team at the same time.'}
                       </p>
                     </div>
                   </div>
@@ -940,18 +954,23 @@ export default function MysteryBoxDashboard() {
             <div>
               <p className="text-[10px] uppercase tracking-[0.2em] text-primary-container font-label-sm m-0">Point Shop Advantage</p>
               <h3 className="text-xl font-headline-md text-on-surface uppercase tracking-widest mt-1 mb-0">Change Challenge Topic</h3>
-              <p className="text-xs text-on-surface-variant mt-2 mb-0">One-time leader swap: upgrades cost 50–75 points, same-tier changes cost 100, and downgrades cost 125–150.</p>
+              <p className="text-xs text-on-surface-variant mt-2 mb-0">Leader-only, one-time exact challenge swap. Every track is available for a fixed 100 points.</p>
             </div>
             <button onClick={() => setTopicModalOpen(false)} className="text-white/60 hover:text-white border-0 bg-transparent cursor-pointer text-lg">✕</button>
           </div>
 
           <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
             {topicsLoading && <p className="text-sm text-primary-container text-center py-10">Loading available topics…</p>}
-            {topics.map((topic) => {
+            {Object.entries(topics.reduce((groups, topic) => {
+              (groups[topic.track] ||= []).push(topic);
+              return groups;
+            }, {})).map(([track, trackTopics]) => (
+              <div key={track} className="space-y-2 pb-3">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-primary-container font-bold mt-4 mb-2">Track: {track}</p>
+                {trackTopics.map((topic) => {
               const currentId = parsedQuestion?.id;
               const isCurrent = topic.id === currentId;
-              const swapCost = getTopicSwapCost(parsedQuestion?.difficulty, topic.difficulty);
-              const canSelect = !isCurrent && swapCost !== null && points >= swapCost && !team.hasChangedQuestion;
+              const canSelect = team.isOpened && !isCurrent && points >= 100 && !team.hasChangedQuestion && !chaosRevealed && !team.isChaosOpened;
               const selected = selectedTopicId === topic.id;
               return (
                 <button
@@ -964,18 +983,20 @@ export default function MysteryBoxDashboard() {
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm text-on-surface font-bold">{topic.title}</span>
                     <span className="text-[9px] uppercase tracking-widest text-primary-container border border-primary-container/30 px-2 py-1 rounded">
-                      {topic.difficulty} · swap {swapCost ?? '—'} pts
+                      100 pts
                     </span>
                   </div>
                   <p className="text-xs text-on-surface-variant leading-5 mt-2 mb-0">{topic.desc}</p>
                   {!canSelect && (
                     <p className="text-[10px] uppercase tracking-widest text-red-300 mt-2 mb-0">
-                      {isCurrent ? 'Current topic' : team.hasChangedQuestion ? 'Swap already used' : swapCost === null ? 'Unknown difficulty' : `Need ${swapCost} points`}
+                      {isCurrent ? 'Current challenge' : !team.isOpened ? 'Reveal your challenge first' : chaosRevealed || team.isChaosOpened ? 'Locked after Chaos Mode' : team.hasChangedQuestion ? 'Swap already used' : 'Need 100 points'}
                     </p>
                   )}
                 </button>
               );
             })}
+              </div>
+            ))}
           </div>
 
           <div className="flex gap-3 mt-6">
@@ -983,7 +1004,7 @@ export default function MysteryBoxDashboard() {
               Cancel
             </button>
             <button type="button" disabled={!selectedTopicId || topicSwapPending} onClick={handleConfirmTopicSwap} className="flex-1 bg-primary-container disabled:bg-white/5 disabled:text-on-surface-variant/40 text-background py-3 rounded-xl text-xs uppercase font-headline-md tracking-widest font-bold cursor-pointer border-0">
-              {topicSwapPending ? 'Applying Swap…' : selectedTopicId ? `Confirm Swap · ${getTopicSwapCost(parsedQuestion?.difficulty, topics.find((topic) => topic.id === selectedTopicId)?.difficulty)} pts` : 'Confirm Swap'}
+              {topicSwapPending ? 'Applying Swap…' : selectedTopicId ? 'Confirm Swap · 100 pts' : 'Confirm Swap'}
             </button>
           </div>
         </div>
