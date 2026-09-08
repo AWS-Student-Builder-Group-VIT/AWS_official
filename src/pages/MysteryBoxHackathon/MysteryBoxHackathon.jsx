@@ -34,7 +34,6 @@ import {
   SHOP_ITEMS,
   REWARDS,
   TWISTS,
-  CHAOS_EVENTS,
   PENALTIES,
   FINALE_PILLS,
 } from './data';
@@ -57,58 +56,10 @@ import {
 const TEAM_STORAGE_KEY = 'mystery-box-hackathon-team';
 const HACKATHON_TOKEN_KEY = 'mystery-box-hackathon-token';
 
-// eslint-disable-next-line react-refresh/only-export-components
-export const MYSTERY_BOX_QUESTIONS = [
-  {
-    title: 'Serverless Student Portal',
-    desc: 'Design a serverless, highly-scalable backend on AWS (Lambda, API Gateway, DynamoDB) that allows student clubs to manage events, registrations, and announcements with zero server costs.',
-    points: 150
-  },
-  {
-    title: 'AWS Cost-Optimizer Dashboard',
-    desc: 'Create a dashboard app that analyzes AWS billing reports to find idle EC2 instances, underutilized S3 buckets, and provides actionable recommendations to save costs.',
-    points: 120
-  },
-  {
-    title: 'AI Study Companion',
-    desc: 'Build a web app using Amazon Bedrock and AWS Lambda that allows students to upload syllabus docs or notes and automatically generates interactive quizzes and flashcards.',
-    points: 180
-  },
-  {
-    title: 'Cloud Resume Builder with CI/CD',
-    desc: 'Design a web app that helps students build their resume and deploys it automatically as a static website on AWS S3/CloudFront, integrated with a mock GitHub Action pipeline.',
-    points: 100
-  },
-  {
-    title: 'Real-time Collaborative Whiteboard',
-    desc: 'Develop a real-time collaborative whiteboard app using AWS AppSync or WebSockets that allows student teams to map out architectural diagrams synchronously.',
-    points: 160
-  },
-  {
-    title: 'Smart Campus Navigation Engine',
-    desc: 'Build a campus guide prototype using AWS Location Service and Amazon Lex that helps new students navigate a campus, find classrooms, and ask assistant bots for help.',
-    points: 140
-  },
-  {
-    title: 'IoT Smart Energy Monitor',
-    desc: 'Design a simulated IoT dashboard using AWS IoT Core that ingests temperature and power data from smart classrooms, visualizes it, and alerts admins when energy waste is detected.',
-    points: 130
-  },
-  {
-    title: 'Automated Code Debugger Bot',
-    desc: 'Develop an automated code reviewer tool that integrates with a Git repo, runs code analysis via Amazon CodeGuru or Bedrock, and leaves helpful debugging comments on student pull requests.',
-    points: 170
-  },
-  {
-    title: 'IVS Stream Hub',
-    desc: 'Create a low-latency streaming hub using Amazon IVS (Interactive Video Service) that allows developers to stream technical workshops and embed interactive live chat polls.',
-    points: 150
-  },
-  {
-    title: 'Attendance via Face Recognition',
-    desc: 'Build a fast attendance system prototype that allows event organizers to take a photo of attendees and verify their registration in real-time using Amazon Rekognition.',
-    points: 160
-  }
+const CHAOS_TEASERS = [
+  'Every team receives one curated, challenge-specific adaptation.',
+  'Chaos Mode is revealed globally by organizers at the same time.',
+  'The adaptation remains visible through final evaluation.',
 ];
 
 const createTeamCode = () => {
@@ -1095,7 +1046,7 @@ function MysteryBoxHackathonInner() {
             </FadeInSection>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-10">
-              {CHAOS_EVENTS.map((evt, i) => (
+              {CHAOS_TEASERS.map((message, i) => (
                 <FadeInSection key={i} delay={i * 0.06}>
                   <div className="relative overflow-hidden p-5 border"
                        style={{
@@ -1108,8 +1059,8 @@ function MysteryBoxHackathonInner() {
                       <span className="w-1.5 h-1.5 rounded-full bg-[#ff5050] animate-pulse" />
                       INCOMING EVENT
                     </div>
-                    <h4 className="text-[15px] font-headline-md text-on-surface mb-1.5 uppercase tracking-widest">{evt.icon} {evt.title}</h4>
-                    <p className="text-[12px] text-on-surface-variant font-body-md">{evt.desc}</p>
+                    <h4 className="text-[15px] font-headline-md text-on-surface mb-1.5 uppercase tracking-widest">Curated adaptation</h4>
+                    <p className="text-[12px] text-on-surface-variant font-body-md">{message}</p>
                   </div>
                 </FadeInSection>
               ))}

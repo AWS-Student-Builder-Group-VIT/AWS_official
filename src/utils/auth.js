@@ -1,4 +1,5 @@
 // ── Auth helpers used across the app ──────────────────────────
+import { readApiResponse } from './apiResponse.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -131,9 +132,9 @@ export async function adminLogin(adminId, password) {
       signal: ctrl.signal,
     });
     clearTimeout(timer);
-    const data = await res.json();
-    if (res.ok) return { ok: true, token: data.token };
-    return { ok: false, error: data.error || `HTTP ${res.status}` };
+    const { data, error } = await readApiResponse(res, 'Backend not reachable');
+    if (res.ok && data.token) return { ok: true, token: data.token };
+    return { ok: false, error };
   } catch (e) {
     return { ok: false, error: e.name === 'AbortError' ? 'Backend not reachable (timeout)' : `Network error: ${e.message}` };
   }
@@ -353,28 +354,43 @@ export async function swapTeamTopic({ code, topicId }) {
   }
 }
 
-/** Trigger or resolve chaos for team or all teams */
-export async function triggerAdminTeamChaos(adminToken, { code, isAll, chaosEvent, resolve, isOpened }) {
+export async function fetchAdminChallenges(adminToken) {
   try {
-    const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/chaos`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-      body: JSON.stringify({ code, isAll, chaosEvent, resolve, isOpened })
+    const res = await fetch(`${API_URL}/api/admin/mystery-box/challenges`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
     });
     const data = await res.json();
-    return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
+    return res.ok
+      ? { ok: true, challenges: data.challenges || [], chaosRevealedAt: data.chaosRevealedAt || null }
+      : { ok: false, error: data.error, challenges: [], chaosRevealedAt: null };
   } catch {
-    return { ok: false, error: 'Network error' };
+    return { ok: false, error: 'Network error', challenges: [] };
   }
 }
 
+export async function revealAdminChaosMode(adminToken) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/mystery-box/chaos/reveal`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}` } });
+    const data = await res.json();
+    return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
+  } catch { return { ok: false, error: 'Network error' }; }
+}
+
+export async function resolveAdminTeamChaos(adminToken, code) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/${code}/chaos/resolve`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}` } });
+    const data = await res.json();
+    return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
+  } catch { return { ok: false, error: 'Network error' }; }
+}
+
 /** Reassign challenge question */
-export async function reassignAdminTeamTopic(adminToken, { code, mysteryQuestion, resetSwapUsed }) {
+export async function reassignAdminTeamTopic(adminToken, { code, challengeId, resetSwapUsed }) {
   try {
     const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/reassign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-      body: JSON.stringify({ code, mysteryQuestion, resetSwapUsed })
+      body: JSON.stringify({ code, challengeId, resetSwapUsed })
     });
     const data = await res.json();
     return res.ok ? { ok: true, team: data.team } : { ok: false, error: data.error };

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   adminLogin,
   fetchAdminScores,
@@ -13,12 +12,13 @@ import {
   updateAdminGameMode,
   updateAdminTeamGameLimit,
   resetAdminTeamGameAttempt,
-  triggerAdminTeamChaos,
+  fetchAdminChallenges,
+  revealAdminChaosMode,
+  resolveAdminTeamChaos,
   reassignAdminTeamTopic,
   deleteAdminHackathonTeam,
   removeAdminHackathonMember,
 } from '../utils/auth';
-import { MYSTERY_BOX_QUESTIONS, CHAOS_EVENTS } from './MysteryBoxHackathon/data';
 
 const QUIZ_TYPE_COLOR = {
   quiz:       { bg: 'rgba(255,153,0,0.15)',  border: 'rgba(255,153,0,0.5)',  text: '#FF9900' },
@@ -30,7 +30,9 @@ const ACTIVITY_TYPE_CONFIG = {
   TOPIC_SWAPPED:   { icon: '🔄', label: 'Topic Swapped',   bg: 'rgba(0,168,224,0.15)',  border: 'rgba(0,168,224,0.4)',  text: '#00a8e0' },
   TOPIC_DECRYPTED: { icon: '🎁', label: 'Box Unveiled',    bg: 'rgba(168,224,99,0.15)', border: 'rgba(168,224,99,0.4)', text: '#a8e063' },
   CHAOS_INJECTED:  { icon: '🌪️', label: 'Chaos Injected', bg: 'rgba(239,68,68,0.15)',  border: 'rgba(239,68,68,0.4)',  text: '#f87171' },
+  CHAOS_REVEALED:  { icon: '🌪️', label: 'Chaos Revealed', bg: 'rgba(239,68,68,0.15)', border: 'rgba(239,68,68,0.4)', text: '#f87171' },
   CHAOS_RESOLVED:  { icon: '✓',  label: 'Chaos Mitigated',bg: 'rgba(52,211,153,0.15)', border: 'rgba(52,211,153,0.4)', text: '#34d399' },
+  CHALLENGE_REASSIGNED: { icon: '🔄', label: 'Challenge Reassigned', bg: 'rgba(0,168,224,0.15)', border: 'rgba(0,168,224,0.4)', text: '#00a8e0' },
   TEAM_CREATED:    { icon: '👥', label: 'Squad Created',  bg: 'rgba(192,132,252,0.15)',border: 'rgba(192,132,252,0.4)',text: '#c084fc' },
   MEMBER_JOINED:   { icon: '👤', label: 'Member Joined',  bg: 'rgba(129,140,248,0.15)',border: 'rgba(129,140,248,0.4)',text: '#818cf8' },
   POINTS_ADJUSTED: { icon: '⚡', label: 'Points Adjusted',bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', text: '#fbbf24' },
@@ -169,9 +171,10 @@ function Dashboard({ token, onLogout }) {
   const [pointsModalTeam, setPointsModalTeam] = useState(null);
   const [pointDeltaInput, setPointDeltaInput] = useState('');
   const [chaosModalTeam, setChaosModalTeam] = useState(null);
-  const [selectedChaosEvent, setSelectedChaosEvent] = useState(CHAOS_EVENTS[0]?.title || '');
   const [reassignModalTeam, setReassignModalTeam] = useState(null);
-  const [selectedReassignQuestion, setSelectedReassignQuestion] = useState(MYSTERY_BOX_QUESTIONS[0]?.id || '');
+  const [challenges, setChallenges] = useState([]);
+  const [chaosRevealedAt, setChaosRevealedAt] = useState(null);
+  const [selectedReassignQuestion, setSelectedReassignQuestion] = useState('');
   const [resetSwapCheckbox, setResetSwapCheckbox] = useState(false);
   const [gameModeEnabled, setGameModeEnabled] = useState(false);
   const [gameLimitTeam, setGameLimitTeam] = useState(null);
@@ -234,9 +237,14 @@ function Dashboard({ token, onLogout }) {
   };
 
   const loadHackathonData = async () => {
-    const [teams, mode] = await Promise.all([fetchAdminHackathonTeams(token), fetchAdminGameMode(token)]);
+    const [teams, mode, catalog] = await Promise.all([fetchAdminHackathonTeams(token), fetchAdminGameMode(token), fetchAdminChallenges(token)]);
     setHackathonTeams(teams);
     if (mode.ok) setGameModeEnabled(mode.enabled);
+    if (catalog.ok) {
+      setChallenges(catalog.challenges);
+      setChaosRevealedAt(catalog.chaosRevealedAt);
+      setSelectedReassignQuestion((current) => current || catalog.challenges[0]?.id || '');
+    }
     setHackathonLoading(false);
   };
 
@@ -263,13 +271,15 @@ function Dashboard({ token, onLogout }) {
   };
 
   useEffect(() => {
+    // The dashboard intentionally performs its initial fetch when the authenticated token changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadAll();
     // Real-time live polling for activity logs and team updates every 2.5 seconds
     const interval = setInterval(() => {
       pollActivities();
     }, 2500);
     return () => clearInterval(interval);
-  }, [token]);
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Quiz Handlers
   const handleStatusChange = async (action) => {
@@ -313,20 +323,12 @@ function Dashboard({ token, onLogout }) {
     }
   };
 
-  const handleTriggerChaos = async (isAll = false, resolve = false) => {
-    const eventObj = CHAOS_EVENTS.find(e => e.title === selectedChaosEvent) || CHAOS_EVENTS[0];
-    const targetCode = isAll ? null : chaosModalTeam?.code;
-
-    const res = await triggerAdminTeamChaos(token, {
-      code: targetCode,
-      isAll,
-      chaosEvent: eventObj,
-      resolve,
-      isOpened: true
-    });
+  const handleTriggerChaos = async (resolve = false) => {
+    const res = resolve ? await resolveAdminTeamChaos(token, chaosModalTeam?.code) : await revealAdminChaosMode(token);
 
     if (res.ok) {
-      notify(resolve ? 'Chaos Event marked as resolved!' : (isAll ? 'Chaos Event injected globally for all teams!' : `Chaos injected for team ${chaosModalTeam?.teamName}!`));
+      if (!resolve && res.revealedAt) setChaosRevealedAt(res.revealedAt);
+      notify(resolve ? 'Chaos adaptation marked as resolved!' : 'Chaos Mode permanently revealed for all teams!');
       setChaosModalTeam(null);
       loadHackathonData();
       pollActivities();
@@ -337,15 +339,15 @@ function Dashboard({ token, onLogout }) {
 
   const handleReassignTopic = async () => {
     if (!reassignModalTeam) return;
-    const qObj = MYSTERY_BOX_QUESTIONS.find(q => q.id === selectedReassignQuestion) || MYSTERY_BOX_QUESTIONS[0];
+    const qObj = challenges.find(q => q.id === selectedReassignQuestion) || challenges[0];
     const res = await reassignAdminTeamTopic(token, {
       code: reassignModalTeam.code,
-      mysteryQuestion: qObj,
+      challengeId: qObj?.id,
       resetSwapUsed: resetSwapCheckbox
     });
 
     if (res.ok) {
-      notify(`Reassigned topic for ${reassignModalTeam.teamName} to "${qObj.title}" [${qObj.difficulty}]`);
+      notify(`Reassigned challenge for ${reassignModalTeam.teamName} to "${qObj.title}" [${qObj.track}]`);
       setReassignModalTeam(null);
       setResetSwapCheckbox(false);
       loadHackathonData();
@@ -439,7 +441,7 @@ function Dashboard({ token, onLogout }) {
       alert('No hackathon teams to export.');
       return;
     }
-    const headers = ['Team Code', 'Team Name', 'Points', 'Difficulty', 'Question Title', 'Topic Changed', 'Chaos Active', 'Members Count', 'Leader Email', 'All Members', 'Registered Date'];
+    const headers = ['Team Code', 'Team Name', 'Points', 'Track', 'Question Title', 'Topic Changed', 'Chaos Active', 'Members Count', 'Leader Email', 'All Members', 'Registered Date'];
     const rows = hackathonTeams.map(t => {
       const q = typeof t.mysteryQuestion === 'object' ? t.mysteryQuestion : {};
       const leader = (t.members || []).find(m => m.isLeader)?.email || '';
@@ -448,7 +450,7 @@ function Dashboard({ token, onLogout }) {
         `"${t.code}"`,
         `"${(t.teamName || '').replace(/"/g, '""')}"`,
         t.points || 0,
-        `"${q.difficulty || 'Easy'}"`,
+        `"${q.track || 'Unassigned'}"`,
         `"${(q.title || 'Sealed').replace(/"/g, '""')}"`,
         t.hasChangedQuestion ? 'YES' : 'NO',
         t.isChaosOpened ? (t.isChaosResolved ? 'RESOLVED' : 'ACTIVE') : 'NO',
@@ -479,11 +481,9 @@ function Dashboard({ token, onLogout }) {
         (t.members || []).some(m => (m.email || '').toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q));
 
       const parsedQ = typeof t.mysteryQuestion === 'object' ? t.mysteryQuestion : {};
-      const diff = (parsedQ.difficulty || 'easy').toLowerCase();
+      const track = (parsedQ.track || '').toLowerCase();
 
-      if (hackathonFilter === 'easy') return matchSearch && diff === 'easy';
-      if (hackathonFilter === 'medium') return matchSearch && diff === 'medium';
-      if (hackathonFilter === 'hard') return matchSearch && diff === 'hard';
+      if (hackathonFilter.startsWith('track:')) return matchSearch && track === hackathonFilter.slice(6);
       if (hackathonFilter === 'chaos') return matchSearch && t.isChaosOpened && !t.isChaosResolved;
       if (hackathonFilter === 'swapped') return matchSearch && t.hasChangedQuestion;
       if (hackathonFilter === 'opened') return matchSearch && t.isOpened;
@@ -642,10 +642,11 @@ function Dashboard({ token, onLogout }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleTriggerChaos(true, false)}
-                  className="bg-red-500/20 border border-red-500/50 hover:bg-red-500 hover:text-white text-red-300 font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all cursor-pointer flex items-center gap-2"
+                  onClick={() => handleTriggerChaos(false)}
+                  disabled={Boolean(chaosRevealedAt)}
+                  className="bg-red-500/20 border border-red-500/50 hover:bg-red-500 hover:text-white text-red-300 font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span>🌪️</span> Trigger Chaos (All Teams)
+                  <span>🌪️</span> {chaosRevealedAt ? 'Chaos Mode Revealed' : 'Reveal Chaos Mode'}
                 </button>
                 <button
                   type="button"
@@ -741,10 +742,10 @@ function Dashboard({ token, onLogout }) {
                     onChange={e => setHackathonFilter(e.target.value)}
                     className="bg-white/5 border border-white/10 px-3 py-2.5 font-mono text-xs text-[#dbc2ad] focus:outline-none focus:border-[#FF9900]"
                   >
-                    <option value="all">All Tiers / Categories</option>
-                    <option value="easy">Easy Tier (100 pts)</option>
-                    <option value="medium">Medium Tier (140 pts)</option>
-                    <option value="hard">Hard Tier (180 pts)</option>
+                    <option value="all">All Tracks</option>
+                    {[...new Set(challenges.map((challenge) => challenge.track))].map((track) => (
+                      <option key={track} value={`track:${track.toLowerCase()}`}>{track}</option>
+                    ))}
                     <option value="opened">Decrypted Topics Only</option>
                     <option value="chaos">Active Chaos Only</option>
                     <option value="swapped">Topic Swapped (1x Used)</option>
@@ -784,9 +785,7 @@ function Dashboard({ token, onLogout }) {
                         {filteredHackathonTeams.map((t) => {
                           const q = typeof t.mysteryQuestion === 'object' && t.mysteryQuestion ? t.mysteryQuestion : null;
                           const leader = (t.members || []).find(m => m.isLeader);
-                          const isHard = q?.difficulty?.toLowerCase() === 'hard';
-                          const isMed = q?.difficulty?.toLowerCase() === 'medium';
-                          const tierColor = isHard ? '#c084fc' : (isMed ? '#FF9900' : '#a8e063');
+                          const tierColor = '#00a8e0';
 
                           return (
                             <tr key={t.code} className="hover:bg-white/3 transition-colors">
@@ -837,7 +836,7 @@ function Dashboard({ token, onLogout }) {
                                           border: `1px solid ${tierColor}40`
                                         }}
                                       >
-                                        {q?.difficulty || 'Easy'} Tier ({q?.points || 100} pts)
+                                        {q?.track || 'Track pending'} ({q?.points || 100} pts)
                                       </span>
                                       {t.hasChangedQuestion && (
                                         <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] rounded uppercase font-bold">
@@ -907,7 +906,6 @@ function Dashboard({ token, onLogout }) {
                                   type="button"
                                   onClick={() => {
                                     setChaosModalTeam(t);
-                                    setSelectedChaosEvent(CHAOS_EVENTS[0]?.title || '');
                                   }}
                                   title="Chaos Event Controls"
                                   className="px-2.5 py-1.5 bg-white/5 hover:bg-red-500 hover:text-white border border-white/10 text-red-300 font-mono text-[11px] font-bold uppercase transition-all cursor-pointer rounded"
@@ -918,7 +916,7 @@ function Dashboard({ token, onLogout }) {
                                   type="button"
                                   onClick={() => {
                                     setReassignModalTeam(t);
-                                    setSelectedReassignQuestion(MYSTERY_BOX_QUESTIONS[0]?.id || '');
+                                    setSelectedReassignQuestion(challenges[0]?.id || '');
                                     setResetSwapCheckbox(false);
                                   }}
                                   title="Reassign Problem Topic"
@@ -1256,7 +1254,7 @@ function Dashboard({ token, onLogout }) {
               <div className="flex justify-between items-center mb-2">
                 <span className="text-xs font-bold text-[#FF9900] uppercase tracking-wider">Active Problem Statement</span>
                 <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-white/10 text-white">
-                  {inspectTeam.mysteryQuestion?.difficulty || 'Easy'} Tier ({inspectTeam.mysteryQuestion?.points || 100} pts)
+                  {inspectTeam.mysteryQuestion?.track || 'Track pending'} ({inspectTeam.mysteryQuestion?.points || 100} pts)
                 </span>
               </div>
               <div className="text-sm font-bold text-white">{inspectTeam.mysteryQuestion?.title || 'Sealed Box'}</div>
@@ -1349,7 +1347,7 @@ function Dashboard({ token, onLogout }) {
                   type="button"
                   onClick={() => {
                     setReassignModalTeam(inspectTeam);
-                    setSelectedReassignQuestion(MYSTERY_BOX_QUESTIONS[0]?.id || '');
+                    setSelectedReassignQuestion(challenges[0]?.id || '');
                     setResetSwapCheckbox(false);
                   }}
                   className="px-3 py-2 bg-[#00a8e0] text-white font-bold text-xs uppercase cursor-pointer rounded"
@@ -1547,34 +1545,14 @@ function Dashboard({ token, onLogout }) {
               </div>
             </div>
 
-            <div className="mb-5">
-              <label className="text-[10px] text-[#dbc2ad] uppercase block mb-2">Select Chaos Event to Inject:</label>
-              <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                {CHAOS_EVENTS.map(ev => (
-                  <div
-                    key={ev.title}
-                    onClick={() => setSelectedChaosEvent(ev.title)}
-                    className={`p-3 rounded border transition-all cursor-pointer ${
-                      selectedChaosEvent === ev.title
-                        ? 'bg-red-500/20 border-red-500 text-white'
-                        : 'bg-white/3 border-white/10 hover:bg-white/5 text-[#dbc2ad]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 font-bold text-xs">
-                      <span>{ev.icon}</span>
-                      <span>{ev.title}</span>
-                    </div>
-                    <div className="text-[11px] text-white/70 mt-1">{ev.desc}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <p className="mb-5 text-xs leading-6 text-[#dbc2ad]">Chaos Mode is a one-time global reveal. Each team receives the curated adaptation stored with its assigned challenge; this screen can only mark the selected team’s adaptation resolved.</p>
 
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => handleTriggerChaos(false, true)}
-                className="bg-green-500/20 hover:bg-green-500 hover:text-white text-green-300 border border-green-500/40 py-2.5 px-3 text-xs font-bold uppercase cursor-pointer rounded"
+                onClick={() => handleTriggerChaos(true)}
+                disabled={!chaosModalTeam.isChaosOpened || chaosModalTeam.isChaosResolved}
+                className="bg-green-500/20 hover:bg-green-500 hover:text-white text-green-300 border border-green-500/40 py-2.5 px-3 text-xs font-bold uppercase cursor-pointer rounded disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 ✓ Mark Resolved
               </button>
@@ -1587,10 +1565,11 @@ function Dashboard({ token, onLogout }) {
               </button>
               <button
                 type="button"
-                onClick={() => handleTriggerChaos(false, false)}
-                className="flex-1 bg-red-600 text-white py-2.5 text-xs font-bold uppercase hover:bg-red-500 cursor-pointer border-0 rounded"
+                onClick={() => handleTriggerChaos(false)}
+                disabled={Boolean(chaosRevealedAt)}
+                className="flex-1 bg-red-600 text-white py-2.5 text-xs font-bold uppercase hover:bg-red-500 cursor-pointer border-0 rounded disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Inject Chaos Now
+                {chaosRevealedAt ? 'Already Revealed' : 'Reveal Chaos Mode Globally'}
               </button>
             </div>
           </div>
@@ -1624,11 +1603,9 @@ function Dashboard({ token, onLogout }) {
             <div className="mb-4">
               <label className="text-[10px] text-[#dbc2ad] uppercase block mb-2">Select New Problem Statement:</label>
               <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-                {MYSTERY_BOX_QUESTIONS.map(q => {
+                {challenges.map(q => {
                   const isSelected = selectedReassignQuestion === q.id;
-                  const isHard = q.difficulty === 'Hard';
-                  const isMed = q.difficulty === 'Medium';
-                  const color = isHard ? '#c084fc' : (isMed ? '#FF9900' : '#a8e063');
+                  const color = '#00a8e0';
 
                   return (
                     <div
@@ -1646,7 +1623,7 @@ function Dashboard({ token, onLogout }) {
                           className="px-2 py-0.5 text-[9px] font-bold rounded uppercase font-mono"
                           style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}
                         >
-                          {q.difficulty} • {q.points} pts
+                          {q.track} • {q.points} pts
                         </span>
                       </div>
                       <div className="text-[11px] text-white/70 line-clamp-2 leading-snug">{q.desc}</div>
@@ -1785,7 +1762,6 @@ function Dashboard({ token, onLogout }) {
 
 // ── Page root ──────────────────────────────────────────────────
 export default function AdminPage() {
-  const navigate = useNavigate();
   const [adminToken, setAdminToken] = useState(() => sessionStorage.getItem('adminToken') || '');
 
   function handleLogin(token) {

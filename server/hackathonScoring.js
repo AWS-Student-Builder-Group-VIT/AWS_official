@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
 import { calculateGamePoints, isScoredGame, SCORING_VERSION } from './gameScoring.js';
-import { getTopicSwapCost, TOPIC_SWAP_PRICING } from '../shared/topicSwapPricing.js';
+import {
+  CHALLENGE_SWAP_COST,
+  chooseBalancedChallenge,
+  createTeamChallengeSnapshot,
+  getChallengeById,
+  listPublicChallenges,
+} from './challengeCatalog.js';
 
 const SHOP_ITEMS = Object.freeze({
   'change-topic': { title: 'Change Challenge Topic', price: 100 },
@@ -14,42 +20,15 @@ const SHOP_ITEMS = Object.freeze({
   'recruit-a-friend': { title: 'Recruit a Friend', price: 250 },
 });
 
-const CHAOS_EVENTS = Object.freeze([
-  { icon: '🌐', title: 'Market Shift', desc: 'Your target user persona has changed completely. Rethink your value proposition.' },
-  { icon: '💸', title: 'Investor Pitch', desc: 'An investor arrives in 15 minutes. You must pitch your MVP immediately.' },
-  { icon: '🔐', title: 'Security Alert', desc: 'A critical vulnerability has been found in your stack. Patch it now.' },
-  { icon: '✂️', title: 'Budget Cut', desc: 'Your cloud budget has been slashed by 60%. Optimize your architecture.' },
-  { icon: '📈', title: 'Viral Growth', desc: 'Your app went viral. Handle 100 times the expected load.' },
-  { icon: '🔄', title: 'Client Revision', desc: 'The client changed their mind. A major feature redesign is required.' },
-]);
-
-const MYSTERY_QUESTIONS = Object.freeze([
-  { id: 'easy-1', title: 'Cloud Resume Builder with CI/CD', difficulty: 'Easy', points: 100, desc: 'Design a web app that helps students build their resume and deploys it automatically as a static website on AWS S3/CloudFront, integrated with a mock GitHub Action pipeline.', tags: ['S3', 'CloudFront', 'GitHub Actions'] },
-  { id: 'easy-2', title: 'Lost & Found Intelligent Matcher', difficulty: 'Easy', points: 100, desc: 'Build a campus lost & found portal using DynamoDB and S3 for photo uploads with keyword tag searching and verification claims.', tags: ['DynamoDB', 'S3', 'API Gateway'] },
-  { id: 'easy-3', title: 'Static Portfolio with Serverless Contact Form', difficulty: 'Easy', points: 100, desc: 'Create a responsive developer portfolio hosted on S3 and CloudFront with an API Gateway + SES/Lambda backend to process and email incoming contact inquiries.', tags: ['S3', 'Lambda', 'SES'] },
-  { id: 'easy-4', title: 'AWS Cost-Optimizer Dashboard', difficulty: 'Easy', points: 100, desc: 'Create a dashboard app that analyzes mock AWS billing reports to find idle EC2 instances, underutilized S3 buckets, and provides actionable recommendations to save costs.', tags: ['CloudWatch', 'Cost Explorer', 'React'] },
-  { id: 'easy-5', title: 'Serverless URL Shortener & Analytics', difficulty: 'Easy', points: 100, desc: 'Build a high-performance URL shortener with click analytics and geolocation counters using AWS Lambda, DynamoDB, and CloudFront edge routing.', tags: ['Lambda', 'DynamoDB', 'CloudFront'] },
-  { id: 'med-1', title: 'Smart Campus Navigation Engine', difficulty: 'Medium', points: 140, desc: 'Build a campus guide prototype using AWS Location Service and Amazon Lex that helps new students navigate a campus, find classrooms, and ask assistant bots for directions.', tags: ['Location Service', 'Amazon Lex', 'Lambda'] },
-  { id: 'med-2', title: 'Serverless Student Club Portal', difficulty: 'Medium', points: 140, desc: 'Design a serverless, highly-scalable backend on AWS (Lambda, API Gateway, DynamoDB) that allows student clubs to manage events, registrations, and announcements with zero server costs.', tags: ['Lambda', 'DynamoDB', 'API Gateway', 'Cognito'] },
-  { id: 'med-3', title: 'IVS Live Stream Hub with Interactive Chat', difficulty: 'Medium', points: 140, desc: 'Create a low-latency streaming hub using Amazon IVS (Interactive Video Service) that allows developers to stream technical workshops and embed interactive live chat polls.', tags: ['Amazon IVS', 'WebSockets', 'Lambda'] },
-  { id: 'med-4', title: 'IoT Smart Energy Classroom Monitor', difficulty: 'Medium', points: 140, desc: 'Design a simulated IoT dashboard using AWS IoT Core that ingests temperature and power data from smart classrooms, visualizes it, and alerts admins when energy waste is detected.', tags: ['IoT Core', 'DynamoDB', 'SNS'] },
-  { id: 'med-5', title: 'Event Ticketing with Dynamic Queue', difficulty: 'Medium', points: 140, desc: 'Build an event ticketing portal with surge seat reservation and queue management using SQS, Lambda, and DynamoDB transactions to prevent double-booking.', tags: ['SQS', 'Lambda', 'DynamoDB'] },
-  { id: 'hard-1', title: 'AI Study Companion with Bedrock', difficulty: 'Hard', points: 180, desc: 'Build a web app using Amazon Bedrock and AWS Lambda that allows students to upload syllabus docs or notes and automatically generates interactive quizzes, mind maps, and flashcards.', tags: ['Amazon Bedrock', 'Lambda', 'S3', 'Vector DB'] },
-  { id: 'hard-2', title: 'Automated Code Reviewer & Debugger Bot', difficulty: 'Hard', points: 180, desc: 'Develop an automated code reviewer tool that integrates with a Git repo, runs code analysis via Amazon CodeGuru or Bedrock, and leaves helpful debugging comments on pull requests.', tags: ['Amazon Bedrock', 'CodeGuru', 'Lambda', 'GitHub API'] },
-  { id: 'hard-3', title: 'Biometric Attendance via Face Recognition', difficulty: 'Hard', points: 180, desc: 'Build a fast attendance system prototype that allows event organizers to take a photo of attendees and verify their registration in real-time using Amazon Rekognition.', tags: ['Rekognition', 'S3', 'Lambda', 'DynamoDB'] },
-  { id: 'hard-4', title: 'Real-time Collaborative Architecture Whiteboard', difficulty: 'Hard', points: 180, desc: 'Develop a real-time collaborative whiteboard app using AWS AppSync or WebSockets that allows student teams to map out architectural diagrams synchronously with live cursor tracking.', tags: ['AppSync', 'GraphQL', 'WebSockets', 'DynamoDB'] },
-  { id: 'hard-5', title: 'Autonomous Cloud Security Incident Responder', difficulty: 'Hard', points: 180, desc: 'Design an AI-driven SecOps bot that monitors CloudTrail & GuardDuty events, diagnoses threats via Bedrock, and automatically generates mitigation Lambda triggers to isolate compromised resources.', tags: ['GuardDuty', 'CloudTrail', 'Bedrock', 'Step Functions'] },
-]);
-
 const DEFAULT_MAX_GAME_ATTEMPTS = 5;
 
 export function pickMysteryQuestion(random = Math.random) {
-  const index = Math.min(MYSTERY_QUESTIONS.length - 1, Math.floor(random() * MYSTERY_QUESTIONS.length));
-  return { ...MYSTERY_QUESTIONS[index] };
+  const entry = chooseBalancedChallenge([], random);
+  return createTeamChallengeSnapshot(entry).challenge;
 }
 
 export function listMysteryQuestions() {
-  return MYSTERY_QUESTIONS.map((question) => ({ ...question, tags: [...(question.tags || [])] }));
+  return listPublicChallenges();
 }
 
 export function normalizeTeamCode(value) {
@@ -148,12 +127,13 @@ export function findLowestAvailableSlot(attempts = [], maxAttempts = DEFAULT_MAX
   return null;
 }
 
-export function getTopicSwapQuote({ currentTopic, targetTopic, teamPoints = 0, hasChangedQuestion = false } = {}) {
-  const cost = getTopicSwapCost(currentTopic?.difficulty, targetTopic?.difficulty) ?? TOPIC_SWAP_PRICING.sameTier;
+export function getTopicSwapQuote({ currentTopic, targetTopic, teamPoints = 0, hasChangedQuestion = false, isOpened = true, chaosRevealed = false } = {}) {
+  const cost = CHALLENGE_SWAP_COST;
+  if (!isOpened) return { cost, allowed: false, reason: 'topic-not-revealed' };
+  if (chaosRevealed) return { cost, allowed: false, reason: 'chaos-revealed' };
   if (hasChangedQuestion) return { cost, allowed: false, reason: 'topic-swap-used' };
   if (!currentTopic?.id || !targetTopic?.id) return { cost, allowed: false, reason: 'topic-required' };
   if (currentTopic.id === targetTopic.id) return { cost, allowed: false, reason: 'same-topic' };
-  if (getTopicSwapCost(currentTopic.difficulty, targetTopic.difficulty) === null) return { cost, allowed: false, reason: 'topic-required' };
   if (Number(teamPoints || 0) < cost) return { cost, allowed: false, reason: 'insufficient-points' };
   return { cost, allowed: true };
 }
@@ -232,6 +212,9 @@ export async function initializeHackathonScoring(pool) {
     INSERT INTO hackathon_event_settings (key, value)
     VALUES ('games_enabled', 'false'::jsonb)
     ON CONFLICT (key) DO NOTHING;
+    INSERT INTO hackathon_event_settings (key, value)
+    VALUES ('chaos_mode_revealed_at', 'null'::jsonb)
+    ON CONFLICT (key) DO NOTHING;
   `);
 
   await pool.query(`
@@ -278,6 +261,54 @@ export async function initializeHackathonScoring(pool) {
   `);
 
   await applyPrelaunchOfficialGameMigration(pool);
+  await applyChallengeCatalogV2Migration(pool);
+}
+
+export async function applyChallengeCatalogV2Migration(pool) {
+  const migrationKey = 'challenge_catalog_v2_migrated';
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const marker = await client.query(
+      `INSERT INTO global_settings (key, value) VALUES ($1, 'in-progress')
+       ON CONFLICT (key) DO NOTHING RETURNING key`,
+      [migrationKey],
+    );
+    if (!marker.rows.length) {
+      await client.query('COMMIT');
+      return { applied: false };
+    }
+    const chaosSetting = await client.query(
+      `SELECT value FROM hackathon_event_settings WHERE key='chaos_mode_revealed_at' FOR UPDATE`,
+    );
+    const chaosRevealed = Boolean(chaosSetting.rows[0]?.value && chaosSetting.rows[0].value !== 'null');
+    const teams = await client.query('SELECT id FROM hackathon_teams ORDER BY id FOR UPDATE');
+    const assignments = [];
+    for (const team of teams.rows) {
+      const challenge = chooseBalancedChallenge(assignments);
+      const snapshot = createTeamChallengeSnapshot(challenge);
+      assignments.push(snapshot.challenge);
+      await client.query(
+        `UPDATE hackathon_teams
+         SET mystery_question=$1, chaos_event=$2, has_changed_question=FALSE,
+             is_chaos_opened=$3, is_chaos_resolved=FALSE, updated_at=NOW()
+         WHERE id=$4`,
+        [JSON.stringify(snapshot.challenge), JSON.stringify(snapshot.chaosEvent), chaosRevealed, team.id],
+      );
+    }
+    await client.query('UPDATE global_settings SET value=$1 WHERE key=$2', ['true', migrationKey]);
+    await client.query(
+      `INSERT INTO hackathon_scoring_migrations (key) VALUES ('v3-track-challenge-catalog')
+       ON CONFLICT (key) DO NOTHING`,
+    );
+    await client.query('COMMIT');
+    return { applied: true, reassigned: teams.rows.length };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function applyPrelaunchOfficialGameMigration(pool) {
@@ -522,8 +553,9 @@ async function getTeamGameSummary(client, team) {
   };
 }
 
-function findMysteryQuestionById(id) {
-  return MYSTERY_QUESTIONS.find((question) => question.id === id);
+async function getChaosModeRevealed(client) {
+  const result = await client.query("SELECT value FROM hackathon_event_settings WHERE key='chaos_mode_revealed_at'");
+  return Boolean(result.rows[0]?.value && result.rows[0].value !== 'null');
 }
 
 const sendError = (res, error) => {
@@ -657,7 +689,16 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
   });
 
   app.get('/api/mystery-box/topics', hackathonAuth, async (req, res) => {
-    res.json({ topics: listMysteryQuestions(), topicSwapPricing: TOPIC_SWAP_PRICING });
+    try {
+      const client = await pool.connect();
+      try {
+        res.json({
+          topics: listPublicChallenges(),
+          topicSwapCost: CHALLENGE_SWAP_COST,
+          chaosRevealed: await getChaosModeRevealed(client),
+        });
+      } finally { client.release(); }
+    } catch (error) { sendError(res, error); }
   });
 
   app.post('/api/mystery-box/teams/:code/leave', hackathonAuth, async (req, res) => {
@@ -718,7 +759,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
 
   app.post('/api/mystery-box/teams/:code/topic-swap', hackathonAuth, async (req, res) => {
     try {
-      const targetTopic = findMysteryQuestionById(req.body?.topicId);
+      const targetTopic = getChallengeById(req.body?.topicId);
       if (!targetTopic) return res.status(400).json({ error: 'Unknown topic selected' });
       const response = await transact(pool, async (client) => {
         const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
@@ -727,11 +768,15 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
           targetTopic,
           teamPoints: team.points,
           hasChangedQuestion: team.has_changed_question,
+          isOpened: team.is_opened,
+          chaosRevealed: await getChaosModeRevealed(client),
         });
         if (!quote.allowed) {
           const error = new Error({
             'topic-swap-used': 'This team has already used its topic swap',
             'topic-required': 'Current topic is not ready for swapping',
+            'topic-not-revealed': 'Reveal your original challenge before changing it',
+            'chaos-revealed': 'Challenge changes are locked after Chaos Mode is revealed',
             'same-topic': 'Choose a different topic',
             'insufficient-points': 'Team does not have enough points',
           }[quote.reason] || 'Topic swap is not allowed');
@@ -747,44 +792,19 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
           actor: req.hackathonUser,
           metadata: { fromTopicId: team.mystery_question?.id, toTopicId: targetTopic.id, cost: quote.cost },
         });
+        const snapshot = createTeamChallengeSnapshot(targetTopic);
         await client.query(
           `UPDATE hackathon_teams
-           SET mystery_question=$1, has_changed_question=TRUE, updated_at=NOW()
-           WHERE id=$2`,
-          [JSON.stringify(targetTopic), team.id],
+           SET mystery_question=$1, chaos_event=$2, has_changed_question=TRUE, updated_at=NOW()
+           WHERE id=$3`,
+          [JSON.stringify(snapshot.challenge), JSON.stringify(snapshot.chaosEvent), team.id],
         );
-        return { balance: ledger.balance, topic: targetTopic, cost: quote.cost, hasChangedQuestion: true };
+        return { balance: ledger.balance, topic: snapshot.challenge, cost: quote.cost, hasChangedQuestion: true };
       });
       res.json(response);
     } catch (error) { sendError(res, error); }
   });
 
-  app.post('/api/mystery-box/teams/:code/chaos/open', hackathonAuth, async (req, res) => {
-    try {
-      const response = await transact(pool, async (client) => {
-        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
-        if (team.is_chaos_opened) return { chaosEvent: team.chaos_event, alreadyOpened: true };
-        const event = team.chaos_event || CHAOS_EVENTS[Math.floor(Math.random() * CHAOS_EVENTS.length)];
-        await client.query('UPDATE hackathon_teams SET chaos_event=$1, is_chaos_opened=TRUE, is_chaos_resolved=FALSE, updated_at=NOW() WHERE id=$2', [JSON.stringify(event), team.id]);
-        return { chaosEvent: event, isChaosOpened: true };
-      });
-      res.json(response);
-    } catch (error) { sendError(res, error); }
-  });
-
-  app.post('/api/mystery-box/teams/:code/chaos/resolve', hackathonAuth, async (req, res) => {
-    try {
-      const response = await transact(pool, async (client) => {
-        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
-        if (!team.is_chaos_opened) { const error = new Error('Chaos event has not been opened'); error.status = 409; throw error; }
-        if (team.is_chaos_resolved) return { balance: Number(team.points || 0), alreadyResolved: true };
-        const ledger = await appendLedger(client, { team, sourceType: 'chaos', sourceRef: 'resolution', delta: 120, reason: 'Chaos event resolved', actor: req.hackathonUser });
-        await client.query('UPDATE hackathon_teams SET is_chaos_resolved=TRUE, updated_at=NOW() WHERE id=$1', [team.id]);
-        return { balance: ledger.balance, awardedPoints: 120, isChaosResolved: true };
-      });
-      res.json(response);
-    } catch (error) { sendError(res, error); }
-  });
 
   app.post('/api/admin/mystery-box/teams/:code/adjustments', adminMiddleware, async (req, res) => {
     try {

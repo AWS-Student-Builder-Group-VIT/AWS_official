@@ -1,3 +1,5 @@
+/* global process */
+
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
@@ -9,11 +11,18 @@ import {
   applyAdminAdjustment,
   initializeHackathonScoring,
   listHackathonMembers,
-  pickMysteryQuestion,
   registerHackathonScoringRoutes,
   normalizeTeamCode,
   upsertHackathonMember,
 } from './hackathonScoring.js';
+import {
+  assignBalancedChallengeForNewTeam,
+  createTeamChallengeSnapshot,
+  getChallengeById,
+  listAdminChallenges,
+} from './challengeCatalog.js';
+import { formatHackathonTeam } from './hackathonTeam.js';
+import { isAllowedOrigin } from './corsOrigins.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -41,8 +50,10 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || /localhost:\d+/.test(origin))
+    return callback(null, true);
+    callback(new Error(`CORS blocked: ${origin}`));
+    if (isAllowedOrigin(origin, allowedOrigins)) return callback(null, true);
+    return callback(new Error(`CORS blocked: ${origin}`));
       return callback(null, true);
     callback(new Error(`CORS blocked: ${origin}`));
   },
@@ -79,23 +90,6 @@ function hackathonAuth(req, res, next) {
   try { req.hackathonUser = jwt.verify(token, HACKATHON_JWT_SECRET); next(); }
   catch { res.status(401).json({ error: 'Hackathon session expired. Sign in with Google again.' }); }
 }
-
-const formatHackathonTeam = (row, members = row.members || []) => ({
-  code: row.code,
-  teamName: row.team_name,
-  mysteryQuestion: row.mystery_question,
-  isOpened: row.is_opened,
-  points: row.points || 0,
-  chaosEvent: row.chaos_event,
-  isChaosOpened: row.is_chaos_opened,
-  isChaosResolved: row.is_chaos_resolved,
-  ownedItems: row.owned_items || [],
-  members,
-  hasChangedQuestion: row.has_changed_question || false,
-  maxGameAttempts: row.max_game_attempts ?? 5,
-  registeredAt: new Date(row.created_at).getTime(),
-  updatedAt: new Date(row.updated_at).getTime(),
-});
 
 async function withTransaction(operation) {
   const client = await pool.connect();
@@ -202,7 +196,7 @@ async function runDatabaseMigrations() {
 async function initDb() {
   const result = await initializeVersionedSchema({
     pool,
-    version: 'v3-runtime-schema-ready',
+    version: 'v4-track-challenge-catalog-ready',
     migrate: runDatabaseMigrations,
   });
   console.log(result.migrated ? 'Database tables ready' : 'Database schema already ready');
@@ -246,13 +240,15 @@ app.post('/api/mystery-box/teams/create', hackathonAuth, async (req, res) => {
       return res.status(400).json({ error: 'Team code already exists' });
     }
 
-    const mysteryQuestion = pickMysteryQuestion();
     const { row, members } = await withTransaction(async (client) => {
+      const snapshot = await assignBalancedChallengeForNewTeam(client);
       const result = await client.query(
-        `INSERT INTO hackathon_teams (code, team_name, mystery_question, is_opened, points, members)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO hackathon_teams (code, team_name, mystery_question, chaos_event, is_chaos_opened, is_opened, points, members)
+         VALUES ($1, $2, $3, $4,
+           (SELECT COALESCE(value <> 'null'::jsonb, FALSE) FROM hackathon_event_settings WHERE key='chaos_mode_revealed_at'),
+           $5, $6, $7)
          RETURNING *`,
-        [upperCode, teamName, JSON.stringify(mysteryQuestion), false, 0, JSON.stringify([{ email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: true }])]
+        [upperCode, teamName, JSON.stringify(snapshot.challenge), JSON.stringify(snapshot.chaosEvent), false, 0, JSON.stringify([{ email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: true }])]
       );
       const created = result.rows[0];
       await upsertHackathonMember(client, { teamId: created.id, email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: true });
@@ -355,7 +351,7 @@ app.post('/api/mystery-box/activity/log', async (req, res) => {
     const { code, teamName, eventType, message, details } = req.body;
     await logHackathonActivity(code, teamName, eventType, message, details);
     res.json({ success: true });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'Failed to record activity log' });
   }
 });
@@ -420,7 +416,7 @@ app.put('/api/user/profile', authMiddleware, async (req, res) => {
       [firstName, lastName, req.user.id]
     );
     res.json({ message: 'Profile updated', user: result.rows[0] });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'Failed to update profile' });
   }
 });
@@ -437,7 +433,7 @@ app.put('/api/user/password', authMiddleware, async (req, res) => {
     const hash = await bcrypt.hash(newPassword, 10);
     await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.user.id]);
     res.json({ message: 'Password updated successfully' });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'Failed to update password' });
   }
 });
@@ -484,7 +480,7 @@ app.get('/api/quiz-scores/me', authMiddleware, async (req, res) => {
       [req.user.id]
     );
     res.json(result.rows);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch scores' });
   }
 });
@@ -643,7 +639,7 @@ app.get('/api/quiz-status', async (req, res) => {
     }
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.status(200).json({ status: cachedQuizStatus });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch status' });
   }
 });
@@ -753,70 +749,70 @@ app.post('/api/admin/mystery-box/teams/points', adminMiddleware, async (req, res
   }
 });
 
-app.post('/api/admin/mystery-box/teams/chaos', adminMiddleware, async (req, res) => {
+app.get('/api/admin/mystery-box/challenges', adminMiddleware, async (req, res) => {
   try {
-    const { code, isAll, chaosEvent, resolve, isOpened } = req.body;
-
-    if (isAll) {
-      let query, params;
-      if (resolve) {
-        query = `UPDATE hackathon_teams SET is_chaos_resolved = TRUE, updated_at = NOW() RETURNING *`;
-        params = [];
-      } else {
-        query = `UPDATE hackathon_teams
-                 SET is_chaos_opened = COALESCE($1, is_chaos_opened),
-                     chaos_event = COALESCE($2, chaos_event),
-                     is_chaos_resolved = FALSE,
-                     updated_at = NOW() RETURNING *`;
-        params = [isOpened !== undefined ? isOpened : true, chaosEvent ? JSON.stringify(chaosEvent) : null];
-      }
-      const result = await pool.query(query, params);
-      return res.json({ success: true, updatedCount: result.rows.length });
-    }
-
-    if (!code) return res.status(400).json({ error: 'Team code is required' });
-    const upperCode = code.toUpperCase().trim();
-
-    let query, params;
-    if (resolve) {
-      query = `UPDATE hackathon_teams SET is_chaos_resolved = TRUE, updated_at = NOW() WHERE code = $1 RETURNING *`;
-      params = [upperCode];
-    } else {
-      query = `UPDATE hackathon_teams
-               SET is_chaos_opened = COALESCE($1, is_chaos_opened),
-                   chaos_event = COALESCE($2, chaos_event),
-                   is_chaos_resolved = FALSE,
-                   updated_at = NOW()
-               WHERE code = $3 RETURNING *`;
-      params = [isOpened !== undefined ? isOpened : true, chaosEvent ? JSON.stringify(chaosEvent) : null, upperCode];
-    }
-
-    const result = await pool.query(query, params);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
-    res.json({ success: true, team: result.rows[0] });
-  } catch (error) {
-    console.error('Admin chaos control error:', error);
-    res.status(500).json({ error: 'Failed to update chaos state' });
+    const setting = await pool.query("SELECT value FROM hackathon_event_settings WHERE key='chaos_mode_revealed_at'");
+    res.json({ challenges: listAdminChallenges(), chaosRevealedAt: setting.rows[0]?.value || null });
+  } catch {
+    res.status(500).json({ error: 'Could not load the challenge catalog' });
   }
+});
+
+app.post('/api/admin/mystery-box/chaos/reveal', adminMiddleware, async (req, res) => {
+  try {
+    const result = await withTransaction(async (client) => {
+      const setting = await client.query("SELECT value FROM hackathon_event_settings WHERE key='chaos_mode_revealed_at' FOR UPDATE");
+      if (setting.rows[0]?.value && setting.rows[0].value !== 'null') {
+        const error = new Error('Chaos Mode has already been revealed'); error.status = 409; throw error;
+      }
+      const revealedAt = new Date().toISOString();
+      const teams = await client.query('UPDATE hackathon_teams SET is_chaos_opened=TRUE, is_chaos_resolved=FALSE, updated_at=NOW() RETURNING code, team_name');
+      await client.query(
+        `INSERT INTO hackathon_event_settings (key, value, updated_at) VALUES ('chaos_mode_revealed_at', $1, NOW())
+         ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW()`,
+        [JSON.stringify(revealedAt)],
+      );
+      return { revealedAt, teams: teams.rows };
+    });
+    for (const team of result.teams) void logHackathonActivity(team.code, team.team_name, 'CHAOS_REVEALED', 'Chaos Mode has been revealed for this team');
+    res.json({ success: true, revealedAt: result.revealedAt, updatedCount: result.teams.length });
+  } catch (error) { res.status(error.status || 500).json({ error: error.status ? error.message : 'Could not reveal Chaos Mode' }); }
+});
+
+app.post('/api/admin/mystery-box/teams/:code/chaos/resolve', adminMiddleware, async (req, res) => {
+  try {
+    const code = normalizeTeamCode(req.params.code);
+    const result = await pool.query(
+      'UPDATE hackathon_teams SET is_chaos_resolved=TRUE, updated_at=NOW() WHERE code=$1 AND is_chaos_opened=TRUE RETURNING *',
+      [code],
+    );
+    if (!result.rows.length) return res.status(409).json({ error: 'Team does not have an active Chaos Mode challenge' });
+    void logHackathonActivity(code, result.rows[0].team_name, 'CHAOS_RESOLVED', 'Chaos adaptation marked resolved by organizer');
+    res.json({ success: true, team: result.rows[0] });
+  } catch { res.status(500).json({ error: 'Could not resolve Chaos Mode for this team' }); }
 });
 
 app.post('/api/admin/mystery-box/teams/reassign', adminMiddleware, async (req, res) => {
   try {
-    const { code, mysteryQuestion, resetSwapUsed } = req.body;
-    if (!code || !mysteryQuestion) return res.status(400).json({ error: 'Code and mysteryQuestion are required' });
+    const { code, challengeId, resetSwapUsed } = req.body;
+    const challenge = getChallengeById(challengeId);
+    if (!code || !challenge) return res.status(400).json({ error: 'A valid team code and challengeId are required' });
 
     const upperCode = code.toUpperCase().trim();
+    const snapshot = createTeamChallengeSnapshot(challenge);
     const result = await pool.query(
       `UPDATE hackathon_teams
        SET mystery_question = $1,
-           has_changed_question = CASE WHEN $2 = true THEN FALSE ELSE has_changed_question END,
+           chaos_event = $2,
+           has_changed_question = CASE WHEN $3 = true THEN FALSE ELSE has_changed_question END,
            updated_at = NOW()
-       WHERE code = $3
+       WHERE code = $4
        RETURNING *`,
-      [JSON.stringify(mysteryQuestion), resetSwapUsed || false, upperCode]
+      [JSON.stringify(snapshot.challenge), JSON.stringify(snapshot.chaosEvent), resetSwapUsed || false, upperCode]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
+    void logHackathonActivity(upperCode, result.rows[0].team_name, 'CHALLENGE_REASSIGNED', `Challenge reassigned to ${snapshot.challenge.title}`, { challengeId, resetSwapUsed: Boolean(resetSwapUsed) });
     res.json({ success: true, team: result.rows[0] });
   } catch (error) {
     console.error('Admin reassign question error:', error);

@@ -1,16 +1,32 @@
-export async function readApiResponse(response, fallbackMessage = 'Request failed') {
-  const text = await response.text().catch(() => '');
+/**
+ * Reads API responses without letting an empty proxy or HTML error page turn
+ * into a JSON parsing exception in the UI.
+ */
+export async function readApiResponse(response, fallback = 'Request failed') {
+  let text;
+  try {
+    text = await response.text();
+  } catch {
+    return { data: {}, error: `${fallback} (HTTP ${response.status})` };
+  }
+
   let data = {};
-  if (text) {
+
+  if (text.trim()) {
     try {
-      const parsed = JSON.parse(text);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) data = parsed;
+      data = JSON.parse(text);
     } catch {
-      data = {};
+      return {
+        data: {},
+        error: `${text.trim()} (HTTP ${response.status})`,
+      };
     }
   }
-  if (response.ok) return { data, error: '' };
-  const cleanText = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
-  const base = data.error || cleanText || fallbackMessage;
-  return { data, error: `${base}${data.error ? '' : ` (HTTP ${response.status})`}` };
+
+  return {
+    data,
+    error: typeof data?.error === 'string'
+      ? data.error
+      : `${fallback} (HTTP ${response.status})`,
+  };
 }
