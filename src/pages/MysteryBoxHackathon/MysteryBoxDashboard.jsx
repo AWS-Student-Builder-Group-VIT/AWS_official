@@ -20,6 +20,7 @@ import {
   consumeTeamRefreshResponse,
 } from './teamSessionSync';
 import { getOfficialGameCardAccess } from './officialGameAccess';
+import { startGameScorePolling } from './gameScorePolling';
 
 export default function MysteryBoxDashboard() {
   const navigate = useNavigate();
@@ -67,6 +68,7 @@ export default function MysteryBoxDashboard() {
   const scoredGames = games.filter((game) => SCORED_TEAM_GAMES.includes(game.slug));
   const playedGameSlugs = new Set(gameScores?.playedGameSlugs || []);
   const officialLimitReached = Boolean(gameScores) && gameScores.remainingAttempts <= 0 && !gameScores.activeAttempt;
+  const gameModeKnown = typeof gameScores?.gamesEnabled === 'boolean';
 
   // Sync state if localStorage changes in other tabs
   useEffect(() => {
@@ -133,19 +135,13 @@ export default function MysteryBoxDashboard() {
   }, [navigate, team?.code]);
 
   useEffect(() => {
-    if (!team?.code) return;
-    let active = true;
-    const loadGameScores = async () => {
-      const response = await fetchTeamGameScores(team.code);
-      if (active && response.ok) setGameScores(response);
-    };
-    loadGameScores();
-    window.addEventListener('aws-team-score:updated', loadGameScores);
-    return () => {
-      active = false;
-      window.removeEventListener('aws-team-score:updated', loadGameScores);
-    };
-  }, [team?.code]);
+    if (!team?.code || activeTab !== 'games') return undefined;
+
+    return startGameScorePolling({
+      loadScores: () => fetchTeamGameScores(team.code),
+      onSuccess: setGameScores,
+    });
+  }, [activeTab, team?.code]);
 
   // Redirect to landing page if not in a team
   useEffect(() => {
@@ -849,8 +845,8 @@ export default function MysteryBoxDashboard() {
                         Registered team members may complete up to {gameScores?.maxAttempts ?? team.maxGameAttempts ?? 5} distinct official games. Each game counts once per team. Refreshing or leaving resumes the active slot; replay buttons open Practice and never award points.
                       </p>
                     </div>
-                    <div className={`px-4 py-3 rounded-xl border font-headline-md uppercase text-xs tracking-widest ${gameScores?.gamesEnabled ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-300'}`}>
-                      {gameScores?.gamesEnabled ? 'Game Mode Active' : 'Game Mode Disabled'}
+                    <div className={`px-4 py-3 rounded-xl border font-headline-md uppercase text-xs tracking-widest ${!gameModeKnown ? 'bg-[#00a8e0]/10 border-[#00a8e0]/30 text-[#00a8e0]' : gameScores.gamesEnabled ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-300'}`}>
+                      {!gameModeKnown ? 'Checking Game Mode…' : gameScores.gamesEnabled ? 'Game Mode Active' : 'Game Mode Disabled'}
                     </div>
                   </div>
                   <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
