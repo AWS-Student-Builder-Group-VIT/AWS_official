@@ -23,6 +23,7 @@ import {
 } from './teamSessionSync';
 import { getOfficialGameCardAccess } from './officialGameAccess';
 import { startGameScorePolling } from './gameScorePolling';
+import { normalizeChallengeDetails } from './challengeDetails';
 
 export default function MysteryBoxDashboard() {
   const navigate = useNavigate();
@@ -173,9 +174,9 @@ export default function MysteryBoxDashboard() {
     }
   })();
 
-  const questionDesc = parsedQuestion?.desc || 'Build your serverless or cloud hackathon solution as assigned.';
   const questionTitle = parsedQuestion?.title || 'Mystery Challenge';
   const questionPoints = parsedQuestion?.points || 100;
+  const questionDetails = normalizeChallengeDetails(parsedQuestion || {});
 
   const persistTeamLocally = (nextTeam) => {
     setTeam(nextTeam);
@@ -539,9 +540,47 @@ export default function MysteryBoxDashboard() {
 
                         <div className="mt-3 p-5 rounded-xl border border-primary-container/20 bg-background/60 relative overflow-hidden">
                           <div className="absolute top-0 left-0 w-1 h-full bg-primary-container" />
-                          <p className="text-[14px] leading-7 text-on-surface-variant font-body-md m-0">
-                            {questionDesc}
-                          </p>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-primary-container font-label-sm mb-2">Detailed Description</p>
+                          <p className="text-[14px] leading-7 text-on-surface-variant font-body-md m-0">{questionDetails.description}</p>
+
+                          {(questionDetails.technicalScope.length > 0 || questionDetails.deliverables.length > 0) && (
+                            <details open className="mt-5 border-t border-white/10 pt-4 group">
+                              <summary className="cursor-pointer select-none text-xs uppercase tracking-[0.16em] text-on-surface font-headline-md marker:text-primary-container">
+                                Complete Challenge Brief
+                              </summary>
+                              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mt-4">
+                                {questionDetails.technicalScope.length > 0 && (
+                                  <section>
+                                    <h5 className="text-[10px] uppercase tracking-[0.18em] text-primary-container font-label-sm mb-3">Technical Scope &amp; Guardrails</h5>
+                                    <ul className="space-y-2 m-0 pl-5 text-xs leading-6 text-on-surface-variant list-disc marker:text-primary-container">
+                                      {questionDetails.technicalScope.map((item) => <li key={item}>{item}</li>)}
+                                    </ul>
+                                  </section>
+                                )}
+                                {questionDetails.deliverables.length > 0 && (
+                                  <section>
+                                    <h5 className="text-[10px] uppercase tracking-[0.18em] text-primary-container font-label-sm mb-3">Core Deliverables</h5>
+                                    <ol className="space-y-2 m-0 pl-5 text-xs leading-6 text-on-surface-variant list-decimal marker:text-primary-container">
+                                      {questionDetails.deliverables.map((item) => <li key={item}>{item}</li>)}
+                                    </ol>
+                                  </section>
+                                )}
+                              </div>
+                            </details>
+                          )}
+
+                          {questionDetails.awsServices.length > 0 && (
+                            <section className="mt-5 border-t border-white/10 pt-4">
+                              <h5 className="text-[10px] uppercase tracking-[0.18em] text-primary-container font-label-sm mb-3">Suggested AWS Services</h5>
+                              <div className="flex flex-wrap gap-2">
+                                {questionDetails.awsServices.map((service) => (
+                                  <span key={service} className="rounded-full border border-primary-container/30 bg-primary-container/10 px-3 py-1 text-[10px] uppercase tracking-wider text-primary-container font-label-sm">
+                                    {service}
+                                  </span>
+                                ))}
+                              </div>
+                            </section>
+                          )}
                         </div>
 
                         <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-white/5 pt-4">

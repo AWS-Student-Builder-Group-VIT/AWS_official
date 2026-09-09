@@ -8,7 +8,7 @@ import {
   getChallengeById,
   listPublicChallenges,
 } from './challengeCatalog.js';
-import { applyChallengeCatalogV2Migration } from './hackathonScoring.js';
+import { applyChallengeCatalogDetailsMigration, applyChallengeCatalogV2Migration } from './hackathonScoring.js';
 
 test('catalog contains forty equally weighted tracked challenges without difficulty tiers', () => {
   assert.equal(CHALLENGE_CATALOG.length, 40);
@@ -22,15 +22,25 @@ test('catalog contains forty equally weighted tracked challenges without difficu
 test('public challenge listings never disclose the private chaos twist', () => {
   const publicChallenge = listPublicChallenges().find((challenge) => challenge.id === 'ai-adaptive-campus-concierge');
 
-  assert.deepEqual(publicChallenge, {
-    id: 'ai-adaptive-campus-concierge',
-    track: 'AI & Automation',
-    title: 'Adaptive Campus Services Concierge',
-    desc: 'Personalize campus notices, services, and next actions for distinct student needs.',
-    tags: ['Lambda', 'DynamoDB', 'S3'],
-    points: 100,
-  });
+  assert.equal(publicChallenge.id, 'ai-adaptive-campus-concierge');
+  assert.equal(publicChallenge.track, 'AI & Automation');
+  assert.equal(publicChallenge.title, 'Adaptive Campus Services Concierge');
+  assert.ok(publicChallenge.desc.length >= 180);
+  assert.ok(publicChallenge.technicalScope.length >= 3);
+  assert.ok(publicChallenge.deliverables.length >= 3);
+  assert.deepEqual(publicChallenge.tags, ['Lambda', 'DynamoDB', 'S3']);
+  assert.equal(publicChallenge.points, 100);
   assert.equal('chaosTwist' in publicChallenge, false);
+});
+
+test('all forty challenges include participant-ready detail and an implementation-ready chaos card', () => {
+  for (const entry of CHALLENGE_CATALOG) {
+    assert.ok(entry.desc.length >= 180, `${entry.id} needs a detailed description`);
+    assert.ok(entry.technicalScope.length >= 3, `${entry.id} needs technical guardrails`);
+    assert.ok(entry.deliverables.length >= 3, `${entry.id} needs core deliverables`);
+    assert.ok(entry.tags.length >= 3, `${entry.id} needs suggested AWS services`);
+    assert.ok(entry.chaosTwist.desc.length >= 100, `${entry.id} needs a detailed chaos scenario`);
+  }
 });
 
 test('balanced assignment chooses only an unassigned challenge before repeating one', () => {
@@ -47,6 +57,37 @@ test('team snapshots retain a private matching chaos twist for later reveal', ()
   assert.equal(snapshot.challenge.id, 'fintech-fraud-network-explorer');
   assert.equal(snapshot.chaosEvent.title, 'Evidence Trail Required');
   assert.equal(snapshot.challenge.points, 100);
+  assert.ok(snapshot.challenge.technicalScope.length >= 3);
+  assert.ok(snapshot.challenge.deliverables.length >= 3);
+});
+
+test('detail migration enriches existing assignments without changing their challenge ids or reveal state', async () => {
+  const calls = [];
+  const oldQuestion = { id: 'cities-green-corridor-planner', title: 'Emergency Green-Corridor Planner', points: 100 };
+  const client = {
+    async query(sql, params = []) {
+      const normalized = String(sql).replace(/\s+/g, ' ').trim();
+      calls.push({ sql: normalized, params });
+      if (normalized.startsWith('INSERT INTO global_settings')) return { rows: [{ key: 'challenge_catalog_v3_details_migrated' }] };
+      if (normalized.includes('SELECT id, mystery_question')) {
+        return { rows: [{ id: 77, mystery_question: oldQuestion, is_opened: true, is_chaos_opened: false, is_chaos_resolved: true }] };
+      }
+      return { rows: [] };
+    },
+    release() {},
+  };
+
+  const result = await applyChallengeCatalogDetailsMigration({ connect: async () => client });
+
+  assert.deepEqual(result, { applied: true, enriched: 1 });
+  const update = calls.find(({ sql }) => sql.startsWith('UPDATE hackathon_teams SET mystery_question'));
+  const enrichedQuestion = JSON.parse(update.params[0]);
+  const enrichedChaos = JSON.parse(update.params[1]);
+  assert.equal(enrichedQuestion.id, oldQuestion.id);
+  assert.ok(enrichedQuestion.technicalScope.length >= 3);
+  assert.ok(enrichedQuestion.deliverables.length >= 3);
+  assert.equal(enrichedChaos.id, 'cities-road-closure');
+  assert.ok(!update.sql.includes('is_opened='));
 });
 
 test('catalog migration is guarded by the requested global settings key', async () => {

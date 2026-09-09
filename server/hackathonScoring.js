@@ -261,6 +261,7 @@ export async function initializeHackathonScoring(pool) {
 
   await applyPrelaunchOfficialGameMigration(pool);
   await applyChallengeCatalogV2Migration(pool);
+  await applyChallengeCatalogDetailsMigration(pool);
 }
 
 export async function applyChallengeCatalogV2Migration(pool) {
@@ -302,6 +303,52 @@ export async function applyChallengeCatalogV2Migration(pool) {
     );
     await client.query('COMMIT');
     return { applied: true, reassigned: teams.rows.length };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function applyChallengeCatalogDetailsMigration(pool) {
+  const migrationKey = 'challenge_catalog_v3_details_migrated';
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const marker = await client.query(
+      `INSERT INTO global_settings (key, value) VALUES ($1, 'in-progress')
+       ON CONFLICT (key) DO NOTHING RETURNING key`,
+      [migrationKey],
+    );
+    if (!marker.rows.length) {
+      await client.query('COMMIT');
+      return { applied: false };
+    }
+
+    const teams = await client.query(
+      `SELECT id, mystery_question, is_opened, is_chaos_opened, is_chaos_resolved
+       FROM hackathon_teams ORDER BY id FOR UPDATE`,
+    );
+    let enriched = 0;
+    for (const team of teams.rows) {
+      const canonical = getChallengeById(team.mystery_question?.id);
+      if (!canonical) continue;
+      const snapshot = createTeamChallengeSnapshot(canonical);
+      await client.query(
+        `UPDATE hackathon_teams SET mystery_question=$1, chaos_event=$2, updated_at=NOW() WHERE id=$3`,
+        [JSON.stringify(snapshot.challenge), JSON.stringify(snapshot.chaosEvent), team.id],
+      );
+      enriched += 1;
+    }
+
+    await client.query('UPDATE global_settings SET value=$1 WHERE key=$2', ['true', migrationKey]);
+    await client.query(
+      `INSERT INTO hackathon_scoring_migrations (key) VALUES ('v4-detailed-challenge-briefs')
+       ON CONFLICT (key) DO NOTHING`,
+    );
+    await client.query('COMMIT');
+    return { applied: true, enriched };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
