@@ -52,5 +52,8 @@
     "tailwindcss": "^4.3.0",
     "three": "^0.184.0",
     "vite": "^8.0.12"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8"
   }
 }

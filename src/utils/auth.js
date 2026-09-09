@@ -3,6 +3,12 @@ import { readApiResponse } from './apiResponse.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+function adminReason() {
+  const reason = window.prompt('Reason for this organizer change (at least 5 characters):');
+  if (!reason || reason.trim().length < 5) throw new Error('A reason of at least five characters is required');
+  return reason.trim();
+}
+
 // Session duration: 24 hours in milliseconds
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 
@@ -246,15 +252,16 @@ export async function fetchAdminHackathonTeams(adminToken) {
 /** Update / Inject points for a team */
 export async function updateAdminTeamPoints(adminToken, { code, delta }) {
   try {
+    const reason = adminReason();
     const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/points`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-      body: JSON.stringify({ code, delta, reason: `Admin adjusted team points by ${Number(delta) >= 0 ? '+' : ''}${Number(delta) || 0}` })
+      body: JSON.stringify({ code, delta, reason })
     });
     const data = await res.json();
     return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
-  } catch {
-    return { ok: false, error: 'Network error' };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Network error' };
   }
 }
 
@@ -272,29 +279,31 @@ export async function fetchAdminGameMode(adminToken) {
 
 export async function updateAdminGameMode(adminToken, enabled) {
   try {
+    const reason = adminReason();
     const res = await fetch(`${API_URL}/api/admin/mystery-box/games-mode`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-      body: JSON.stringify({ enabled })
+      body: JSON.stringify({ enabled, reason })
     });
     const data = await res.json();
     return res.ok ? { ok: true, enabled: data.enabled === true } : { ok: false, error: data.error };
-  } catch {
-    return { ok: false, error: 'Network error' };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Network error' };
   }
 }
 
 export async function updateAdminTeamGameLimit(adminToken, { code, maxAttempts }) {
   try {
+    const reason = adminReason();
     const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/${code}/games-limit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-      body: JSON.stringify({ maxAttempts })
+      body: JSON.stringify({ maxAttempts, reason })
     });
     const data = await res.json();
     return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
-  } catch {
-    return { ok: false, error: 'Network error' };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Network error' };
   }
 }
 
@@ -361,7 +370,7 @@ export async function fetchAdminChallenges(adminToken) {
     });
     const data = await res.json();
     return res.ok
-      ? { ok: true, challenges: data.challenges || [], chaosRevealedAt: data.chaosRevealedAt || null }
+      ? { ok: true, challenges: data.challenges || [], chaosRevealedAt: data.chaosRevealedAt || null, chaosEnabled: data.chaosEnabled === true }
       : { ok: false, error: data.error, challenges: [], chaosRevealedAt: null };
   } catch {
     return { ok: false, error: 'Network error', challenges: [] };
@@ -370,60 +379,66 @@ export async function fetchAdminChallenges(adminToken) {
 
 export async function revealAdminChaosMode(adminToken) {
   try {
-    const res = await fetch(`${API_URL}/api/admin/mystery-box/chaos/reveal`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}` } });
+    const reason = adminReason();
+    const res = await fetch(`${API_URL}/api/admin/mystery-box/chaos/reveal`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({reason}) });
     const data = await res.json();
     return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
-  } catch { return { ok: false, error: 'Network error' }; }
+  } catch (error) { return { ok: false, error: error.message || 'Network error' }; }
 }
 
 export async function resolveAdminTeamChaos(adminToken, code) {
   try {
-    const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/${code}/chaos/resolve`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}` } });
+    const reason = adminReason();
+    const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/${code}/chaos/resolve`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({reason}) });
     const data = await res.json();
     return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
-  } catch { return { ok: false, error: 'Network error' }; }
+  } catch (error) { return { ok: false, error: error.message || 'Network error' }; }
 }
 
 /** Reassign challenge question */
 export async function reassignAdminTeamTopic(adminToken, { code, challengeId, resetSwapUsed }) {
   try {
+    const reason = adminReason();
     const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/reassign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-      body: JSON.stringify({ code, challengeId, resetSwapUsed })
+      body: JSON.stringify({ code, challengeId, resetSwapUsed, reason })
     });
     const data = await res.json();
     return res.ok ? { ok: true, team: data.team } : { ok: false, error: data.error };
-  } catch {
-    return { ok: false, error: 'Network error' };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Network error' };
   }
 }
 
 /** Delete / Disband hackathon team */
 export async function deleteAdminHackathonTeam(adminToken, code) {
   try {
+    const reason = adminReason();
     const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/${code}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${adminToken}` }
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({reason})
     });
     const data = await res.json();
     return res.ok ? { ok: true } : { ok: false, error: data.error };
-  } catch {
-    return { ok: false, error: 'Network error' };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Network error' };
   }
 }
 
 export async function removeAdminHackathonMember(adminToken, { code, email }) {
   try {
+    const reason = adminReason();
     const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/${code}/members/remove`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ email, reason })
     });
     const data = await res.json();
     return res.ok ? { ok: true, team: data.team } : { ok: false, error: data.error };
-  } catch {
-    return { ok: false, error: 'Network error' };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Network error' };
   }
 }
 

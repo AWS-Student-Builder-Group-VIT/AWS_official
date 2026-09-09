@@ -9,8 +9,8 @@ export const WHEEL_SEGMENTS = [
   { label: 'Better Luck', color: '#001a2a', stroke: '#00A8FF' },
   { label: 'Better Luck', color: '#2a1800', stroke: '#FF9900' },
   { label: 'Better Luck', color: '#1a0020', stroke: '#7C4DFF' },
-  { label: '🥇 Golden Pass', color: '#1a1000', stroke: '#FFD700' },
-  { label: '🃏 Wildcard', color: '#0f0025', stroke: '#b24dff' },
+  { label: '+50 Points', color: '#1a1000', stroke: '#FFD700' },
+  { label: 'Free Problem Change Card', color: '#0f0025', stroke: '#b24dff' },
 ];
 
 /* ── How It Works Steps ── */

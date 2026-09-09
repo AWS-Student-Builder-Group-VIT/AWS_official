@@ -22,6 +22,7 @@ import {
   listAdminChallenges,
 } from './challengeCatalog.js';
 import { formatHackathonTeam } from './hackathonTeam.js';
+import { initializeEventRewards, registerEventRewardRoutes } from './eventRewards.js';
 import { isAllowedOrigin } from './corsOrigins.js';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -191,12 +192,13 @@ async function runDatabaseMigrations() {
     );
   `).catch(err => console.log('ALTER columns for hackathon_teams error:', err.message));
   await initializeHackathonScoring(pool);
+  await initializeEventRewards(pool);
 }
 
 async function initDb() {
   const result = await initializeVersionedSchema({
     pool,
-    version: 'v4-track-challenge-catalog-ready',
+    version: 'v5-wheel-reversible-chaos-ready',
     migrate: runDatabaseMigrations,
   });
   console.log(result.migrated ? 'Database tables ready' : 'Database schema already ready');
@@ -241,12 +243,13 @@ app.post('/api/mystery-box/teams/create', hackathonAuth, async (req, res) => {
     }
 
     const { row, members } = await withTransaction(async (client) => {
+      await client.query("SELECT value FROM hackathon_event_settings WHERE key='chaos_enabled' FOR SHARE");
       const snapshot = await assignBalancedChallengeForNewTeam(client);
       const result = await client.query(
-        `INSERT INTO hackathon_teams (code, team_name, mystery_question, chaos_event, is_chaos_opened, is_opened, points, members)
+        `INSERT INTO hackathon_teams (code, team_name, mystery_question, chaos_event, is_chaos_opened, is_opened, points, members, chaos_version)
          VALUES ($1, $2, $3, $4,
-           (SELECT COALESCE(value <> 'null'::jsonb, FALSE) FROM hackathon_event_settings WHERE key='chaos_mode_revealed_at'),
-           $5, $6, $7)
+           (SELECT value = 'true'::jsonb FROM hackathon_event_settings WHERE key='chaos_enabled'),
+           $5, $6, $7, (SELECT (value::text)::integer FROM hackathon_event_settings WHERE key='chaos_version'))
          RETURNING *`,
         [upperCode, teamName, JSON.stringify(snapshot.challenge), JSON.stringify(snapshot.chaosEvent), false, 0, JSON.stringify([{ email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: true }])]
       );
@@ -344,6 +347,7 @@ app.get('/api/mystery-box/teams/:code', hackathonAuth, async (req, res) => {
   }
 });
 
+registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddleware });
 registerHackathonScoringRoutes(app, { pool, hackathonAuth, adminMiddleware });
 
 app.post('/api/mystery-box/activity/log', async (req, res) => {
@@ -675,6 +679,9 @@ app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
       SELECT id, code, team_name, mystery_question, is_opened, points,
              members, chaos_event, is_chaos_opened, is_chaos_resolved,
              owned_items, has_changed_question, max_game_attempts, created_at, updated_at,
+             spins_used, free_change_cards, chaos_version,
+             COALESCE((SELECT jsonb_agg(s ORDER BY s.created_at DESC) FROM team_wheel_spins s WHERE s.team_id=hackathon_teams.id),'[]'::jsonb) AS spin_history,
+             COALESCE((SELECT jsonb_agg(i ORDER BY i.created_at DESC) FROM team_member_invitations i WHERE i.team_id=hackathon_teams.id),'[]'::jsonb) AS invitations,
              COALESCE((
                SELECT jsonb_agg(jsonb_build_object(
                  'attemptId', a.id,
@@ -708,6 +715,12 @@ app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
     `);
     const formatted = result.rows.map(row => ({
       id: row.id,
+      spinsUsed: row.spins_used,
+      remainingSpins: 5-row.spins_used,
+      freeChangeCards: row.free_change_cards,
+      chaosVersion: row.chaos_version,
+      spinHistory: row.spin_history,
+      invitations: row.invitations,
       code: row.code,
       teamName: row.team_name,
       mysteryQuestion: row.mystery_question,
@@ -751,8 +764,9 @@ app.post('/api/admin/mystery-box/teams/points', adminMiddleware, async (req, res
 
 app.get('/api/admin/mystery-box/challenges', adminMiddleware, async (req, res) => {
   try {
-    const setting = await pool.query("SELECT value FROM hackathon_event_settings WHERE key='chaos_mode_revealed_at'");
-    res.json({ challenges: listAdminChallenges(), chaosRevealedAt: setting.rows[0]?.value || null });
+    const setting = await pool.query("SELECT key,value FROM hackathon_event_settings WHERE key IN ('chaos_mode_revealed_at','chaos_enabled','chaos_version')");
+    const settings = Object.fromEntries(setting.rows.map(row => [row.key,row.value]));
+    res.json({ challenges: listAdminChallenges(), chaosRevealedAt: settings.chaos_mode_revealed_at || null, chaosEnabled: settings.chaos_enabled === true, chaosVersion: settings.chaos_version });
   } catch {
     res.status(500).json({ error: 'Could not load the challenge catalog' });
   }
