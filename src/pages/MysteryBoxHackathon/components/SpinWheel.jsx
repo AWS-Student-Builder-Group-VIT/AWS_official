@@ -3,7 +3,7 @@ import { createSpinOutcome } from './spinWheelLogic';
 import { eventRequest, pendingRequest } from '../../../utils/eventRewards';
 
 const sectors = ['Better Luck', 'Better Luck', 'Better Luck', 'Better Luck', 'Better Luck', '+50 Points', 'Free Problem|Change Card'];
-export default function SpinWheel({ team = { code: 'preview' }, isLeader = false }) {
+export default function SpinWheel({ team = { code: 'preview' }, isMember = false }) {
   const [busy, setBusy] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [message, setMessage] = useState('');
@@ -17,7 +17,7 @@ export default function SpinWheel({ team = { code: 'preview' }, isLeader = false
   const used = receipt && receipt.previousUpdatedAt === team.updatedAt ? receipt.spinsUsed : team.spinsUsed || 0;
 
   async function spin() {
-    if (locked.current || !isLeader) return;
+    if (locked.current || !isMember) return;
     locked.current = true; setBusy(true); setMessage('Confirming your spin…');
     try {
       const requestId = pendingRequest(key); setPending(true);
@@ -58,7 +58,7 @@ export default function SpinWheel({ team = { code: 'preview' }, isLeader = false
       </svg>
     </div>
     <p className="text-xs text-center text-on-surface-variant">Better luck: 90% · +50 points: 5% · Free change card: 5%<br />Sector sizes are decorative; each spin uses these odds.</p>
-    <button onClick={spin} disabled={busy || !isLeader || (used>=5 && !pending)} className="bg-primary-container text-black font-bold px-8 py-3 rounded-lg disabled:opacity-40">{busy?'Spinning…':!isLeader?'Leader only':pending?'Retry pending spin':used>=5?'All five spins used':'Spin the wheel'}</button>
+    <button onClick={spin} disabled={busy || !isMember || (used>=5 && !pending)} className="bg-primary-container text-black font-bold px-8 py-3 rounded-lg disabled:opacity-40">{busy?'Spinning…':!isMember?'Team members only':pending?'Retry pending spin':used>=5?'All five spins used':'Spin the wheel'}</button>
     <p role="status" className="text-center text-primary-container min-h-6">{message}</p>
   </div>;
 }

@@ -60,7 +60,7 @@ export async function initializeEventRewards(pool) {
 export async function spinWheel(pool, { code, user, id, draw = () => randomInt(10000) }) {
   requestId(id);
   return transact(pool, async client => {
-    const team = await findAuthorizedTeam(client, code, user, { leader: true, lock: true });
+    const team = await findAuthorizedTeam(client, code, user, { lock: true });
     const previous = await client.query('SELECT * FROM team_wheel_spins WHERE team_id=$1 AND request_id=$2', [team.id,id]);
     let spin = previous.rows[0];
     if (!spin) {
@@ -126,7 +126,7 @@ export function registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddl
   app.post('/api/mystery-box/teams/:code/free-topic-swap',hackathonAuth,route(req => transact(pool,async client => {
     const id=requestId(req.body.requestId);
     const enabled=await chaosState(client,'FOR SHARE');
-    const team=await findAuthorizedTeam(client,req.params.code,req.hackathonUser,{leader:true,lock:true});
+    const team=await findAuthorizedTeam(client,req.params.code,req.hackathonUser,{lock:true});
     const previous=await client.query('SELECT topic_id FROM team_card_redemptions WHERE team_id=$1 AND request_id=$2',[team.id,id]);
     if (!previous.rows.length) {
       if (enabled) reject('Topic changes are locked while Chaos is enabled',409);

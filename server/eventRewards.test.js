@@ -50,6 +50,8 @@ test('PostgreSQL reward, chaos and team administration transactions',async t=>{
     await query('INSERT INTO hackathon_team_members(team_id,email,google_sub,is_leader) VALUES($1,$2,$3,TRUE)',[team.rows[0].id,`${code}@test.local`,code]);
   }
   const user={sub:'TEAM01',email:'TEAM01@test.local'};
+  const member={sub:'TEAM01-member',email:'member@test.local'};
+  await query('INSERT INTO hackathon_team_members(team_id,email,google_sub,is_leader) VALUES((SELECT id FROM hackathon_teams WHERE code=$1),$2,$3,FALSE)',['TEAM01',member.email,member.sub]);
   const routes=new Map();
   const app=Object.fromEntries(['get','post','patch','delete'].map(method=>[method,(path,...handlers)=>{if(!routes.has(`${method}:${path}`))routes.set(`${method}:${path}`,handlers.at(-1));}]));
   const middleware=(_req,_res,next)=>next();
@@ -62,23 +64,28 @@ test('PostgreSQL reward, chaos and team administration transactions',async t=>{
   }
   const team=async(code='TEAM01')=>(await query('SELECT * FROM hackathon_teams WHERE code=$1',[code])).rows[0];
   const edit=(body)=>request('patch','/api/admin/mystery-box/teams/:code',{reason:'Test adjustment',...body});
-  await t.test('leader authorization, repeated requests and exact point awards',async()=>{
+  await t.test('verified members may spin, while cross-team users remain blocked',async()=>{
     await assert.rejects(spinWheel(pool,{code:'TEAM02',user,id:randomUUID()}),{status:403});
     const id=randomUUID();
-    const won=await spinWheel(pool,{code:'TEAM01',user,id,draw:()=>9000});
+    const won=await spinWheel(pool,{code:'TEAM01',user:member,id,draw:()=>9000});
     assert.equal(won.balance,150);assert.equal(won.spinsUsed,1);
-    const repeated=await spinWheel(pool,{code:'TEAM01',user,id,draw:()=>9500});
+    const repeated=await spinWheel(pool,{code:'TEAM01',user:member,id,draw:()=>9500});
     assert.equal(repeated.spin.id,won.spin.id);assert.equal(repeated.balance,150);assert.equal(repeated.spinsUsed,1);
     assert.equal((await query("SELECT COUNT(*)::integer AS count FROM team_point_ledger WHERE source_type='wheel'")).rows[0].count,1);
   });
-  await t.test('card grant and redemption are atomic, repeat-safe and separate from paid swaps',async()=>{
+  await t.test('verified members may redeem a card and use Point Shop rewards',async()=>{
     await spinWheel(pool,{code:'TEAM01',user,id:randomUUID(),draw:()=>9500});
     await query('UPDATE hackathon_teams SET has_changed_question=TRUE WHERE code=$1',['TEAM01']);
     const id=randomUUID();
-    const result=await request('post','/api/mystery-box/teams/:code/free-topic-swap',{requestId:id,topicId:challengeIds[1]});
+    const result=await request('post','/api/mystery-box/teams/:code/free-topic-swap',{requestId:id,topicId:challengeIds[1]},{code:'TEAM01'},member);
     assert.equal(result.status,200);assert.equal(result.data.cost,0);assert.equal(result.data.balance,150);assert.equal(result.data.freeChangeCards,0);assert.equal(result.data.hasChangedQuestion,true);
-    const duplicate=await request('post','/api/mystery-box/teams/:code/free-topic-swap',{requestId:id,topicId:challengeIds[1]});
+    const duplicate=await request('post','/api/mystery-box/teams/:code/free-topic-swap',{requestId:id,topicId:challengeIds[1]},{code:'TEAM01'},member);
     assert.equal(duplicate.status,200);assert.equal(duplicate.data.freeChangeCards,0);
+    const purchase=await request('post','/api/mystery-box/teams/:code/purchases',{itemId:'mentor-help'},{code:'TEAM01'},member);
+    assert.equal(purchase.status,200);assert.equal(purchase.data.balance,0);
+    await query('UPDATE hackathon_teams SET points=100,has_changed_question=FALSE WHERE code=$1',['TEAM01']);
+    const paidSwap=await request('post','/api/mystery-box/teams/:code/topic-swap',{topicId:challengeIds[2]},{code:'TEAM01'},member);
+    assert.equal(paidSwap.status,200);assert.equal(paidSwap.data.balance,0);
     const invalid=await request('post','/api/mystery-box/teams/:code/free-topic-swap',{requestId:randomUUID(),topicId:challengeIds[2]});
     assert.equal(invalid.status,409);
   });
@@ -105,8 +112,8 @@ test('PostgreSQL reward, chaos and team administration transactions',async t=>{
     assert.equal(formatHackathonTeam(await team()).chaosEvent,null);
     await setChaosMode(pool,{enabled:true,reason:'Resume round two',actor:'admin'});
     assert.equal((await team()).is_chaos_resolved,true);assert.ok((await team()).chaos_version>opened.chaos_version);
-    await edit({challengeId:challengeIds[2]});assert.equal((await team()).is_chaos_resolved,false);
-    assert.equal((await team()).chaos_event.id,createTeamChallengeSnapshot(getChallengeById(challengeIds[2])).chaosEvent.id);
+    await edit({challengeId:challengeIds[0]});assert.equal((await team()).is_chaos_resolved,false);
+    assert.equal((await team()).chaos_event.id,createTeamChallengeSnapshot(getChallengeById(challengeIds[0])).chaosEvent.id);
   });
   await t.test('admin edits, ledger balances, reason validation and re-reveal do not duplicate points',async()=>{
     const before=await team();assert.equal((await edit({reason:'no',points:200})).status,400);

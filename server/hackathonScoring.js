@@ -705,7 +705,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
   app.post('/api/mystery-box/teams/:code/leave', hackathonAuth, async (req, res) => {
     try {
       const response = await transact(pool, async (client) => {
-        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { lock: true });
+        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
         if (team.actor_is_leader) {
           const error = new Error('The team leader cannot leave without transferring leadership');
           error.status = 409;
@@ -729,7 +729,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
   app.post('/api/mystery-box/teams/:code/reveal', hackathonAuth, async (req, res) => {
     try {
       const response = await transact(pool, async (client) => {
-        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
+        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { lock: true });
         if (team.is_opened) return { balance: Number(team.points || 0), alreadyOpened: true };
         const award = team.primary_awarded ? 0 : Math.max(0, Math.trunc(Number(team.mystery_question?.points || 0)));
         const ledger = await appendLedger(client, { team, sourceType: 'mystery', sourceRef: 'primary-reveal', delta: award, reason: 'Primary mystery box revealed', actor: req.hackathonUser });
@@ -746,7 +746,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
       const item = SHOP_ITEMS[req.body?.itemId];
       if (!item) return res.status(400).json({ error: 'Unknown shop item' });
       const response = await transact(pool, async (client) => {
-        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
+        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { lock: true });
         const owned = Array.isArray(team.owned_items) ? team.owned_items : [];
         if (owned.includes(item.title)) { const error = new Error('This item is already owned'); error.status = 409; throw error; }
         const ledger = await appendLedger(client, { team, sourceType: 'shop', sourceRef: req.body.itemId, delta: -item.price, reason: `Purchased ${item.title}`, actor: req.hackathonUser, metadata: { itemId: req.body.itemId } });
@@ -764,7 +764,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
       if (!targetTopic) return res.status(400).json({ error: 'Unknown topic selected' });
       const response = await transact(pool, async (client) => {
         await client.query("SELECT value FROM hackathon_event_settings WHERE key='chaos_enabled' FOR SHARE");
-        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
+        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { lock: true });
         const quote = getTopicSwapQuote({
           currentTopic: team.mystery_question,
           targetTopic,

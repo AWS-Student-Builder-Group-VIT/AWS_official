@@ -187,7 +187,7 @@ export default function MysteryBoxDashboard() {
     }
   };
 
-  const runLeaderAction = async (path, body = {}) => {
+  const runTeamAction = async (path, body = {}) => {
     const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
     const response = await fetch(path, {
       method: 'POST',
@@ -226,7 +226,7 @@ export default function MysteryBoxDashboard() {
     if (!team || !isCurrentLeader) return;
     try {
       setIsOpeningLocal(true);
-      const result = await runLeaderAction(`/api/mystery-box/teams/${team.code}/reveal`);
+      const result = await runTeamAction(`/api/mystery-box/teams/${team.code}/reveal`);
       setIsOpeningLocal(false);
       setNotification(`Mystery challenge revealed. +${result.awardedPoints || 0} pts awarded.`);
       setTimeout(() => setNotification(''), 4000);
@@ -265,7 +265,6 @@ export default function MysteryBoxDashboard() {
   const handlePurchase = async (item, free = false) => {
     setUseFreeCard(free);
     if (item.id === 'change-topic' || item.isSpecialSwap) {
-      if (!isCurrentLeader) return;
       if (!team.isOpened) {
         setNotification('Reveal your original challenge before changing it.');
         return;
@@ -292,10 +291,10 @@ export default function MysteryBoxDashboard() {
       return;
     }
     const cost = parseInt(item.price);
-    if (!isCurrentLeader || isNaN(cost) || (team.points || 0) < cost) return;
+    if (isNaN(cost) || (team.points || 0) < cost) return;
     try {
       const itemId = item.id || item.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      await runLeaderAction(`/api/mystery-box/teams/${team.code}/purchases`, { itemId });
+      await runTeamAction(`/api/mystery-box/teams/${team.code}/purchases`, { itemId });
       setNotification(`Successfully purchased ${item.title}!`);
       setTimeout(() => setNotification(''), 4000);
     } catch (error) {
@@ -629,7 +628,7 @@ export default function MysteryBoxDashboard() {
                   
                   <TeamActivity key={team.code} team={team} />
 
-                  {isCurrentLeader && <button className="bg-primary-container text-black rounded-xl p-4 disabled:opacity-40" disabled={!team.isOpened || team.isChaosOpened || !team.freeChangeCards} onClick={() => handlePurchase({id:'change-topic'},true)}>Use Free Problem Change Card ({team.freeChangeCards || 0})</button>}
+                  <button className="bg-primary-container text-black rounded-xl p-4 disabled:opacity-40" disabled={!team.isOpened || team.isChaosOpened || !team.freeChangeCards} onClick={() => handlePurchase({id:'change-topic'},true)}>Use Free Problem Change Card ({team.freeChangeCards || 0})</button>
                   {/* Members Widget */}
                   <div className="bg-white/[0.02] border border-white/5 p-6 rounded-[24px]">
                     <p className="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-label-sm mb-4">Live Teammates</p>
@@ -687,7 +686,7 @@ export default function MysteryBoxDashboard() {
                     const isTopicSwap = item.id === 'change-topic' || item.isSpecialSwap;
                     const priceVal = parseInt(item.price);
                     const isOwned = isTopicSwap ? team.hasChangedQuestion : ownedItems.includes(item.title);
-                    const canAfford = isCurrentLeader && (isTopicSwap || points >= priceVal);
+                    const canAfford = isTopicSwap || points >= priceVal;
 
                     return (
                       <div
@@ -734,7 +733,7 @@ export default function MysteryBoxDashboard() {
                                   : 'bg-white/5 text-on-surface-variant/40 cursor-not-allowed'
                               }`}
                             >
-                              {canAfford ? 'Purchase Advantage' : isCurrentLeader ? 'Not Enough Points' : 'Leader Only'}
+                              {canAfford ? 'Purchase Advantage' : 'Not Enough Points'}
                             </button>
                           )}
                         </div>
@@ -761,7 +760,7 @@ export default function MysteryBoxDashboard() {
                 </div>
 
                 <div className="bg-white/[0.02] border border-white/5 p-6 rounded-[24px] flex justify-center shadow-[0_15px_50px_rgba(255,153,0,0.05)]">
-                  <SpinWheel key={team.code} team={team} isLeader={isCurrentLeader} />
+                  <SpinWheel key={team.code} team={team} isMember={Boolean(myEmail)} />
                 </div>
               </motion.div>
             )}
