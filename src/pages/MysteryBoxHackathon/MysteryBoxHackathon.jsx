@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { readApiResponse } from '../../utils/apiResponse';
 import { motion } from 'framer-motion';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import TeamInvitations from './components/TeamInvitations';
 
 // Global assets (shared across the whole app)
 import awsIcon from '../../assets/aws_icon.jpeg';
@@ -744,6 +745,7 @@ function MysteryBoxHackathonInner() {
             )}
           </div>
         </nav>
+        <TeamInvitations onJoined={() => navigate('/mystery-box-hackathon/dashboard')} />
 
         {/* ═══════════ HERO ═══════════ */}
         <section
@@ -1133,13 +1135,13 @@ function MysteryBoxHackathonInner() {
                      }}>
                   <span className="inline-block px-2.5 py-1 text-[10px] tracking-[2px] uppercase font-bold mb-4 font-label-sm"
                         style={{ background: 'linear-gradient(135deg, #FF9900, #ff6b00)', color: '#000' }}>
-                    ✦ MYTHIC · ULTRA RARE
+                    ✦ WHEEL REWARDS
                   </span>
                   <div className="text-[32px] mb-3">🃏</div>
-                  <h3 className="text-[22px] mb-4 font-headline-md uppercase tracking-widest" style={{ color: '#b24dff' }}>Wildcard Advantage</h3>
-                  <p className="text-[13px] text-on-surface-variant mb-4 font-body-md">Choose any one of the following advantages:</p>
+                  <h3 className="text-[22px] mb-4 font-headline-md uppercase tracking-widest" style={{ color: '#b24dff' }}>Five Spins Per Team</h3>
+                  <p className="text-[13px] text-on-surface-variant mb-4 font-body-md">Each spin has a 90% chance of Better Luck Next Time, a 5% chance of 50 points, and a 5% chance of a free problem change.</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {['Remove One Penalty', '+100 Points', 'Additional Hint', 'Extra Pitch Time'].map(opt => (
+                    {['+50 Points', 'Free Problem Change Card'].map(opt => (
                       <div key={opt} className="p-2.5 text-[13px] text-on-surface border text-center"
                            style={{ background: 'rgba(255,153,0,0.1)', border: '1px solid rgba(255,153,0,0.2)', borderRadius: '2px' }}>
                         {opt}

@@ -417,7 +417,7 @@ export async function listHackathonMembers(client, teamId) {
   return result.rows;
 }
 
-async function findAuthorizedTeam(client, code, user, { leader = false, lock = false } = {}) {
+export async function findAuthorizedTeam(client, code, user, { leader = false, lock = false } = {}) {
   const result = await client.query(
     `SELECT t.*, m.id AS actor_member_id, m.google_sub AS actor_google_sub,
             m.is_leader AS actor_is_leader
@@ -445,7 +445,7 @@ async function findAuthorizedTeam(client, code, user, { leader = false, lock = f
   return team;
 }
 
-async function transact(pool, operation) {
+export async function transact(pool, operation) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -460,7 +460,7 @@ async function transact(pool, operation) {
   }
 }
 
-async function appendLedger(client, { team, sourceType, sourceRef, delta, reason, actor, metadata = {} }) {
+export async function appendLedger(client, { team, sourceType, sourceRef, delta, reason, actor, metadata = {} }) {
   const balance = Number(team.points || 0) + delta;
   if (balance < 0) {
     const error = new Error('Team does not have enough points');
@@ -554,8 +554,8 @@ async function getTeamGameSummary(client, team) {
 }
 
 async function getChaosModeRevealed(client) {
-  const result = await client.query("SELECT value FROM hackathon_event_settings WHERE key='chaos_mode_revealed_at'");
-  return Boolean(result.rows[0]?.value && result.rows[0].value !== 'null');
+  const result = await client.query("SELECT value FROM hackathon_event_settings WHERE key='chaos_enabled'");
+  return result.rows[0]?.value === true;
 }
 
 const sendError = (res, error) => {
@@ -683,7 +683,8 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
           client.query(`SELECT source_type AS "sourceType", source_ref AS "sourceRef", delta, balance_after AS "balanceAfter", reason, created_at AS "createdAt" FROM team_point_ledger WHERE team_id=$1 ORDER BY created_at DESC, id DESC LIMIT 200`, [team.id]),
           getTeamGameSummary(client, team),
         ]);
-        res.json({ teamCode: team.code, balance: Number(team.points || 0), ...gameSummary, ledger: ledger.rows });
+        const totals = await client.query('SELECT COALESCE(SUM(delta) FILTER (WHERE delta>0),0)::integer AS earned, COALESCE(-SUM(delta) FILTER (WHERE delta<0),0)::integer AS spent FROM team_point_ledger WHERE team_id=$1',[team.id]);
+        res.json({ teamCode: team.code, balance: Number(team.points || 0), earnedPoints: totals.rows[0].earned, spentPoints: totals.rows[0].spent, ...gameSummary, ledger: ledger.rows });
       } finally { client.release(); }
     } catch (error) { sendError(res, error); }
   });
@@ -730,10 +731,10 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
       const response = await transact(pool, async (client) => {
         const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
         if (team.is_opened) return { balance: Number(team.points || 0), alreadyOpened: true };
-        const award = Math.max(0, Math.trunc(Number(team.mystery_question?.points || 0)));
+        const award = team.primary_awarded ? 0 : Math.max(0, Math.trunc(Number(team.mystery_question?.points || 0)));
         const ledger = await appendLedger(client, { team, sourceType: 'mystery', sourceRef: 'primary-reveal', delta: award, reason: 'Primary mystery box revealed', actor: req.hackathonUser });
-        await client.query('UPDATE hackathon_teams SET is_opened=TRUE, updated_at=NOW() WHERE id=$1', [team.id]);
-        return { balance: ledger.balance, awardedPoints: award, isOpened: true };
+        await client.query('UPDATE hackathon_teams SET is_opened=TRUE, primary_awarded=TRUE, updated_at=NOW() WHERE id=$1', [team.id]);
+        return { balance: ledger.balance, awardedPoints: ledger.applied ? award : 0, isOpened: true };
       });
       res.json(response);
     } catch (error) { sendError(res, error); }
@@ -762,6 +763,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
       const targetTopic = getChallengeById(req.body?.topicId);
       if (!targetTopic) return res.status(400).json({ error: 'Unknown topic selected' });
       const response = await transact(pool, async (client) => {
+        await client.query("SELECT value FROM hackathon_event_settings WHERE key='chaos_enabled' FOR SHARE");
         const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
         const quote = getTopicSwapQuote({
           currentTopic: team.mystery_question,
@@ -795,7 +797,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
         const snapshot = createTeamChallengeSnapshot(targetTopic);
         await client.query(
           `UPDATE hackathon_teams
-           SET mystery_question=$1, chaos_event=$2, has_changed_question=TRUE, updated_at=NOW()
+           SET mystery_question=$1, chaos_event=$2, has_changed_question=TRUE, is_chaos_resolved=FALSE, updated_at=NOW()
            WHERE id=$3`,
           [JSON.stringify(snapshot.challenge), JSON.stringify(snapshot.chaosEvent), team.id],
         );

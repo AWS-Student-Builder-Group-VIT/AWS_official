@@ -5,10 +5,12 @@ import awsIcon from '../../assets/aws_icon.jpeg';
 import {
   MiniMysteryBox,
   MiniChaosMysteryBox,
-  Divider,
 } from './components';
-import { SHOP_ITEMS, POINTS } from './data';
+import { SHOP_ITEMS } from './data';
 import SpinWheel from './components/SpinWheel';
+import GiftReveal from './components/GiftReveal';
+import TeamActivity from './components/TeamActivity';
+import { eventRequest, pendingRequest } from '../../utils/eventRewards';
 import { games } from '../gamesRegistry';
 import { SCORED_TEAM_GAMES } from '../../utils/teamGameScoring';
 import { fetchMysteryTopics, fetchTeamGameScores, swapTeamTopic } from '../../utils/auth';
@@ -27,6 +29,7 @@ export default function MysteryBoxDashboard() {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState(() => new URLSearchParams(location.search).get('tab') === 'games' ? 'games' : 'control');
   const [gameScores, setGameScores] = useState(null);
+  const [useFreeCard, setUseFreeCard] = useState(false);
   const [topicModalOpen, setTopicModalOpen] = useState(false);
   const [topics, setTopics] = useState([]);
   const [selectedTopicId, setSelectedTopicId] = useState('');
@@ -50,7 +53,6 @@ export default function MysteryBoxDashboard() {
   });
 
   const [isOpeningLocal, setIsOpeningLocal] = useState(false);
-  const [prevIsOpened, setPrevIsOpened] = useState(false);
 
   // Shop state mirrors the server-owned inventory for rendering only.
   const [ownedItems, setOwnedItems] = useState(() => {
@@ -151,20 +153,6 @@ export default function MysteryBoxDashboard() {
     }
   }, [team, myEmail, navigate]);
 
-  // Set up primary box-opening state changes
-  useEffect(() => {
-    if (team?.isOpened && !prevIsOpened) {
-      const startTimer = setTimeout(() => setIsOpeningLocal(true), 0);
-      const finishTimer = setTimeout(() => {
-        setIsOpeningLocal(false);
-        setPrevIsOpened(true);
-      }, 2000);
-      return () => {
-        clearTimeout(startTimer);
-        clearTimeout(finishTimer);
-      };
-    }
-  }, [team?.isOpened, prevIsOpened]);
 
   if (!team || !myEmail) {
     return null; // Will redirect in useEffect
@@ -238,8 +226,9 @@ export default function MysteryBoxDashboard() {
     if (!team || !isCurrentLeader) return;
     try {
       setIsOpeningLocal(true);
-      await runLeaderAction(`/api/mystery-box/teams/${team.code}/reveal`);
-      setNotification(`Mystery challenge revealed. +${questionPoints} pts awarded.`);
+      const result = await runLeaderAction(`/api/mystery-box/teams/${team.code}/reveal`);
+      setIsOpeningLocal(false);
+      setNotification(`Mystery challenge revealed. +${result.awardedPoints || 0} pts awarded.`);
       setTimeout(() => setNotification(''), 4000);
     } catch (error) {
       setNotification(error.message);
@@ -273,14 +262,15 @@ export default function MysteryBoxDashboard() {
   };
 
   // Point Shop Purchase handler
-  const handlePurchase = async (item) => {
+  const handlePurchase = async (item, free = false) => {
+    setUseFreeCard(free);
     if (item.id === 'change-topic' || item.isSpecialSwap) {
       if (!isCurrentLeader) return;
       if (!team.isOpened) {
         setNotification('Reveal your original challenge before changing it.');
         return;
       }
-      if (team.hasChangedQuestion) {
+      if (team.hasChangedQuestion && !free) {
         setNotification('This team has already used its one challenge swap.');
         return;
       }
@@ -317,36 +307,29 @@ export default function MysteryBoxDashboard() {
     if (!selectedTopicId || topicSwapPending) return;
     setTopicSwapPending(true);
     try {
-      const response = await swapTeamTopic({ code: team.code, topicId: selectedTopicId });
+      const pendingKey = `aws-free-swap:${team.code}:${selectedTopicId}`;
+      const response = useFreeCard
+        ? { ok: true, ...await eventRequest(`mystery-box/teams/${team.code}/free-topic-swap`, { method: 'POST', body: { topicId: selectedTopicId, requestId: pendingRequest(pendingKey) } }) }
+        : await swapTeamTopic({ code: team.code, topicId: selectedTopicId });
       if (response.ok) {
-        const freshTeam = { ...team, mysteryQuestion: response.topic, points: response.balance, hasChangedQuestion: true };
+        const freshTeam = { ...team, mysteryQuestion: response.topic, points: response.balance, hasChangedQuestion: response.hasChangedQuestion, freeChangeCards: response.freeChangeCards ?? team.freeChangeCards };
         persistTeamLocally(freshTeam);
         setTopicModalOpen(false);
+        localStorage.removeItem(pendingKey);
+        window.dispatchEvent(new Event('aws-team-score:updated'));
         setNotification(`Challenge topic changed. -${response.cost} pts deducted.`);
         setTimeout(() => setNotification(''), 4000);
       } else {
         setNotification(response.error || 'Could not change challenge topic');
       }
+    } catch (error) {
+      setNotification(error.message);
     } finally {
       setTopicSwapPending(false);
     }
   };
 
-  // Determine user level based on points
   const points = team.points || 0;
-  let level = 'Cloud Rookie';
-  let nextLevel = 'SysOps Architect';
-  let progressPct = Math.min((points / 150) * 100, 100);
-
-  if (points >= 150 && points < 300) {
-    level = 'SysOps Architect';
-    nextLevel = 'Cloud Master';
-    progressPct = Math.min(((points - 150) / 150) * 100, 100);
-  } else if (points >= 300) {
-    level = 'Cloud Master';
-    nextLevel = 'Infinite Scale';
-    progressPct = 100;
-  }
 
   return (
     <>
@@ -491,7 +474,7 @@ export default function MysteryBoxDashboard() {
 
                     {/* Closed Box State */}
                     {!team.isOpened && !isOpeningLocal && (
-                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
                         <motion.div
                           animate={{
                             rotate: [0, -3, 3, -3, 3, 0],
@@ -529,33 +512,11 @@ export default function MysteryBoxDashboard() {
                     )}
 
                     {/* Opening / Transition State */}
-                    {isOpeningLocal && (
-                      <div className="flex flex-col items-center justify-center py-10 text-center overflow-hidden">
-                        <motion.div
-                          animate={{
-                            rotate: [-8, 8, -8, 8, -8, 8, 0],
-                            scale: [1, 1.2, 1.4, 0.8, 1.8, 0],
-                            filter: ["brightness(1)", "brightness(1.5)", "brightness(2)"],
-                          }}
-                          transition={{
-                            duration: 2,
-                            ease: "easeInOut",
-                          }}
-                        >
-                          <MiniMysteryBox />
-                        </motion.div>
-                        <motion.h4
-                          animate={{ opacity: [0.5, 1, 0.5] }}
-                          transition={{ repeat: Infinity, duration: 0.5 }}
-                          className="mt-6 text-sm font-headline-md text-primary-container uppercase tracking-[0.2em]"
-                        >
-                          ⚡ Decrypting Problem Statement... ⚡
-                        </motion.h4>
-                      </div>
-                    )}
+                    {isOpeningLocal && <p role="status" className="text-center py-8">Opening your challenge…</p>}
 
                     {/* Revealed State */}
                     {team.isOpened && !isOpeningLocal && (
+                      <GiftReveal key={team.code} storageKey={`aws-primary-reveal:${team.code}`}>
                       <motion.div
                         initial={{ opacity: 0, y: 15 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -592,6 +553,7 @@ export default function MysteryBoxDashboard() {
                           </span>
                         </div>
                       </motion.div>
+                      </GiftReveal>
                     )}
                   </div>
 
@@ -602,10 +564,11 @@ export default function MysteryBoxDashboard() {
                     <div className="flex justify-between items-center mb-4">
                       <p className="text-[10px] uppercase tracking-[0.2em] text-red-400 font-label-sm m-0">Chaos Mode Injector</p>
                       <span className="px-2.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider font-label-sm bg-red-500/10 border border-red-500/30 text-red-400">
-                        {team.isChaosResolved ? 'Resolved' : team.isChaosOpened ? 'Active' : 'Sealed'}
+                        {!team.isChaosOpened ? 'Sealed' : team.isChaosResolved ? 'Resolved' : 'Active'}
                       </span>
                     </div>
 
+                    <GiftReveal key={`${team.code}:${team.isChaosOpened}:${team.chaosVersion}`} storageKey={`aws-chaos-reveal:${team.code}:${team.chaosVersion}`} color="#ef4444" skip={!team.isChaosOpened}>
                     <div className="flex flex-col items-center justify-center py-8 text-center">
                       <motion.div
                         animate={{
@@ -629,9 +592,10 @@ export default function MysteryBoxDashboard() {
                       </div>
 
                       <p className="text-xs text-on-surface-variant max-w-[420px] mt-3 mb-0">
-                        {team.isChaosResolved ? 'The organizer has marked this adaptation as resolved. Keep the requirement visible in your final build.' : team.isChaosOpened ? 'Chaos Mode is active. Incorporate this required adaptation into your solution.' : 'Stay tuned. Organizers will reveal one curated adaptation for every team at the same time.'}
+                        {!team.isChaosOpened ? 'Chaos is disabled. Your card is sealed until organizers enable it.' : team.isChaosResolved ? 'The organizer has marked this adaptation as resolved. Keep the requirement visible in your final build.' : team.isChaosOpened ? 'Chaos Mode is active. Incorporate this required adaptation into your solution.' : 'Stay tuned. Organizers will reveal one curated adaptation for every team at the same time.'}
                       </p>
                     </div>
+                    </GiftReveal>
                   </div>
 
                   {/* Sandbox Deliverables Widget */}
@@ -663,35 +627,9 @@ export default function MysteryBoxDashboard() {
                 {/* Right Side Info Widgets */}
                 <div className="flex flex-col gap-6">
                   
-                  {/* Stats Progress Level widget */}
-                  <div className="bg-white/[0.02] border border-white/5 p-6 rounded-[24px]">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-label-sm mb-2">Team standing</p>
-                    <h4 className="text-lg font-headline-md text-primary-container uppercase m-0 tracking-widest">{level}</h4>
-                    
-                    {/* Progress slider */}
-                    <div className="mt-4">
-                      <div className="flex justify-between text-[10px] text-on-surface-variant font-label-sm mb-1.5">
-                        <span>XP Progress</span>
-                        <span>Next Rank: {nextLevel}</span>
-                      </div>
-                      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full bg-primary-container rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(255,153,0,0.5)]" style={{ width: `${progressPct}%` }} />
-                      </div>
-                    </div>
+                  <TeamActivity key={team.code} team={team} />
 
-                    <Divider className="my-5" />
-
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-label-sm mb-3">Scores Breakdown</p>
-                    <div className="space-y-3">
-                      {POINTS.slice(0, 3).map((p, idx) => (
-                        <div key={idx} className="flex justify-between items-center text-xs font-label-sm border-b border-white/5 pb-2">
-                          <span className="text-on-surface-variant">{p.icon} {p.name}</span>
-                          <span className="text-primary-container font-bold">{p.val} pts</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
+                  {isCurrentLeader && <button className="bg-primary-container text-black rounded-xl p-4 disabled:opacity-40" disabled={!team.isOpened || team.isChaosOpened || !team.freeChangeCards} onClick={() => handlePurchase({id:'change-topic'},true)}>Use Free Problem Change Card ({team.freeChangeCards || 0})</button>}
                   {/* Members Widget */}
                   <div className="bg-white/[0.02] border border-white/5 p-6 rounded-[24px]">
                     <p className="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-label-sm mb-4">Live Teammates</p>
@@ -819,11 +757,11 @@ export default function MysteryBoxDashboard() {
               >
                 <div className="bg-white/[0.02] border border-white/5 p-6 rounded-[24px] text-center mb-6">
                   <h3 className="text-xl font-headline-md text-on-surface uppercase tracking-widest mt-0 mb-1.5">🎰 Golden Spin Wheel</h3>
-                  <p className="text-xs text-on-surface-variant max-w-[500px] mx-auto font-body-md">Spin the wheel to earn wildcards, judging perks, or bonus points. Spins require 1 Spin Token.</p>
+                  <p className="text-xs text-on-surface-variant max-w-[500px] mx-auto font-body-md">Your team has five shared spins. Win 50 points or a Free Problem Change Card.</p>
                 </div>
 
                 <div className="bg-white/[0.02] border border-white/5 p-6 rounded-[24px] flex justify-center shadow-[0_15px_50px_rgba(255,153,0,0.05)]">
-                  <SpinWheel />
+                  <SpinWheel key={team.code} team={team} isLeader={isCurrentLeader} />
                 </div>
               </motion.div>
             )}
@@ -950,7 +888,7 @@ export default function MysteryBoxDashboard() {
             <div>
               <p className="text-[10px] uppercase tracking-[0.2em] text-primary-container font-label-sm m-0">Point Shop Advantage</p>
               <h3 className="text-xl font-headline-md text-on-surface uppercase tracking-widest mt-1 mb-0">Change Challenge Topic</h3>
-              <p className="text-xs text-on-surface-variant mt-2 mb-0">Leader-only, one-time exact challenge swap. Every track is available for a fixed 100 points.</p>
+              <p className="text-xs text-on-surface-variant mt-2 mb-0">{useFreeCard ? 'Use one Free Problem Change Card. Your paid swap allowance is preserved.' : 'Leader-only, one-time exact challenge swap. Every track is available for 100 points.'}</p>
             </div>
             <button onClick={() => setTopicModalOpen(false)} className="text-white/60 hover:text-white border-0 bg-transparent cursor-pointer text-lg">✕</button>
           </div>
@@ -966,7 +904,7 @@ export default function MysteryBoxDashboard() {
                 {trackTopics.map((topic) => {
               const currentId = parsedQuestion?.id;
               const isCurrent = topic.id === currentId;
-              const canSelect = team.isOpened && !isCurrent && points >= 100 && !team.hasChangedQuestion && !chaosRevealed && !team.isChaosOpened;
+              const canSelect = team.isOpened && !isCurrent && (useFreeCard ? team.freeChangeCards > 0 : points >= 100 && !team.hasChangedQuestion) && !chaosRevealed && !team.isChaosOpened;
               const selected = selectedTopicId === topic.id;
               return (
                 <button
@@ -979,7 +917,7 @@ export default function MysteryBoxDashboard() {
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm text-on-surface font-bold">{topic.title}</span>
                     <span className="text-[9px] uppercase tracking-widest text-primary-container border border-primary-container/30 px-2 py-1 rounded">
-                      100 pts
+                      {useFreeCard ? '1 free card' : '100 pts'}
                     </span>
                   </div>
                   <p className="text-xs text-on-surface-variant leading-5 mt-2 mb-0">{topic.desc}</p>
@@ -1000,7 +938,7 @@ export default function MysteryBoxDashboard() {
               Cancel
             </button>
             <button type="button" disabled={!selectedTopicId || topicSwapPending} onClick={handleConfirmTopicSwap} className="flex-1 bg-primary-container disabled:bg-white/5 disabled:text-on-surface-variant/40 text-background py-3 rounded-xl text-xs uppercase font-headline-md tracking-widest font-bold cursor-pointer border-0">
-              {topicSwapPending ? 'Applying Swap…' : selectedTopicId ? 'Confirm Swap · 100 pts' : 'Confirm Swap'}
+              {topicSwapPending ? 'Applying Swap…' : selectedTopicId ? (useFreeCard ? 'Redeem 1 Free Card' : 'Confirm Swap · 100 pts') : 'Confirm Swap'}
             </button>
           </div>
         </div>

@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import TeamAdminEditor from './TeamAdminEditor';
+import { eventRequest } from '../utils/eventRewards';
 import {
   adminLogin,
   fetchAdminScores,
@@ -13,7 +15,6 @@ import {
   updateAdminTeamGameLimit,
   resetAdminTeamGameAttempt,
   fetchAdminChallenges,
-  revealAdminChaosMode,
   resolveAdminTeamChaos,
   reassignAdminTeamTopic,
   deleteAdminHackathonTeam,
@@ -173,7 +174,8 @@ function Dashboard({ token, onLogout }) {
   const [chaosModalTeam, setChaosModalTeam] = useState(null);
   const [reassignModalTeam, setReassignModalTeam] = useState(null);
   const [challenges, setChallenges] = useState([]);
-  const [chaosRevealedAt, setChaosRevealedAt] = useState(null);
+  const [chaosEnabled, setChaosEnabled] = useState(false);
+  const [editingTeamCode, setEditingTeamCode] = useState(null);
   const [selectedReassignQuestion, setSelectedReassignQuestion] = useState('');
   const [resetSwapCheckbox, setResetSwapCheckbox] = useState(false);
   const [gameModeEnabled, setGameModeEnabled] = useState(false);
@@ -239,10 +241,11 @@ function Dashboard({ token, onLogout }) {
   const loadHackathonData = async () => {
     const [teams, mode, catalog] = await Promise.all([fetchAdminHackathonTeams(token), fetchAdminGameMode(token), fetchAdminChallenges(token)]);
     setHackathonTeams(teams);
+    setInspectTeam(current => current ? teams.find(t => t.code === current.code) || null : null);
     if (mode.ok) setGameModeEnabled(mode.enabled);
     if (catalog.ok) {
       setChallenges(catalog.challenges);
-      setChaosRevealedAt(catalog.chaosRevealedAt);
+      setChaosEnabled(catalog.chaosEnabled);
       setSelectedReassignQuestion((current) => current || catalog.challenges[0]?.id || '');
     }
     setHackathonLoading(false);
@@ -276,8 +279,10 @@ function Dashboard({ token, onLogout }) {
     loadAll();
     // Real-time live polling for activity logs and team updates every 2.5 seconds
     const interval = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
       pollActivities();
-    }, 2500);
+      loadHackathonData();
+    }, 3000);
     return () => clearInterval(interval);
   }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -324,11 +329,22 @@ function Dashboard({ token, onLogout }) {
   };
 
   const handleTriggerChaos = async (resolve = false) => {
-    const res = resolve ? await resolveAdminTeamChaos(token, chaosModalTeam?.code) : await revealAdminChaosMode(token);
+    if (!resolve) {
+      const reason = window.prompt(`Reason to ${chaosEnabled ? 'disable and reseal' : 'enable'} Chaos Mode (at least 5 characters):`);
+      if (!reason || reason.trim().length < 5) return;
+      try {
+        await eventRequest('admin/mystery-box/chaos-mode', {adminToken:token,method:'POST',body:{enabled:!chaosEnabled,reason}});
+        setChaosEnabled(!chaosEnabled); setChaosModalTeam(null);
+        notify(chaosEnabled ? 'Chaos disabled. Team cards are sealed.' : 'Chaos enabled for every team.');
+        loadHackathonData(); pollActivities();
+      } catch(error) { notify(error.message); }
+      return;
+    }
+    const res = await resolveAdminTeamChaos(token, chaosModalTeam?.code);
 
     if (res.ok) {
-      if (!resolve && res.revealedAt) setChaosRevealedAt(res.revealedAt);
-      notify(resolve ? 'Chaos adaptation marked as resolved!' : 'Chaos Mode permanently revealed for all teams!');
+      
+      notify('Chaos adaptation marked as resolved!');
       setChaosModalTeam(null);
       loadHackathonData();
       pollActivities();
@@ -643,10 +659,10 @@ function Dashboard({ token, onLogout }) {
                 <button
                   type="button"
                   onClick={() => handleTriggerChaos(false)}
-                  disabled={Boolean(chaosRevealedAt)}
+                  
                   className="bg-red-500/20 border border-red-500/50 hover:bg-red-500 hover:text-white text-red-300 font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span>🌪️</span> {chaosRevealedAt ? 'Chaos Mode Revealed' : 'Reveal Chaos Mode'}
+                  <span>🌪️</span> {chaosEnabled ? 'Disable Chaos Mode' : 'Enable Chaos Mode'}
                 </button>
                 <button
                   type="button"
@@ -1204,6 +1220,7 @@ function Dashboard({ token, onLogout }) {
       {/* ═══════════════════════════════════════════════════════════
           MODAL 0: FULL SQUAD DOSSIER / DETAILED INSPECT MODAL
          ═══════════════════════════════════════════════════════════ */}
+      {editingTeamCode && hackathonTeams.some(t=>t.code===editingTeamCode) && <TeamAdminEditor key={editingTeamCode} team={hackathonTeams.find(t=>t.code===editingTeamCode)} token={token} challenges={challenges} onClose={()=>setEditingTeamCode(null)} onSaved={loadHackathonData} />}
       {inspectTeam && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
           <div className="w-full max-w-2xl bg-[#111114] border border-[#00a8e0]/50 p-6 rounded-2xl shadow-2xl font-mono max-h-[90vh] overflow-y-auto">
@@ -1213,6 +1230,7 @@ function Dashboard({ token, onLogout }) {
                   Squad Dossier #{inspectTeam.code}
                 </span>
                 <h2 className="text-xl font-bold text-white mt-1 m-0">{inspectTeam.teamName}</h2>
+                <button className="bg-orange-400 text-black px-4 py-2 rounded mt-3" onClick={()=>setEditingTeamCode(inspectTeam.code)}>Manage all team details</button>
                 <div className="text-xs text-[#dbc2ad] mt-0.5">Created: {fmt(inspectTeam.registeredAt)}</div>
               </div>
               <button
@@ -1566,10 +1584,10 @@ function Dashboard({ token, onLogout }) {
               <button
                 type="button"
                 onClick={() => handleTriggerChaos(false)}
-                disabled={Boolean(chaosRevealedAt)}
+                
                 className="flex-1 bg-red-600 text-white py-2.5 text-xs font-bold uppercase hover:bg-red-500 cursor-pointer border-0 rounded disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {chaosRevealedAt ? 'Already Revealed' : 'Reveal Chaos Mode Globally'}
+                {chaosEnabled ? 'Disable and Reseal Chaos Globally' : 'Enable Chaos Mode Globally'}
               </button>
             </div>
           </div>

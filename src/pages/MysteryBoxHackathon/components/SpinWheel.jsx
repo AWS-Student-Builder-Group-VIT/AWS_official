@@ -1,98 +1,64 @@
-import { useEffect, useState, useRef } from 'react';
-import { WHEEL_SEGMENTS } from '../data';
+import { useEffect, useRef, useState } from 'react';
 import { createSpinOutcome } from './spinWheelLogic';
+import { eventRequest, pendingRequest } from '../../../utils/eventRewards';
 
-const SPIN_DURATION_MS = 1600;
+const sectors = ['Better Luck', 'Better Luck', 'Better Luck', 'Better Luck', 'Better Luck', '+50 Points', 'Free Problem|Change Card'];
+export default function SpinWheel({ team = { code: 'preview' }, isLeader = false }) {
+  const [busy, setBusy] = useState(false);
+  const [rotation, setRotation] = useState(0);
+  const [message, setMessage] = useState('');
+  const [receipt, setReceipt] = useState(null);
+  const timer = useRef(null);
+  const mounted = useRef(true);
+  const locked = useRef(false);
+  const key = `aws-wheel-pending:${team.code}`;
+  const [pending, setPending] = useState(() => Boolean(localStorage.getItem(key)));
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; clearTimeout(timer.current); }; }, []);
+  const used = receipt && receipt.previousUpdatedAt === team.updatedAt ? receipt.spinsUsed : team.spinsUsed || 0;
 
-/* ═══════════════════════════════════════════════════════════
-   WHEEL COMPONENT — Mystery Box Hackathon
-   ═══════════════════════════════════════════════════════════ */
-
-function polarToCart(cx, cy, r, angle) {
-  const rad = (angle * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-
-export default function SpinWheel() {
-  const [spinning, setSpinning] = useState(false);
-  const [totalRotation, setTotalRotation] = useState(0);
-  const [result, setResult] = useState('');
-  const wheelRef = useRef(null);
-  const resultTimerRef = useRef(null);
-
-  const cx = 140, cy = 140, r = 120;
-  const total = WHEEL_SEGMENTS.length;
-  const step = 360 / total;
-
-  const segments = WHEEL_SEGMENTS.map((s, i) => {
-    const startAngle = i * step - 90;
-    const endAngle = (i + 1) * step - 90;
-    const p1 = polarToCart(cx, cy, r, startAngle);
-    const p2 = polarToCart(cx, cy, r, endAngle);
-    const mid = polarToCart(cx, cy, r * 0.65, (startAngle + endAngle) / 2);
-    const largeArc = step > 180 ? 1 : 0;
-    const d = `M ${cx} ${cy} L ${p1.x} ${p1.y} A ${r} ${r} 0 ${largeArc} 1 ${p2.x} ${p2.y} Z`;
-
-    return (
-      <g key={i}>
-        <path d={d} fill={s.color} stroke={s.stroke} strokeWidth="1.5" />
-        <text x={mid.x} y={mid.y} textAnchor="middle" dominantBaseline="middle"
-              fill={s.stroke} fontSize="9" fontWeight="600" fontFamily="'Space Mono', monospace">
-          {s.label}
-        </text>
-      </g>
-    );
-  });
-
-  useEffect(() => () => clearTimeout(resultTimerRef.current), []);
-
-  const spin = () => {
-    if (spinning) return;
-    setSpinning(true);
-    setResult('Spinning...');
-    const outcome = createSpinOutcome({ segmentCount: total, currentRotation: totalRotation });
-    setTotalRotation(outcome.rotation);
-
-    resultTimerRef.current = setTimeout(() => {
-      const seg = WHEEL_SEGMENTS[outcome.selectedIndex];
-      setResult(seg.label.includes('Luck') ? '😅 Better luck next time!' : `🎉 You won: ${seg.label}!`);
-      setSpinning(false);
-    }, SPIN_DURATION_MS + 50);
-  };
-
-  return (
-    <div className="flex flex-col items-center mt-10 gap-8">
-      <div className="relative w-[280px] h-[280px]">
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-2xl z-10"
-             style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>▼</div>
-        <svg
-          ref={wheelRef}
-          viewBox="0 0 280 280"
-          width="280" height="280"
-          style={{
-            transition: `transform ${SPIN_DURATION_MS}ms cubic-bezier(0.17, 0.67, 0.12, 0.99)`,
-            transform: `rotate(${totalRotation}deg)`,
-          }}
-        >
-          <circle cx="140" cy="140" r="130" fill="#1a1200" stroke="#FF9900" strokeWidth="2" />
-          {segments}
-          <circle cx="140" cy="140" r="22" fill="#0A0C10" stroke="#FF9900" strokeWidth="2" />
-          <text x="140" y="145" textAnchor="middle" fontSize="14" fill="#FF9900" fontWeight="700">SPIN</text>
-        </svg>
-      </div>
-      <button
-        onClick={spin}
-        disabled={spinning}
-        className="bg-primary-container text-background px-9 py-3.5 font-headline-md text-label-md uppercase tracking-widest font-bold transition-transform active:scale-[0.97] cursor-pointer border-0 hover:bg-primary"
-      >
-        {spinning ? 'Spinning…' : '🎰 Spin (1 Token)'}
-      </button>
-      <div className="flex items-center gap-2 bg-white/[0.03] border border-white/10 px-4 py-2.5 text-[13px] text-on-surface-variant font-label-sm">
-        🪙 Earn tokens via quizzes, challenges, milestones &amp; bonus tasks
-      </div>
-      {result && (
-        <p className="text-body-md font-headline-md text-primary-container min-h-[24px]">{result}</p>
-      )}
+  async function spin() {
+    if (locked.current || !isLeader) return;
+    locked.current = true; setBusy(true); setMessage('Confirming your spin…');
+    try {
+      const requestId = pendingRequest(key); setPending(true);
+      const result = await eventRequest(`mystery-box/teams/${team.code}/spins`, { method: 'POST', body: { requestId } });
+      if (!mounted.current) return;
+      setRotation(createSpinOutcome({ segmentCount: 7, selectedIndex: result.spin.segment_index, currentRotation: rotation }).rotation);
+      const finish = () => {
+        localStorage.removeItem(key); setPending(false); setReceipt({...result,previousUpdatedAt:team.updatedAt});
+        setMessage(result.spin.outcome === 'points' ? `+50 points added. Team balance: ${result.balance} pts.` : result.spin.outcome === 'free-change' ? `Free Problem Change Card won! Cards available: ${result.freeChangeCards}.` : 'Better luck next time!');
+        setBusy(false); locked.current = false;
+        window.dispatchEvent(new Event('aws-team-score:updated'));
+      };
+      timer.current = setTimeout(finish, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 1650);
+    } catch (error) {
+      if (mounted.current) {
+        const rejected=[400,403,409].includes(error.status);
+        if(rejected){ localStorage.removeItem(key); setPending(false); }
+        setMessage(rejected ? error.message : `${error.message}. Retry to recover the same spin.`); setBusy(false); locked.current = false;
+      }
+    }
+  }
+  return <div className="flex flex-col items-center gap-6 p-4">
+    <p className="text-primary-container font-mono">Spins remaining: {5-used}/5</p>
+    <div className="relative w-full max-w-[380px]">
+      <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10 text-4xl text-white" aria-hidden="true">▼</div>
+      <svg viewBox="0 0 360 360" role="img" aria-label="Prize wheel: 90% better luck, 5% fifty points, 5% free problem change card" style={{ width: '100%', transform: `rotate(${rotation}deg)`, transition: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'none' : 'transform 1.6s cubic-bezier(.17,.67,.12,.99)' }}>
+        <circle cx="180" cy="180" r="174" fill="#090d14" stroke="#ff9900" strokeWidth="5" />
+        {sectors.map((label,i) => {
+          const start=(i*360/7-90)*Math.PI/180, end=((i+1)*360/7-90)*Math.PI/180, mid=(start+end)/2;
+          const x=180+108*Math.cos(mid),y=180+108*Math.sin(mid);
+          return <g key={i}>
+            <path d={`M180 180 L${180+164*Math.cos(start)} ${180+164*Math.sin(start)} A164 164 0 0 1 ${180+164*Math.cos(end)} ${180+164*Math.sin(end)} Z`} fill={i===5?'#663600':i===6?'#272152':i%2?'#182536':'#101823'} stroke="#ffb84d" strokeWidth="2.5" />
+            <text x={x} y={y} textAnchor="middle" fill={i<5?'#f4e6cf':'#ffffff'} fontSize="12" fontWeight="700">{label.split('|').map((line,j)=><tspan key={line} x={x} dy={j?16:0}>{line}</tspan>)}</text>
+          </g>;
+        })}
+        <circle cx="180" cy="180" r="31" fill="#090d14" stroke="#ff9900" strokeWidth="3" />
+        <text x="180" y="185" textAnchor="middle" fill="#ff9900" fontWeight="bold">SPIN</text>
+      </svg>
     </div>
-  );
+    <p className="text-xs text-center text-on-surface-variant">Better luck: 90% · +50 points: 5% · Free change card: 5%<br />Sector sizes are decorative; each spin uses these odds.</p>
+    <button onClick={spin} disabled={busy || !isLeader || (used>=5 && !pending)} className="bg-primary-container text-black font-bold px-8 py-3 rounded-lg disabled:opacity-40">{busy?'Spinning…':!isLeader?'Leader only':pending?'Retry pending spin':used>=5?'All five spins used':'Spin the wheel'}</button>
+    <p role="status" className="text-center text-primary-container min-h-6">{message}</p>
+  </div>;
 }
