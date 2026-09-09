@@ -42,7 +42,7 @@ import GunshotRoulette from './pages/games/GunshotRoulette/GunshotRoulette.jsx';
 import HackType from './pages/games/HackType/HackType.jsx';
 import GamesPage from './pages/GamesPage';
 import { games } from './pages/gamesRegistry';
-import { buildOfficialGameReceipt, completeTeamGame, SCORED_TEAM_GAMES, startTeamGame } from './utils/teamGameScoring';
+import { buildOfficialGameReceipt, completeTeamGame, SCORED_TEAM_GAMES, shouldReturnToDashboardAfterOfficialCompletion, startTeamGame } from './utils/teamGameScoring';
 
 /**
  * Detect mobile viewport (≤768px).
@@ -85,6 +85,7 @@ function GameRoute({ Component, gameSlug, official = false }) {
   const completionPayloadRef = useRef(null);
   const submissionRef = useRef(null);
   const retrySubmissionRef = useRef(null);
+  const dashboardPath = '/mystery-box-hackathon/dashboard?tab=games';
 
   useEffect(() => {
     if (!official) return undefined;
@@ -106,13 +107,17 @@ function GameRoute({ Component, gameSlug, official = false }) {
     setSubmitting(true);
     const submission = completeTeamGame(gameSlug, attemptRef.current, result)
       .then((response) => {
+        if (response.submitted && shouldReturnToDashboardAfterOfficialCompletion(gameSlug)) {
+          navigate(dashboardPath);
+          return response;
+        }
         setReceipt(buildOfficialGameReceipt(gameSlug, response));
         return response;
       })
       .finally(() => setSubmitting(false));
     submissionRef.current = submission;
     return submission;
-  }, [gameSlug, official]);
+  }, [gameSlug, official, navigate]);
 
   const retrySubmission = useCallback(async () => {
     if (submitting) return;
@@ -130,8 +135,6 @@ function GameRoute({ Component, gameSlug, official = false }) {
   }, [gameSlug, submitting]);
 
   const game = games.find((entry) => entry.slug === gameSlug);
-  const dashboardPath = '/mystery-box-hackathon/dashboard?tab=games';
-
   if (official && (submitting || receipt)) {
     return (
       <OfficialGameReceipt

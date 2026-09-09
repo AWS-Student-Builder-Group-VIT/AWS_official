@@ -63,10 +63,23 @@ test('team game usage counts distinct non-void attempts and reports played games
     completedAttempts: 1,
     playedGameSlugs: ['wordle', 'morse'],
     activeAttempt: attempts[2],
+    activeAttempts: [attempts[2]],
   });
 });
 
-test('official game starts reject repeats, another active game, and the sixth distinct game', () => {
+test('a removed game no longer consumes an official team slot', () => {
+  const usage = summarizeTeamGameUsage({
+    attempts: [
+      { game_slug: 'crack-the-code', status: 'completed', slot_number: 1 },
+      { game_slug: 'wordle', status: 'completed', slot_number: 2 },
+    ],
+    maxAttempts: 5,
+  });
+  assert.equal(usage.usedAttempts, 1);
+  assert.deepEqual(usage.playedGameSlugs, ['wordle']);
+});
+
+test('official game starts reject repeats and the sixth distinct game but permit another paused game', () => {
   const completed = [{ game_slug: 'wordle', status: 'completed', slot_number: 1 }];
   assert.deepEqual(canStartOfficialGame({ attempts: completed, maxAttempts: 5, gamesEnabled: true, gameSlug: 'wordle' }), {
     allowed: false,
@@ -75,9 +88,7 @@ test('official game starts reject repeats, another active game, and the sixth di
   });
   const active = [...completed, { id: 'active-1', game_slug: 'morse', status: 'active', slot_number: 2 }];
   assert.deepEqual(canStartOfficialGame({ attempts: active, maxAttempts: 5, gamesEnabled: true, gameSlug: 'pacman' }), {
-    allowed: false,
-    reason: 'active-attempt-exists',
-    attempt: active[1],
+    allowed: true,
   });
   const fiveDistinct = ['wordle', 'morse', 'pacman', 'snake', 'fruit-ninja'].map((game_slug, index) => ({
     game_slug,
@@ -96,9 +107,9 @@ test('official game starts reject repeats, another active game, and the sixth di
 
 test('allocates the lowest slot freed by a voided attempt', () => {
   assert.equal(scoring.findLowestAvailableSlot([
-    { slot_number: 1, status: 'completed' },
-    { slot_number: 2, status: 'completed', voided_at: '2026-09-01T00:00:00Z' },
-    { slot_number: 3, status: 'completed' },
+    { game_slug: 'wordle', slot_number: 1, status: 'completed' },
+    { game_slug: 'morse', slot_number: 2, status: 'completed', voided_at: '2026-09-01T00:00:00Z' },
+    { game_slug: 'pacman', slot_number: 3, status: 'completed' },
   ], 5), 2);
   assert.equal(scoring.findLowestAvailableSlot([], 0), null);
 });

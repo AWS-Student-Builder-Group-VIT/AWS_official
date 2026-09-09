@@ -84,16 +84,18 @@ export function buildGameErrorPayload(error) {
 export function summarizeTeamGameUsage({ attempts = [], maxAttempts = DEFAULT_MAX_GAME_ATTEMPTS } = {}) {
   const parsedMax = Number(maxAttempts);
   const normalizedMax = Math.min(12, Math.max(0, Math.trunc(Number.isFinite(parsedMax) ? parsedMax : DEFAULT_MAX_GAME_ATTEMPTS)));
-  const countedAttempts = attempts.filter((attempt) => !attempt.voided_at && !attempt.voidedAt);
+  const countedAttempts = attempts.filter((attempt) => !attempt.voided_at && !attempt.voidedAt && isScoredGame(attempt.game_slug || attempt.gameSlug));
   const usedAttempts = countedAttempts.length;
   const completedAttempts = countedAttempts.filter((attempt) => attempt.status === 'completed').length;
+  const activeAttempts = countedAttempts.filter((attempt) => attempt.status === 'active');
   return {
     maxAttempts: normalizedMax,
     usedAttempts,
     remainingAttempts: Math.max(0, normalizedMax - usedAttempts),
     completedAttempts,
     playedGameSlugs: [...new Set(countedAttempts.map((attempt) => attempt.game_slug || attempt.gameSlug).filter(Boolean))],
-    activeAttempt: countedAttempts.find((attempt) => attempt.status === 'active') || null,
+    activeAttempt: activeAttempts[0] || null,
+    activeAttempts,
   };
 }
 
@@ -108,7 +110,6 @@ export function canStartOfficialGame({ attempts = [], maxAttempts = DEFAULT_MAX_
     }
     return { allowed: false, reason: 'game-already-played', attempt: existingAttempt };
   }
-  if (usage.activeAttempt) return { allowed: false, reason: 'active-attempt-exists', attempt: usage.activeAttempt };
   if (usage.usedAttempts >= usage.maxAttempts) return { allowed: false, reason: 'game-limit-reached' };
   return { allowed: true };
 }
@@ -117,7 +118,7 @@ export function findLowestAvailableSlot(attempts = [], maxAttempts = DEFAULT_MAX
   const usage = summarizeTeamGameUsage({ attempts, maxAttempts });
   const occupied = new Set(
     attempts
-      .filter((attempt) => !attempt.voided_at && !attempt.voidedAt)
+      .filter((attempt) => !attempt.voided_at && !attempt.voidedAt && isScoredGame(attempt.game_slug || attempt.gameSlug))
       .map((attempt) => Number(attempt.slot_number ?? attempt.slotNumber))
       .filter(Number.isInteger),
   );
@@ -178,9 +179,7 @@ export async function initializeHackathonScoring(pool) {
     DROP INDEX IF EXISTS idx_team_game_attempts_one_active;
     DROP INDEX IF EXISTS idx_team_game_attempts_team_game;
     CREATE UNIQUE INDEX idx_team_game_attempts_team_slot ON team_game_attempts(team_id, slot_number)
-      WHERE slot_number IS NOT NULL AND voided_at IS NULL;
-    CREATE UNIQUE INDEX idx_team_game_attempts_one_active ON team_game_attempts(team_id)
-      WHERE status = 'active' AND voided_at IS NULL;
+      WHERE slot_number IS NOT NULL AND voided_at IS NULL AND game_slug <> 'crack-the-code';
     CREATE UNIQUE INDEX idx_team_game_attempts_team_game ON team_game_attempts(team_id, game_slug)
       WHERE voided_at IS NULL;
 
@@ -549,7 +548,8 @@ async function getTeamGameSummary(client, team) {
     completedAttempts: usage.completedAttempts,
     playedGameSlugs: usage.playedGameSlugs,
     activeAttempt: formatAttempt(usage.activeAttempt),
-    attempts: attempts.map(formatAttempt),
+    activeAttempts: usage.activeAttempts.map(formatAttempt),
+    attempts: attempts.filter((attempt) => isScoredGame(attempt.game_slug)).map(formatAttempt),
   };
 }
 
@@ -576,12 +576,11 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
         const attempts = await listTeamAttempts(client, team.id);
         const gamesEnabled = await getGamesEnabled(client);
         const usage = summarizeTeamGameUsage({ attempts, maxAttempts: team.max_game_attempts });
-        const activeAttempt = usage.activeAttempt;
-        if (activeAttempt?.game_slug === gameSlug) return { created: false, attempt: activeAttempt, usage: summarizeTeamGameUsage({ attempts, maxAttempts: team.max_game_attempts }) };
+        const activeAttempt = usage.activeAttempts.find((attempt) => attempt.game_slug === gameSlug);
+        if (activeAttempt) return { created: false, attempt: activeAttempt, usage: summarizeTeamGameUsage({ attempts, maxAttempts: team.max_game_attempts }) };
         const decision = canStartOfficialGame({ attempts, maxAttempts: team.max_game_attempts, gamesEnabled, gameSlug });
         if (!decision.allowed) {
           const messages = {
-            'active-attempt-exists': `Resume ${decision.attempt?.game_slug || 'the active game'} before starting another official game`,
             'game-already-played': 'This team has already completed this official game',
             'game-mode-disabled': 'Official game mode is disabled',
             'game-limit-reached': 'This team has used all official game plays',

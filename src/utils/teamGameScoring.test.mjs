@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { completeTeamGame, normalizeGameCompletion, SCORED_TEAM_GAMES, startTeamGame } from './teamGameScoring.js';
+import { completeTeamGame, normalizeGameCompletion, SCORED_TEAM_GAMES, shouldReturnToDashboardAfterOfficialCompletion, startTeamGame } from './teamGameScoring.js';
 import * as teamScoring from './teamGameScoring.js';
 
 const memoryStorage = () => {
@@ -21,7 +21,7 @@ test('normalizes score games into the server contract', () => {
 
 test('normalizes achievement and completion games', () => {
   assert.deepEqual(normalizeGameCompletion('wordle', { solved: true }), { official: true, solved: true });
-  assert.deepEqual(normalizeGameCompletion('crack-the-code', { solved: true }), { official: true, solved: true });
+  assert.equal(normalizeGameCompletion('crack-the-code', { solved: true }), null);
   assert.deepEqual(normalizeGameCompletion('detective-crime', { solved: true }), { official: true, solved: true });
   assert.deepEqual(normalizeGameCompletion('level-devil', { completedLevels: 4 }), { official: true, completedLevels: 4 });
   assert.deepEqual(normalizeGameCompletion('morse', { correctCount: 3 }), { official: true, correctCount: 3 });
@@ -32,7 +32,12 @@ test('practice results and unscored games cannot produce a submission', () => {
   assert.equal(normalizeGameCompletion('wordle', { official: false, solved: true }), null);
   assert.equal(normalizeGameCompletion('gunshot-roulette', { score: 100 }), null);
   assert.equal(normalizeGameCompletion('hack-type', { score: 100 }), null);
-  assert.equal(SCORED_TEAM_GAMES.length, 12);
+  assert.equal(SCORED_TEAM_GAMES.length, 11);
+});
+
+test('Asteroid Command returns to the dashboard after its one official run', () => {
+  assert.equal(shouldReturnToDashboardAfterOfficialCompletion('asteroid-command'), true);
+  assert.equal(shouldReturnToDashboardAfterOfficialCompletion('wordle'), false);
 });
 
 test('builds confirmed and queued official score receipt view models', () => {

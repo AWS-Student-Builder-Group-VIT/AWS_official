@@ -9,7 +9,6 @@ export const SCORED_GAME_SLUGS = Object.freeze([
   'watergirl-fireboy',
   'fruit-ninja',
   'wordle',
-  'crack-the-code',
   'detective-crime',
   'level-devil',
   'morse',
@@ -53,7 +52,6 @@ export function calculateGamePoints(gameSlug, result = {}) {
   }
 
   if (gameSlug === 'wordle') return result.solved === true ? 20 : 0;
-  if (gameSlug === 'crack-the-code') return result.solved === true ? 20 : 0;
   if (gameSlug === 'detective-crime') return result.solved === true ? 10 : 0;
   if (gameSlug === 'level-devil') return clampInteger(result.completedLevels, 0, 5) * 8;
   if (gameSlug === 'morse') return clampInteger(result.correctCount, 0, 5) * 5;

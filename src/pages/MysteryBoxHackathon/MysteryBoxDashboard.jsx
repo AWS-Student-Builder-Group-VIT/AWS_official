@@ -69,6 +69,7 @@ export default function MysteryBoxDashboard() {
   const [notification, setNotification] = useState('');
   const scoredGames = games.filter((game) => SCORED_TEAM_GAMES.includes(game.slug));
   const playedGameSlugs = new Set(gameScores?.playedGameSlugs || []);
+  const activeGameAttempts = gameScores?.activeAttempts || (gameScores?.activeAttempt ? [gameScores.activeAttempt] : []);
   const officialLimitReached = Boolean(gameScores) && gameScores.remainingAttempts <= 0 && !gameScores.activeAttempt;
   const gameModeKnown = typeof gameScores?.gamesEnabled === 'boolean';
 
@@ -779,7 +780,7 @@ export default function MysteryBoxDashboard() {
                     <div>
                       <h3 className="text-xl font-headline-md text-on-surface uppercase tracking-widest mt-0 mb-1.5">Official Games</h3>
                       <p className="text-xs text-on-surface-variant m-0 font-body-md max-w-3xl">
-                        Registered team members may complete up to {gameScores?.maxAttempts ?? team.maxGameAttempts ?? 5} distinct official games. Each game counts once per team. Refreshing or leaving resumes the active slot; replay buttons open Practice and never award points.
+                        Registered team members may complete up to {gameScores?.maxAttempts ?? team.maxGameAttempts ?? 5} distinct official games. Each game counts once per team. Leaving a game reserves its one official slot, but does not block other available games. Replay buttons open Practice and never award points.
                       </p>
                     </div>
                     <div className={`px-4 py-3 rounded-xl border font-headline-md uppercase text-xs tracking-widest ${!gameModeKnown ? 'bg-[#00a8e0]/10 border-[#00a8e0]/30 text-[#00a8e0]' : gameScores.gamesEnabled ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-300'}`}>
@@ -802,19 +803,15 @@ export default function MysteryBoxDashboard() {
                   </div>
                 </div>
 
-                {gameScores?.activeAttempt && (
-                  <div className="mb-6 border border-[#00a8e0]/40 bg-[#00a8e0]/10 rounded-[18px] p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.2em] text-[#00a8e0] font-label-sm m-0">Active official slot</p>
-                      <h4 className="text-lg text-on-surface uppercase tracking-widest mt-2 mb-0">{games.find((game) => game.slug === gameScores.activeAttempt.gameSlug)?.title || gameScores.activeAttempt.gameSlug}</h4>
+                {activeGameAttempts.length > 0 && (
+                  <div className="mb-6 border border-[#00a8e0]/40 bg-[#00a8e0]/10 rounded-[18px] p-5">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-[#00a8e0] font-label-sm m-0">Paused official games</p>
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {activeGameAttempts.map((attempt) => <div key={attempt.attemptId} className="flex items-center justify-between gap-3 rounded-xl border border-[#00a8e0]/20 p-3">
+                        <h4 className="text-sm text-on-surface uppercase tracking-widest m-0">{games.find((game) => game.slug === attempt.gameSlug)?.title || attempt.gameSlug}</h4>
+                        <button type="button" onClick={() => navigate(`/mystery-box-hackathon/games/${attempt.gameSlug}`)} className="bg-[#00a8e0] text-white px-4 py-2 rounded-lg font-headline-md text-[10px] uppercase tracking-widest font-bold cursor-pointer">Resume</button>
+                      </div>)}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/mystery-box-hackathon/games/${gameScores.activeAttempt.gameSlug}`)}
-                      className="bg-[#00a8e0] text-white px-5 py-3 rounded-xl font-headline-md text-xs uppercase tracking-widest font-bold cursor-pointer"
-                    >
-                      Resume Game
-                    </button>
                   </div>
                 )}
 

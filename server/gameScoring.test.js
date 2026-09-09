@@ -25,7 +25,7 @@ test('scores Mario, Asteroid Command, Snake, Flappy Bird and Fruit Ninja tiers',
 
 test('scores completion and achievement games from canonical result fields', () => {
   assert.equal(calculateGamePoints('wordle', { official: true, solved: true }), 20);
-  assert.equal(calculateGamePoints('crack-the-code', { official: true, solved: true }), 20);
+  assert.equal(calculateGamePoints('crack-the-code', { official: true, solved: true }), 0);
   assert.equal(calculateGamePoints('detective-crime', { official: true, solved: true }), 10);
   assert.equal(calculateGamePoints('level-devil', { official: true, completedLevels: 5 }), 40);
   assert.equal(calculateGamePoints('morse', { official: true, correctCount: 4 }), 20);
@@ -41,5 +41,6 @@ test('failed, practice, malformed and unlisted results award zero', () => {
   assert.equal(calculateGamePoints('gunshot-roulette', official(100)), 0);
   assert.equal(calculateGamePoints('hack-type', official(100)), 0);
   assert.equal(isScoredGame('gunshot-roulette'), false);
-  assert.equal(SCORED_GAME_SLUGS.length, 12);
+  assert.equal(isScoredGame('crack-the-code'), false);
+  assert.equal(SCORED_GAME_SLUGS.length, 11);
 });
