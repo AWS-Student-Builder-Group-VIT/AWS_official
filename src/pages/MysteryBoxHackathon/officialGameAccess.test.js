@@ -9,7 +9,7 @@ test('routes every unplayed game to Practice after the official limit is exhaust
     gamesEnabled: true,
     activeAttempt: null,
     practicePath: '/games/morse',
-    officialPath: '/mystery-box-hackathon/games/morse',
+    officialPath: '/hackquest/games/morse',
   }), {
     mode: 'practice',
     disabled: false,
@@ -25,7 +25,7 @@ test('Practice remains available after the limit even when official game mode is
     gamesEnabled: false,
     activeAttempt: null,
     practicePath: '/games/snake',
-    officialPath: '/mystery-box-hackathon/games/snake',
+    officialPath: '/hackquest/games/snake',
   });
 
   assert.equal(access.mode, 'practice');
@@ -40,12 +40,12 @@ test('an unplayed game starts officially while team slots remain', () => {
     gamesEnabled: true,
     activeAttempt: null,
     practicePath: '/games/wordle',
-    officialPath: '/mystery-box-hackathon/games/wordle',
+    officialPath: '/hackquest/games/wordle',
   }), {
     mode: 'official',
     disabled: false,
     label: 'Play Official Game',
-    path: '/mystery-box-hackathon/games/wordle',
+    path: '/hackquest/games/wordle',
   });
 });
 
@@ -56,14 +56,14 @@ test('a paused official game does not block another unplayed official game', () 
     gamesEnabled: true,
     activeAttempt: { gameSlug: 'wordle' },
     practicePath: '/games/morse',
-    officialPath: '/mystery-box-hackathon/games/morse',
+    officialPath: '/hackquest/games/morse',
   });
 
   assert.deepEqual(access, {
     mode: 'official',
     disabled: false,
     label: 'Play Official Game',
-    path: '/mystery-box-hackathon/games/morse',
+    path: '/hackquest/games/morse',
   });
 });
 
@@ -74,7 +74,7 @@ test('a completed game always reopens as unscored Practice when no attempt is ac
     gamesEnabled: true,
     activeAttempt: null,
     practicePath: '/games/pacman',
-    officialPath: '/mystery-box-hackathon/games/pacman',
+    officialPath: '/hackquest/games/pacman',
   });
 
   assert.equal(access.mode, 'practice');

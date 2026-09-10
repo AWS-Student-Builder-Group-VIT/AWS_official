@@ -27,7 +27,7 @@ function decodeJwt(token) {
   }
 }
 
-// Local Mystery Box Hackathon data + components
+// Local HackQuest data + components
 import {
   STEPS,
   RULES,
@@ -43,7 +43,6 @@ import {
   SectionLabel,
   SectionTitle,
   SectionSub,
-  TypeWriter,
   Divider,
   SpinWheel,
   MysteryBoxSVG,
@@ -271,7 +270,7 @@ function MysteryBoxHackathonInner() {
       setRegisterForm({ email: '', regNo: '', teamName: '', isLeader: true });
       setGoogleUser(null);
       setRegisterOpen(false);
-      navigate('/mystery-box-hackathon/dashboard');
+      navigate('/hackquest/dashboard');
     } catch (err) {
       console.error('Error creating team:', err);
       setFormError(`Could not reach the team server: ${err.message || 'network request failed'}. No local team was created.`);
@@ -333,7 +332,7 @@ function MysteryBoxHackathonInner() {
       setJoinForm({ email: '', regNo: '', teamCode: '' });
       setGoogleJoinUser(null);
       setJoinOpen(false);
-      navigate('/mystery-box-hackathon/dashboard');
+      navigate('/hackquest/dashboard');
     } catch (err) {
       console.error('Error joining team:', err);
       setJoinError(`Could not reach the team server: ${err.message || 'network request failed'}. Please try again.`);
@@ -720,7 +719,7 @@ function MysteryBoxHackathonInner() {
             {isMemberOfTeam ? (
               <button
                 type="button"
-                onClick={() => navigate('/mystery-box-hackathon/dashboard')}
+                onClick={() => navigate('/hackquest/dashboard')}
                 className="bg-primary-container text-background px-5 py-2 text-[13px] font-headline-md uppercase tracking-widest border-0 cursor-pointer hover:bg-primary transition-colors"
               >
                 Go to Dashboard
@@ -745,7 +744,7 @@ function MysteryBoxHackathonInner() {
             )}
           </div>
         </nav>
-        <TeamInvitations onJoined={() => navigate('/mystery-box-hackathon/dashboard')} />
+        <TeamInvitations onJoined={() => navigate('/hackquest/dashboard')} />
 
         {/* ═══════════ HERO ═══════════ */}
         <section
@@ -757,11 +756,8 @@ function MysteryBoxHackathonInner() {
           <div className="max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-[60px] items-center">
             <FadeInSection>
               <h1 className="font-headline-xl text-on-surface leading-[1.05] mb-4 uppercase tracking-widest flex flex-col items-start relative z-10">
-                <span className="text-[clamp(42px,8vw,96px)]">Mystery</span>
-                <span className="text-[clamp(42px,8vw,96px)]">Box</span>
-                <span className="text-[clamp(42px,8vw,96px)] text-primary-container" style={{ textShadow: '0 0 30px rgba(255,153,0,0.4)' }}>
-                  <TypeWriter words={['Hackathon', 'Hack It']} typingDelay={120} />
-                </span>
+                <span className="text-[clamp(42px,8vw,96px)]">Hack</span>
+                <span className="text-[clamp(42px,8vw,96px)] text-primary-container" style={{ textShadow: '0 0 30px rgba(255,153,0,0.4)' }}>Quest</span>
               </h1>
 
               <p className="text-[clamp(18px,2.5vw,24px)] text-primary-container font-headline-md mb-5 uppercase tracking-widest relative z-10">
@@ -1272,7 +1268,7 @@ function MysteryBoxHackathonInner() {
             <img src={awsIcon} alt="AWS Student Builder Club" className="w-5 h-5 rounded-full object-cover" />
             <span className="font-headline-md text-label-md text-primary-container uppercase tracking-widest">AWS Student Builder Club</span>
           </div>
-          <div className="text-[13px] text-on-surface-variant font-label-sm uppercase tracking-widest">Mystery Box Hackathon — Build. Adapt. Survive.</div>
+          <div className="text-[13px] text-on-surface-variant font-label-sm uppercase tracking-widest">HackQuest — Build. Adapt. Survive.</div>
           <div className="text-[13px] text-on-surface-variant font-label-sm uppercase tracking-widest">© 2026 AWS Student Builder Club</div>
         </footer>
 

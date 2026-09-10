@@ -113,7 +113,7 @@ export default function MysteryBoxDashboard() {
           setMyEmail('');
           setOwnedItems([]);
           setGameScores(null);
-          navigate('/mystery-box-hackathon', {
+          navigate('/hackquest', {
             replace: true,
             state: { teamSessionInvalidated: result.reason },
           });
@@ -151,7 +151,7 @@ export default function MysteryBoxDashboard() {
   useEffect(() => {
     const isMemberOfTeam = team && myEmail && team.members?.some((m) => m.email === myEmail);
     if (!isMemberOfTeam) {
-      navigate('/mystery-box-hackathon');
+      navigate('/hackquest');
     }
   }, [team, myEmail, navigate]);
 
@@ -260,7 +260,7 @@ export default function MysteryBoxDashboard() {
     window.localStorage.removeItem(OWNED_ITEMS_KEY);
     window.localStorage.removeItem('mystery-box-chaos-simulated');
     setMyEmail('');
-    navigate('/mystery-box-hackathon');
+    navigate('/hackquest');
   };
 
   // Point Shop Purchase handler
@@ -358,7 +358,7 @@ export default function MysteryBoxDashboard() {
             <img src={awsIcon} alt="AWS" className="w-8 h-8 rounded-full object-cover border border-primary-container/20" />
             <div>
               <h4 className="text-xs uppercase font-headline-xl tracking-widest text-primary-container font-bold m-0">AWS Cloud Club</h4>
-              <p className="text-[9px] uppercase tracking-wider text-on-surface-variant font-label-sm m-0">Mystery Hackathon</p>
+              <p className="text-[9px] uppercase tracking-wider text-on-surface-variant font-label-sm m-0">HackQuest</p>
             </div>
           </div>
 
@@ -435,7 +435,7 @@ export default function MysteryBoxDashboard() {
             {/* Back Button */}
             <button
               type="button"
-              onClick={() => navigate('/mystery-box-hackathon')}
+              onClick={() => navigate('/hackquest')}
               className="border border-white/10 hover:border-primary-container text-on-surface hover:text-primary-container font-headline-md text-xs uppercase px-4 py-3.5 rounded-xl transition-all cursor-pointer font-semibold"
             >
               ← View Event Info
@@ -848,7 +848,7 @@ export default function MysteryBoxDashboard() {
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                       {activeGameAttempts.map((attempt) => <div key={attempt.attemptId} className="flex items-center justify-between gap-3 rounded-xl border border-[#00a8e0]/20 p-3">
                         <h4 className="text-sm text-on-surface uppercase tracking-widest m-0">{games.find((game) => game.slug === attempt.gameSlug)?.title || attempt.gameSlug}</h4>
-                        <button type="button" onClick={() => navigate(`/mystery-box-hackathon/games/${attempt.gameSlug}`)} className="bg-[#00a8e0] text-white px-4 py-2 rounded-lg font-headline-md text-[10px] uppercase tracking-widest font-bold cursor-pointer">Resume</button>
+                        <button type="button" onClick={() => navigate(`/hackquest/games/${attempt.gameSlug}`)} className="bg-[#00a8e0] text-white px-4 py-2 rounded-lg font-headline-md text-[10px] uppercase tracking-widest font-bold cursor-pointer">Resume</button>
                       </div>)}
                     </div>
                   </div>
@@ -871,7 +871,7 @@ export default function MysteryBoxDashboard() {
                       gamesEnabled: gameScores?.gamesEnabled,
                       activeAttempt: gameScores?.activeAttempt,
                       practicePath: game.path,
-                      officialPath: `/mystery-box-hackathon/games/${game.slug}`,
+                      officialPath: `/hackquest/games/${game.slug}`,
                     });
                     const practice = access.mode === 'practice';
                     return (

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
-import { Routes, Route, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, Routes, Route, useLocation, useNavigate, useParams } from 'react-router-dom';
 import AwsStudentBuilderLoader from './components/AwsStudentBuilderLoader';
 import MobilePreloader from './components/MobilePreloader';
 import Hero from './components/Hero';
@@ -90,7 +90,7 @@ function GameRoute({ Component, gameSlug, official = false }) {
   const completionPayloadRef = useRef(null);
   const submissionRef = useRef(null);
   const retrySubmissionRef = useRef(null);
-  const dashboardPath = '/mystery-box-hackathon/dashboard?tab=games';
+  const dashboardPath = '/hackquest/dashboard?tab=games';
 
   useEffect(() => {
     if (!official) return undefined;
@@ -181,6 +181,12 @@ function RouteLoading() {
       <p className="uppercase tracking-[0.2em] text-sm animate-pulse">Loading AWS experience…</p>
     </main>
   );
+}
+
+function LegacyHackQuestRedirect() {
+  const location = useLocation();
+  const path = location.pathname.replace('/mystery-box-hackathon', '/hackquest');
+  return <Navigate replace to={`${path}${location.search}${location.hash}`} />;
 }
 
 export default function App() {
@@ -356,9 +362,11 @@ export default function App() {
 
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/account" element={<AccountPage />} />
-            <Route path="/mystery-box-hackathon" element={<MysteryBoxHackathon />} />
-            <Route path="/mystery-box-hackathon/dashboard" element={<MysteryBoxDashboard />} />
-            <Route path="/mystery-box-hackathon/games/:gameSlug" element={<OfficialGameRoute />} />
+            <Route path="/hackquest" element={<MysteryBoxHackathon />} />
+            <Route path="/hackquest/dashboard" element={<MysteryBoxDashboard />} />
+            <Route path="/hackquest/games/:gameSlug" element={<OfficialGameRoute />} />
+            <Route path="/mystery-box-hackathon" element={<LegacyHackQuestRedirect />} />
+            <Route path="/mystery-box-hackathon/*" element={<LegacyHackQuestRedirect />} />
             <Route path="/games" element={<GamesPage />} />
             {games.map((game) => <Route key={game.slug} path={game.path} element={<GameRoute Component={gameComponents[game.slug]} gameSlug={game.slug} />} />)}
           </Routes>

@@ -602,7 +602,7 @@ function Dashboard({ token, onLogout }) {
                 : 'text-[#dbc2ad] hover:text-white'
             }`}
           >
-            🎁 Mystery Box Hackathon ({hackathonTeams.length})
+            🎁 HackQuest ({hackathonTeams.length})
           </button>
           <button
             onClick={() => setActiveTab('quiz')}
@@ -631,7 +631,7 @@ function Dashboard({ token, onLogout }) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
 
         {/* ═══════════════════════════════════════════════════════════
-            TAB 1: MYSTERY BOX HACKATHON OPERATIONS
+            TAB 1: HACKQUEST OPERATIONS
            ═══════════════════════════════════════════════════════════ */}
         {activeTab === 'hackathon' && (
           <div>
@@ -643,7 +643,7 @@ function Dashboard({ token, onLogout }) {
                   Live Event Operations &amp; Real-time Audit
                 </div>
                 <h2 className="font-mono text-2xl font-bold text-white uppercase tracking-wider m-0">
-                  Mystery Box Hackathon Hub
+                  HackQuest Hub
                 </h2>
                 <p className="font-mono text-xs text-[#dbc2ad] mt-1 mb-0">Live team telemetry, topic swaps, vendor shop purchases, and chaos injection controls.</p>
               </div>
