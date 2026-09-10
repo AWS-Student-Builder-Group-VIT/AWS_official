@@ -23,6 +23,7 @@ import {
 } from './teamSessionSync';
 import { getOfficialGameCardAccess } from './officialGameAccess';
 import { startGameScorePolling } from './gameScorePolling';
+import { normalizeChallengeDetails } from './challengeDetails';
 
 export default function MysteryBoxDashboard() {
   const navigate = useNavigate();
@@ -69,6 +70,7 @@ export default function MysteryBoxDashboard() {
   const [notification, setNotification] = useState('');
   const scoredGames = games.filter((game) => SCORED_TEAM_GAMES.includes(game.slug));
   const playedGameSlugs = new Set(gameScores?.playedGameSlugs || []);
+  const activeGameAttempts = gameScores?.activeAttempts || (gameScores?.activeAttempt ? [gameScores.activeAttempt] : []);
   const officialLimitReached = Boolean(gameScores) && gameScores.remainingAttempts <= 0 && !gameScores.activeAttempt;
   const gameModeKnown = typeof gameScores?.gamesEnabled === 'boolean';
 
@@ -172,9 +174,9 @@ export default function MysteryBoxDashboard() {
     }
   })();
 
-  const questionDesc = parsedQuestion?.desc || 'Build your serverless or cloud hackathon solution as assigned.';
   const questionTitle = parsedQuestion?.title || 'Mystery Challenge';
   const questionPoints = parsedQuestion?.points || 100;
+  const questionDetails = normalizeChallengeDetails(parsedQuestion || {});
 
   const persistTeamLocally = (nextTeam) => {
     setTeam(nextTeam);
@@ -187,7 +189,7 @@ export default function MysteryBoxDashboard() {
     }
   };
 
-  const runLeaderAction = async (path, body = {}) => {
+  const runTeamAction = async (path, body = {}) => {
     const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
     const response = await fetch(path, {
       method: 'POST',
@@ -226,7 +228,7 @@ export default function MysteryBoxDashboard() {
     if (!team || !isCurrentLeader) return;
     try {
       setIsOpeningLocal(true);
-      const result = await runLeaderAction(`/api/mystery-box/teams/${team.code}/reveal`);
+      const result = await runTeamAction(`/api/mystery-box/teams/${team.code}/reveal`);
       setIsOpeningLocal(false);
       setNotification(`Mystery challenge revealed. +${result.awardedPoints || 0} pts awarded.`);
       setTimeout(() => setNotification(''), 4000);
@@ -265,7 +267,6 @@ export default function MysteryBoxDashboard() {
   const handlePurchase = async (item, free = false) => {
     setUseFreeCard(free);
     if (item.id === 'change-topic' || item.isSpecialSwap) {
-      if (!isCurrentLeader) return;
       if (!team.isOpened) {
         setNotification('Reveal your original challenge before changing it.');
         return;
@@ -292,10 +293,10 @@ export default function MysteryBoxDashboard() {
       return;
     }
     const cost = parseInt(item.price);
-    if (!isCurrentLeader || isNaN(cost) || (team.points || 0) < cost) return;
+    if (isNaN(cost) || (team.points || 0) < cost) return;
     try {
       const itemId = item.id || item.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      await runLeaderAction(`/api/mystery-box/teams/${team.code}/purchases`, { itemId });
+      await runTeamAction(`/api/mystery-box/teams/${team.code}/purchases`, { itemId });
       setNotification(`Successfully purchased ${item.title}!`);
       setTimeout(() => setNotification(''), 4000);
     } catch (error) {
@@ -539,9 +540,47 @@ export default function MysteryBoxDashboard() {
 
                         <div className="mt-3 p-5 rounded-xl border border-primary-container/20 bg-background/60 relative overflow-hidden">
                           <div className="absolute top-0 left-0 w-1 h-full bg-primary-container" />
-                          <p className="text-[14px] leading-7 text-on-surface-variant font-body-md m-0">
-                            {questionDesc}
-                          </p>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-primary-container font-label-sm mb-2">Detailed Description</p>
+                          <p className="text-[14px] leading-7 text-on-surface-variant font-body-md m-0">{questionDetails.description}</p>
+
+                          {(questionDetails.technicalScope.length > 0 || questionDetails.deliverables.length > 0) && (
+                            <details open className="mt-5 border-t border-white/10 pt-4 group">
+                              <summary className="cursor-pointer select-none text-xs uppercase tracking-[0.16em] text-on-surface font-headline-md marker:text-primary-container">
+                                Complete Challenge Brief
+                              </summary>
+                              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mt-4">
+                                {questionDetails.technicalScope.length > 0 && (
+                                  <section>
+                                    <h5 className="text-[10px] uppercase tracking-[0.18em] text-primary-container font-label-sm mb-3">Technical Scope &amp; Guardrails</h5>
+                                    <ul className="space-y-2 m-0 pl-5 text-xs leading-6 text-on-surface-variant list-disc marker:text-primary-container">
+                                      {questionDetails.technicalScope.map((item) => <li key={item}>{item}</li>)}
+                                    </ul>
+                                  </section>
+                                )}
+                                {questionDetails.deliverables.length > 0 && (
+                                  <section>
+                                    <h5 className="text-[10px] uppercase tracking-[0.18em] text-primary-container font-label-sm mb-3">Core Deliverables</h5>
+                                    <ol className="space-y-2 m-0 pl-5 text-xs leading-6 text-on-surface-variant list-decimal marker:text-primary-container">
+                                      {questionDetails.deliverables.map((item) => <li key={item}>{item}</li>)}
+                                    </ol>
+                                  </section>
+                                )}
+                              </div>
+                            </details>
+                          )}
+
+                          {questionDetails.awsServices.length > 0 && (
+                            <section className="mt-5 border-t border-white/10 pt-4">
+                              <h5 className="text-[10px] uppercase tracking-[0.18em] text-primary-container font-label-sm mb-3">Suggested AWS Services</h5>
+                              <div className="flex flex-wrap gap-2">
+                                {questionDetails.awsServices.map((service) => (
+                                  <span key={service} className="rounded-full border border-primary-container/30 bg-primary-container/10 px-3 py-1 text-[10px] uppercase tracking-wider text-primary-container font-label-sm">
+                                    {service}
+                                  </span>
+                                ))}
+                              </div>
+                            </section>
+                          )}
                         </div>
 
                         <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-white/5 pt-4">
@@ -629,7 +668,7 @@ export default function MysteryBoxDashboard() {
                   
                   <TeamActivity key={team.code} team={team} />
 
-                  {isCurrentLeader && <button className="bg-primary-container text-black rounded-xl p-4 disabled:opacity-40" disabled={!team.isOpened || team.isChaosOpened || !team.freeChangeCards} onClick={() => handlePurchase({id:'change-topic'},true)}>Use Free Problem Change Card ({team.freeChangeCards || 0})</button>}
+                  <button className="bg-primary-container text-black rounded-xl p-4 disabled:opacity-40" disabled={!team.isOpened || team.isChaosOpened || !team.freeChangeCards} onClick={() => handlePurchase({id:'change-topic'},true)}>Use Free Problem Change Card ({team.freeChangeCards || 0})</button>
                   {/* Members Widget */}
                   <div className="bg-white/[0.02] border border-white/5 p-6 rounded-[24px]">
                     <p className="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-label-sm mb-4">Live Teammates</p>
@@ -687,7 +726,7 @@ export default function MysteryBoxDashboard() {
                     const isTopicSwap = item.id === 'change-topic' || item.isSpecialSwap;
                     const priceVal = parseInt(item.price);
                     const isOwned = isTopicSwap ? team.hasChangedQuestion : ownedItems.includes(item.title);
-                    const canAfford = isCurrentLeader && (isTopicSwap || points >= priceVal);
+                    const canAfford = isTopicSwap || points >= priceVal;
 
                     return (
                       <div
@@ -734,7 +773,7 @@ export default function MysteryBoxDashboard() {
                                   : 'bg-white/5 text-on-surface-variant/40 cursor-not-allowed'
                               }`}
                             >
-                              {canAfford ? 'Purchase Advantage' : isCurrentLeader ? 'Not Enough Points' : 'Leader Only'}
+                              {canAfford ? 'Purchase Advantage' : 'Not Enough Points'}
                             </button>
                           )}
                         </div>
@@ -761,7 +800,7 @@ export default function MysteryBoxDashboard() {
                 </div>
 
                 <div className="bg-white/[0.02] border border-white/5 p-6 rounded-[24px] flex justify-center shadow-[0_15px_50px_rgba(255,153,0,0.05)]">
-                  <SpinWheel key={team.code} team={team} isLeader={isCurrentLeader} />
+                  <SpinWheel key={team.code} team={team} isMember={Boolean(myEmail)} />
                 </div>
               </motion.div>
             )}
@@ -780,7 +819,7 @@ export default function MysteryBoxDashboard() {
                     <div>
                       <h3 className="text-xl font-headline-md text-on-surface uppercase tracking-widest mt-0 mb-1.5">Official Games</h3>
                       <p className="text-xs text-on-surface-variant m-0 font-body-md max-w-3xl">
-                        Registered team members may complete up to {gameScores?.maxAttempts ?? team.maxGameAttempts ?? 5} distinct official games. Each game counts once per team. Refreshing or leaving resumes the active slot; replay buttons open Practice and never award points.
+                        Registered team members may complete up to {gameScores?.maxAttempts ?? team.maxGameAttempts ?? 5} distinct official games. Each game counts once per team. Leaving a game reserves its one official slot, but does not block other available games. Replay buttons open Practice and never award points.
                       </p>
                     </div>
                     <div className={`px-4 py-3 rounded-xl border font-headline-md uppercase text-xs tracking-widest ${!gameModeKnown ? 'bg-[#00a8e0]/10 border-[#00a8e0]/30 text-[#00a8e0]' : gameScores.gamesEnabled ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-300'}`}>
@@ -803,19 +842,15 @@ export default function MysteryBoxDashboard() {
                   </div>
                 </div>
 
-                {gameScores?.activeAttempt && (
-                  <div className="mb-6 border border-[#00a8e0]/40 bg-[#00a8e0]/10 rounded-[18px] p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.2em] text-[#00a8e0] font-label-sm m-0">Active official slot</p>
-                      <h4 className="text-lg text-on-surface uppercase tracking-widest mt-2 mb-0">{games.find((game) => game.slug === gameScores.activeAttempt.gameSlug)?.title || gameScores.activeAttempt.gameSlug}</h4>
+                {activeGameAttempts.length > 0 && (
+                  <div className="mb-6 border border-[#00a8e0]/40 bg-[#00a8e0]/10 rounded-[18px] p-5">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-[#00a8e0] font-label-sm m-0">Paused official games</p>
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {activeGameAttempts.map((attempt) => <div key={attempt.attemptId} className="flex items-center justify-between gap-3 rounded-xl border border-[#00a8e0]/20 p-3">
+                        <h4 className="text-sm text-on-surface uppercase tracking-widest m-0">{games.find((game) => game.slug === attempt.gameSlug)?.title || attempt.gameSlug}</h4>
+                        <button type="button" onClick={() => navigate(`/mystery-box-hackathon/games/${attempt.gameSlug}`)} className="bg-[#00a8e0] text-white px-4 py-2 rounded-lg font-headline-md text-[10px] uppercase tracking-widest font-bold cursor-pointer">Resume</button>
+                      </div>)}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/mystery-box-hackathon/games/${gameScores.activeAttempt.gameSlug}`)}
-                      className="bg-[#00a8e0] text-white px-5 py-3 rounded-xl font-headline-md text-xs uppercase tracking-widest font-bold cursor-pointer"
-                    >
-                      Resume Game
-                    </button>
                   </div>
                 )}
 

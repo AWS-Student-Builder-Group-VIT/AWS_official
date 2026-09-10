@@ -84,16 +84,18 @@ export function buildGameErrorPayload(error) {
 export function summarizeTeamGameUsage({ attempts = [], maxAttempts = DEFAULT_MAX_GAME_ATTEMPTS } = {}) {
   const parsedMax = Number(maxAttempts);
   const normalizedMax = Math.min(12, Math.max(0, Math.trunc(Number.isFinite(parsedMax) ? parsedMax : DEFAULT_MAX_GAME_ATTEMPTS)));
-  const countedAttempts = attempts.filter((attempt) => !attempt.voided_at && !attempt.voidedAt);
+  const countedAttempts = attempts.filter((attempt) => !attempt.voided_at && !attempt.voidedAt && isScoredGame(attempt.game_slug || attempt.gameSlug));
   const usedAttempts = countedAttempts.length;
   const completedAttempts = countedAttempts.filter((attempt) => attempt.status === 'completed').length;
+  const activeAttempts = countedAttempts.filter((attempt) => attempt.status === 'active');
   return {
     maxAttempts: normalizedMax,
     usedAttempts,
     remainingAttempts: Math.max(0, normalizedMax - usedAttempts),
     completedAttempts,
     playedGameSlugs: [...new Set(countedAttempts.map((attempt) => attempt.game_slug || attempt.gameSlug).filter(Boolean))],
-    activeAttempt: countedAttempts.find((attempt) => attempt.status === 'active') || null,
+    activeAttempt: activeAttempts[0] || null,
+    activeAttempts,
   };
 }
 
@@ -108,7 +110,6 @@ export function canStartOfficialGame({ attempts = [], maxAttempts = DEFAULT_MAX_
     }
     return { allowed: false, reason: 'game-already-played', attempt: existingAttempt };
   }
-  if (usage.activeAttempt) return { allowed: false, reason: 'active-attempt-exists', attempt: usage.activeAttempt };
   if (usage.usedAttempts >= usage.maxAttempts) return { allowed: false, reason: 'game-limit-reached' };
   return { allowed: true };
 }
@@ -117,7 +118,7 @@ export function findLowestAvailableSlot(attempts = [], maxAttempts = DEFAULT_MAX
   const usage = summarizeTeamGameUsage({ attempts, maxAttempts });
   const occupied = new Set(
     attempts
-      .filter((attempt) => !attempt.voided_at && !attempt.voidedAt)
+      .filter((attempt) => !attempt.voided_at && !attempt.voidedAt && isScoredGame(attempt.game_slug || attempt.gameSlug))
       .map((attempt) => Number(attempt.slot_number ?? attempt.slotNumber))
       .filter(Number.isInteger),
   );
@@ -178,9 +179,7 @@ export async function initializeHackathonScoring(pool) {
     DROP INDEX IF EXISTS idx_team_game_attempts_one_active;
     DROP INDEX IF EXISTS idx_team_game_attempts_team_game;
     CREATE UNIQUE INDEX idx_team_game_attempts_team_slot ON team_game_attempts(team_id, slot_number)
-      WHERE slot_number IS NOT NULL AND voided_at IS NULL;
-    CREATE UNIQUE INDEX idx_team_game_attempts_one_active ON team_game_attempts(team_id)
-      WHERE status = 'active' AND voided_at IS NULL;
+      WHERE slot_number IS NOT NULL AND voided_at IS NULL AND game_slug <> 'crack-the-code';
     CREATE UNIQUE INDEX idx_team_game_attempts_team_game ON team_game_attempts(team_id, game_slug)
       WHERE voided_at IS NULL;
 
@@ -262,6 +261,7 @@ export async function initializeHackathonScoring(pool) {
 
   await applyPrelaunchOfficialGameMigration(pool);
   await applyChallengeCatalogV2Migration(pool);
+  await applyChallengeCatalogDetailsMigration(pool);
 }
 
 export async function applyChallengeCatalogV2Migration(pool) {
@@ -303,6 +303,52 @@ export async function applyChallengeCatalogV2Migration(pool) {
     );
     await client.query('COMMIT');
     return { applied: true, reassigned: teams.rows.length };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function applyChallengeCatalogDetailsMigration(pool) {
+  const migrationKey = 'challenge_catalog_v3_details_migrated';
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const marker = await client.query(
+      `INSERT INTO global_settings (key, value) VALUES ($1, 'in-progress')
+       ON CONFLICT (key) DO NOTHING RETURNING key`,
+      [migrationKey],
+    );
+    if (!marker.rows.length) {
+      await client.query('COMMIT');
+      return { applied: false };
+    }
+
+    const teams = await client.query(
+      `SELECT id, mystery_question, is_opened, is_chaos_opened, is_chaos_resolved
+       FROM hackathon_teams ORDER BY id FOR UPDATE`,
+    );
+    let enriched = 0;
+    for (const team of teams.rows) {
+      const canonical = getChallengeById(team.mystery_question?.id);
+      if (!canonical) continue;
+      const snapshot = createTeamChallengeSnapshot(canonical);
+      await client.query(
+        `UPDATE hackathon_teams SET mystery_question=$1, chaos_event=$2, updated_at=NOW() WHERE id=$3`,
+        [JSON.stringify(snapshot.challenge), JSON.stringify(snapshot.chaosEvent), team.id],
+      );
+      enriched += 1;
+    }
+
+    await client.query('UPDATE global_settings SET value=$1 WHERE key=$2', ['true', migrationKey]);
+    await client.query(
+      `INSERT INTO hackathon_scoring_migrations (key) VALUES ('v4-detailed-challenge-briefs')
+       ON CONFLICT (key) DO NOTHING`,
+    );
+    await client.query('COMMIT');
+    return { applied: true, enriched };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -549,7 +595,8 @@ async function getTeamGameSummary(client, team) {
     completedAttempts: usage.completedAttempts,
     playedGameSlugs: usage.playedGameSlugs,
     activeAttempt: formatAttempt(usage.activeAttempt),
-    attempts: attempts.map(formatAttempt),
+    activeAttempts: usage.activeAttempts.map(formatAttempt),
+    attempts: attempts.filter((attempt) => isScoredGame(attempt.game_slug)).map(formatAttempt),
   };
 }
 
@@ -576,12 +623,11 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
         const attempts = await listTeamAttempts(client, team.id);
         const gamesEnabled = await getGamesEnabled(client);
         const usage = summarizeTeamGameUsage({ attempts, maxAttempts: team.max_game_attempts });
-        const activeAttempt = usage.activeAttempt;
-        if (activeAttempt?.game_slug === gameSlug) return { created: false, attempt: activeAttempt, usage: summarizeTeamGameUsage({ attempts, maxAttempts: team.max_game_attempts }) };
+        const activeAttempt = usage.activeAttempts.find((attempt) => attempt.game_slug === gameSlug);
+        if (activeAttempt) return { created: false, attempt: activeAttempt, usage: summarizeTeamGameUsage({ attempts, maxAttempts: team.max_game_attempts }) };
         const decision = canStartOfficialGame({ attempts, maxAttempts: team.max_game_attempts, gamesEnabled, gameSlug });
         if (!decision.allowed) {
           const messages = {
-            'active-attempt-exists': `Resume ${decision.attempt?.game_slug || 'the active game'} before starting another official game`,
             'game-already-played': 'This team has already completed this official game',
             'game-mode-disabled': 'Official game mode is disabled',
             'game-limit-reached': 'This team has used all official game plays',
@@ -705,7 +751,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
   app.post('/api/mystery-box/teams/:code/leave', hackathonAuth, async (req, res) => {
     try {
       const response = await transact(pool, async (client) => {
-        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { lock: true });
+        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
         if (team.actor_is_leader) {
           const error = new Error('The team leader cannot leave without transferring leadership');
           error.status = 409;
@@ -729,7 +775,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
   app.post('/api/mystery-box/teams/:code/reveal', hackathonAuth, async (req, res) => {
     try {
       const response = await transact(pool, async (client) => {
-        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
+        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { lock: true });
         if (team.is_opened) return { balance: Number(team.points || 0), alreadyOpened: true };
         const award = team.primary_awarded ? 0 : Math.max(0, Math.trunc(Number(team.mystery_question?.points || 0)));
         const ledger = await appendLedger(client, { team, sourceType: 'mystery', sourceRef: 'primary-reveal', delta: award, reason: 'Primary mystery box revealed', actor: req.hackathonUser });
@@ -746,7 +792,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
       const item = SHOP_ITEMS[req.body?.itemId];
       if (!item) return res.status(400).json({ error: 'Unknown shop item' });
       const response = await transact(pool, async (client) => {
-        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
+        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { lock: true });
         const owned = Array.isArray(team.owned_items) ? team.owned_items : [];
         if (owned.includes(item.title)) { const error = new Error('This item is already owned'); error.status = 409; throw error; }
         const ledger = await appendLedger(client, { team, sourceType: 'shop', sourceRef: req.body.itemId, delta: -item.price, reason: `Purchased ${item.title}`, actor: req.hackathonUser, metadata: { itemId: req.body.itemId } });
@@ -764,7 +810,7 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
       if (!targetTopic) return res.status(400).json({ error: 'Unknown topic selected' });
       const response = await transact(pool, async (client) => {
         await client.query("SELECT value FROM hackathon_event_settings WHERE key='chaos_enabled' FOR SHARE");
-        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
+        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { lock: true });
         const quote = getTopicSwapQuote({
           currentTopic: team.mystery_question,
           targetTopic,

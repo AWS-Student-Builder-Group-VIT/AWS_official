@@ -49,10 +49,10 @@ test('an unplayed game starts officially while team slots remain', () => {
   });
 });
 
-test('an active official attempt blocks starting or practicing another card', () => {
+test('a paused official game does not block another unplayed official game', () => {
   const access = getOfficialGameCardAccess({
-    played: true,
-    remainingAttempts: 0,
+    played: false,
+    remainingAttempts: 3,
     gamesEnabled: true,
     activeAttempt: { gameSlug: 'wordle' },
     practicePath: '/games/morse',
@@ -60,10 +60,10 @@ test('an active official attempt blocks starting or practicing another card', ()
   });
 
   assert.deepEqual(access, {
-    mode: 'blocked',
-    disabled: true,
-    label: 'Resume Active Slot First',
-    path: null,
+    mode: 'official',
+    disabled: false,
+    label: 'Play Official Game',
+    path: '/mystery-box-hackathon/games/morse',
   });
 });
 

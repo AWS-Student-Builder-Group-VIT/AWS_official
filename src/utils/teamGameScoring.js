@@ -1,6 +1,6 @@
 export const SCORED_TEAM_GAMES = Object.freeze([
   'pacman', 'mario-kart', 'asteroid-command', 'snake', 'flappy-bird', 'watergirl-fireboy',
-  'fruit-ninja', 'wordle', 'crack-the-code', 'detective-crime', 'level-devil', 'morse',
+  'fruit-ninja', 'wordle', 'detective-crime', 'level-devil', 'morse',
 ]);
 
 const TEAM_STORAGE_KEY = 'mystery-box-hackathon-team';
@@ -17,7 +17,7 @@ const PERSISTED_GAME_KEYS = Object.freeze({
 export function normalizeGameCompletion(gameSlug, payload = {}) {
   if (!SCORED_TEAM_GAMES.includes(gameSlug) || payload?.official === false) return null;
   if (SCORE_GAMES.has(gameSlug)) return { official: true, completed: true, rawScore: Number(payload.score) || 0 };
-  if (['wordle','crack-the-code','detective-crime'].includes(gameSlug)) return { official: true, solved: payload.solved === true };
+  if (['wordle','detective-crime'].includes(gameSlug)) return { official: true, solved: payload.solved === true };
   if (gameSlug === 'level-devil') return { official: true, completedLevels: Number(payload.completedLevels) || 0 };
   if (gameSlug === 'morse') return { official: true, correctCount: Number(payload.correctCount) || 0 };
   if (gameSlug === 'watergirl-fireboy') return { official: true, highestLevel: Number(payload.highestLevel) || 0, totalDeaths: Number(payload.totalDeaths) || 0 };
@@ -36,6 +36,10 @@ export function buildOfficialGameReceipt(gameSlug, response = {}) {
     remainingAttempts: confirmed && Number.isFinite(Number(response.usage?.remainingAttempts)) ? Number(response.usage.remainingAttempts) : null,
     error: String(response.error || ''),
   };
+}
+
+export function shouldReturnToDashboardAfterOfficialCompletion(gameSlug) {
+  return gameSlug === 'asteroid-command';
 }
 
 function getSession() {

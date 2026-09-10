@@ -1,9 +1,23 @@
+import { CHALLENGE_DETAILS } from './challengeDetails.js';
+
 export const CHALLENGE_SWAP_COST = 100;
 
-const challenge = (id, track, title, desc, tags, chaosId, chaosTitle, chaosDesc) => Object.freeze({
-  id, track, title, desc, tags: Object.freeze(tags), points: 100,
-  chaosTwist: Object.freeze({ id: chaosId, title: chaosTitle, desc: chaosDesc }),
-});
+const challenge = (id, track, title, summary, tags, chaosId, chaosTitle) => {
+  const details = CHALLENGE_DETAILS[id];
+  if (!details) throw new Error(`Missing detailed challenge brief for ${id}`);
+  return Object.freeze({
+    id,
+    track,
+    title,
+    summary,
+    desc: details.desc,
+    technicalScope: details.technicalScope,
+    deliverables: details.deliverables,
+    tags: Object.freeze(tags),
+    points: 100,
+    chaosTwist: Object.freeze({ id: chaosId, title: chaosTitle, desc: details.chaosDesc }),
+  });
+};
 
 export const CHALLENGE_CATALOG = Object.freeze([
   challenge('ai-adaptive-campus-concierge', 'AI & Automation', 'Adaptive Campus Services Concierge', 'Personalize campus notices, services, and next actions for distinct student needs.', ['Lambda', 'DynamoDB', 'S3'], 'ai-manual-override', 'Manual Override Required', 'Add a manual override and record why a recommendation changed.'),
@@ -57,7 +71,17 @@ export const CHALLENGE_CATALOG = Object.freeze([
   challenge('civic-inclusive-service-redesign', 'Civic Tech & Open Innovation', 'Inclusive Campus Service Redesign', 'Improve a defined service for an underserved user group.', ['Lambda', 'DynamoDB', 'API Gateway'], 'civic-second-persona', 'Second User Persona', 'Support a second persona with different language or accessibility needs.'),
 ]);
 
-const clonePublic = ({ id, track, title, desc, tags, points }) => ({ id, track, title, desc, tags: [...tags], points });
+const clonePublic = ({ id, track, title, summary, desc, technicalScope, deliverables, tags, points }) => ({
+  id,
+  track,
+  title,
+  summary,
+  desc,
+  technicalScope: [...technicalScope],
+  deliverables: [...deliverables],
+  tags: [...tags],
+  points,
+});
 const cloneChaos = ({ id, title, desc }) => ({ id, title, desc });
 
 export function listPublicChallenges() {
