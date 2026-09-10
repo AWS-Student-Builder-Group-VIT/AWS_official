@@ -14,11 +14,13 @@ import { eventRequest, pendingRequest } from '../../utils/eventRewards';
 import { games } from '../gamesRegistry';
 import { SCORED_TEAM_GAMES } from '../../utils/teamGameScoring';
 import { fetchMysteryTopics, fetchTeamGameScores, swapTeamTopic } from '../../utils/auth';
+import { readApiResponse } from '../../utils/apiResponse';
 import {
   HACKATHON_TOKEN_KEY,
   MEMBER_EMAIL_KEY,
   OWNED_ITEMS_KEY,
   TEAM_STORAGE_KEY,
+  clearHackathonBrowserSession,
   consumeTeamRefreshResponse,
 } from './teamSessionSync';
 import { getOfficialGameCardAccess } from './officialGameAccess';
@@ -113,7 +115,7 @@ export default function MysteryBoxDashboard() {
           setMyEmail('');
           setOwnedItems([]);
           setGameScores(null);
-          navigate('/mystery-box-hackathon', {
+          navigate('/hackquest', {
             replace: true,
             state: { teamSessionInvalidated: result.reason },
           });
@@ -151,7 +153,7 @@ export default function MysteryBoxDashboard() {
   useEffect(() => {
     const isMemberOfTeam = team && myEmail && team.members?.some((m) => m.email === myEmail);
     if (!isMemberOfTeam) {
-      navigate('/mystery-box-hackathon');
+      navigate('/hackquest');
     }
   }, [team, myEmail, navigate]);
 
@@ -238,29 +240,33 @@ export default function MysteryBoxDashboard() {
     }
   };
 
-  const handleDisbandOrLeave = async () => {
-    const isLeader = team.members?.find((member) => member.isLeader)?.email === myEmail;
-    if (!isLeader) {
-      try {
-        const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
-        const response = await fetch(`/api/mystery-box/teams/${team.code}/leave`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token || ''}` },
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Could not leave the team');
-      } catch (error) {
-        setNotification(error.message);
-        return;
-      }
-    }
-    persistTeamLocally(null);
-    window.sessionStorage.removeItem(MEMBER_EMAIL_KEY);
-    window.sessionStorage.removeItem(HACKATHON_TOKEN_KEY);
-    window.localStorage.removeItem(OWNED_ITEMS_KEY);
-    window.localStorage.removeItem('mystery-box-chaos-simulated');
+  const handleSignOut = () => {
+    clearHackathonBrowserSession({
+      localStorage: window.localStorage,
+      sessionStorage: window.sessionStorage,
+    });
+    setTeam(null);
     setMyEmail('');
-    navigate('/mystery-box-hackathon');
+    setOwnedItems([]);
+    setGameScores(null);
+    navigate('/hackquest', { replace: true, state: { signedOut: true } });
+  };
+
+  const handleLeaveTeam = async () => {
+    const leaderNote = isCurrentLeader ? ' Leadership will transfer automatically, or the team will be deleted if you are its last member.' : '';
+    if (!window.confirm(`Leave this HackQuest team permanently?${leaderNote}`)) return;
+    try {
+      const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
+      const response = await fetch(`/api/mystery-box/teams/${team.code}/leave`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token || ''}` },
+      });
+      const apiResponse = await readApiResponse(response, 'Could not leave the team');
+      if (!response.ok) throw new Error(apiResponse.error);
+      handleSignOut();
+    } catch (error) {
+      setNotification(error.message);
+    }
   };
 
   // Point Shop Purchase handler
@@ -358,7 +364,7 @@ export default function MysteryBoxDashboard() {
             <img src={awsIcon} alt="AWS" className="w-8 h-8 rounded-full object-cover border border-primary-container/20" />
             <div>
               <h4 className="text-xs uppercase font-headline-xl tracking-widest text-primary-container font-bold m-0">AWS Cloud Club</h4>
-              <p className="text-[9px] uppercase tracking-wider text-on-surface-variant font-label-sm m-0">Mystery Hackathon</p>
+              <p className="text-[9px] uppercase tracking-wider text-on-surface-variant font-label-sm m-0">HackQuest</p>
             </div>
           </div>
 
@@ -401,10 +407,17 @@ export default function MysteryBoxDashboard() {
 
           <button
             type="button"
-            onClick={handleDisbandOrLeave}
+            onClick={handleSignOut}
             className="w-full bg-red-950/20 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white transition-all py-3 rounded-xl text-xs uppercase font-headline-md tracking-wider cursor-pointer font-bold duration-150"
           >
-            {isCurrentLeader ? 'Sign Out' : 'Leave Team'}
+            Sign Out
+          </button>
+          <button
+            type="button"
+            onClick={handleLeaveTeam}
+            className="w-full bg-transparent border border-white/10 text-on-surface-variant hover:border-red-500/50 hover:text-red-400 transition-all py-2.5 rounded-xl text-[10px] uppercase font-headline-md tracking-wider cursor-pointer"
+          >
+            Leave Team Permanently
           </button>
         </div>
       </aside>
@@ -435,7 +448,7 @@ export default function MysteryBoxDashboard() {
             {/* Back Button */}
             <button
               type="button"
-              onClick={() => navigate('/mystery-box-hackathon')}
+              onClick={() => navigate('/hackquest')}
               className="border border-white/10 hover:border-primary-container text-on-surface hover:text-primary-container font-headline-md text-xs uppercase px-4 py-3.5 rounded-xl transition-all cursor-pointer font-semibold"
             >
               ← View Event Info
@@ -848,7 +861,7 @@ export default function MysteryBoxDashboard() {
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                       {activeGameAttempts.map((attempt) => <div key={attempt.attemptId} className="flex items-center justify-between gap-3 rounded-xl border border-[#00a8e0]/20 p-3">
                         <h4 className="text-sm text-on-surface uppercase tracking-widest m-0">{games.find((game) => game.slug === attempt.gameSlug)?.title || attempt.gameSlug}</h4>
-                        <button type="button" onClick={() => navigate(`/mystery-box-hackathon/games/${attempt.gameSlug}`)} className="bg-[#00a8e0] text-white px-4 py-2 rounded-lg font-headline-md text-[10px] uppercase tracking-widest font-bold cursor-pointer">Resume</button>
+                        <button type="button" onClick={() => navigate(`/hackquest/games/${attempt.gameSlug}`)} className="bg-[#00a8e0] text-white px-4 py-2 rounded-lg font-headline-md text-[10px] uppercase tracking-widest font-bold cursor-pointer">Resume</button>
                       </div>)}
                     </div>
                   </div>
@@ -871,7 +884,7 @@ export default function MysteryBoxDashboard() {
                       gamesEnabled: gameScores?.gamesEnabled,
                       activeAttempt: gameScores?.activeAttempt,
                       practicePath: game.path,
-                      officialPath: `/mystery-box-hackathon/games/${game.slug}`,
+                      officialPath: `/hackquest/games/${game.slug}`,
                     });
                     const practice = access.mode === 'practice';
                     return (

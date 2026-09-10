@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { readApiResponse } from '../../utils/apiResponse';
 import { motion } from 'framer-motion';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
-import TeamInvitations from './components/TeamInvitations';
+import {
+  HACKATHON_TOKEN_KEY,
+  MEMBER_EMAIL_KEY,
+  TEAM_STORAGE_KEY,
+  consumeVerifiedHackathonSession,
+} from './teamSessionSync';
 
 // Global assets (shared across the whole app)
 import awsIcon from '../../assets/aws_icon.jpeg';
@@ -27,7 +32,7 @@ function decodeJwt(token) {
   }
 }
 
-// Local Mystery Box Hackathon data + components
+// Local HackQuest data + components
 import {
   STEPS,
   RULES,
@@ -43,7 +48,6 @@ import {
   SectionLabel,
   SectionTitle,
   SectionSub,
-  TypeWriter,
   Divider,
   SpinWheel,
   MysteryBoxSVG,
@@ -53,9 +57,6 @@ import {
 /* ═══════════════════════════════════════════════════════════
    MYSTERY BOX HACKATHON — Landing Page
    ═══════════════════════════════════════════════════════════ */
-
-const TEAM_STORAGE_KEY = 'mystery-box-hackathon-team';
-const HACKATHON_TOKEN_KEY = 'mystery-box-hackathon-token';
 
 const CHAOS_TEASERS = [
   'Every team receives one curated, challenge-specific adaptation.',
@@ -130,6 +131,7 @@ function MysteryBoxHackathonInner() {
   });
   const [formError, setFormError] = useState('');
   const [joinError, setJoinError] = useState('');
+  const [googleSessionPending, setGoogleSessionPending] = useState(false);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -167,49 +169,65 @@ function MysteryBoxHackathonInner() {
     }
   };
 
-  const handleGoogleRegisterSuccess = (credentialResponse) => {
-    setFormError('');
+  const handleGoogleSuccess = async (credentialResponse, mode) => {
+    const setError = mode === 'register' ? setFormError : setJoinError;
+    setError('');
     if (!credentialResponse?.credential) {
-      setFormError('Failed to receive Google credential.');
+      setError('Failed to receive Google credential.');
       return;
     }
     const decoded = decodeJwt(credentialResponse.credential);
     if (!decoded || !decoded.email) {
-      setFormError('Failed to parse Google account information.');
+      setError('Failed to parse Google account information.');
       return;
     }
-    const email = decoded.email.toLowerCase().trim();
-    setGoogleUser({ credential: credentialResponse.credential,
-      email,
-      name: decoded.name || 'Participant',
-      picture: decoded.picture || '',
-      givenName: decoded.given_name || '',
-      familyName: decoded.family_name || '',
-    });
-    setRegisterForm((prev) => ({ ...prev, email }));
+    setGoogleSessionPending(true);
+    try {
+      const response = await fetch('/api/mystery-box/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: credentialResponse.credential }),
+      });
+      const apiResponse = await readApiResponse(response, 'Google verification failed');
+      if (!response.ok) {
+        setError(apiResponse.error);
+        return;
+      }
+
+      const sessionData = apiResponse.data;
+      const sessionResult = consumeVerifiedHackathonSession(sessionData, {
+        localStorage: window.localStorage,
+        sessionStorage: window.sessionStorage,
+      });
+      if (sessionResult.kind === 'resume') {
+        setTeam(sessionResult.team);
+        setMyEmail(sessionData.user.email);
+        setRegisterOpen(false);
+        setJoinOpen(false);
+        navigate('/hackquest/dashboard');
+        return;
+      }
+      const verifiedUser = {
+        email: sessionData.user.email,
+        name: sessionData.user.name || decoded.name || 'Participant',
+        picture: sessionData.user.picture || decoded.picture || '',
+      };
+      if (mode === 'register') {
+        setGoogleUser(verifiedUser);
+        setRegisterForm((prev) => ({ ...prev, email: verifiedUser.email }));
+      } else {
+        setGoogleJoinUser(verifiedUser);
+        setJoinForm((prev) => ({ ...prev, email: verifiedUser.email }));
+      }
+    } catch (error) {
+      setError(`Could not reach the team server: ${error.message || 'network request failed'}.`);
+    } finally {
+      setGoogleSessionPending(false);
+    }
   };
 
-  const handleGoogleJoinSuccess = (credentialResponse) => {
-    setJoinError('');
-    if (!credentialResponse?.credential) {
-      setJoinError('Failed to receive Google credential.');
-      return;
-    }
-    const decoded = decodeJwt(credentialResponse.credential);
-    if (!decoded || !decoded.email) {
-      setJoinError('Failed to parse Google account information.');
-      return;
-    }
-    const email = decoded.email.toLowerCase().trim();
-    setGoogleJoinUser({ credential: credentialResponse.credential,
-      email,
-      name: decoded.name || 'Participant',
-      picture: decoded.picture || '',
-      givenName: decoded.given_name || '',
-      familyName: decoded.family_name || '',
-    });
-    setJoinForm((prev) => ({ ...prev, email }));
-  };
+  const handleGoogleRegisterSuccess = (response) => handleGoogleSuccess(response, 'register');
+  const handleGoogleJoinSuccess = (response) => handleGoogleSuccess(response, 'join');
 
   const handleRegisterSubmit = async (event) => {
     event.preventDefault();
@@ -241,14 +259,11 @@ function MysteryBoxHackathonInner() {
 
     const newCode = createTeamCode();
     try {
-      const session = await fetch('/api/mystery-box/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: googleUser.credential }) });
-      const sessionResponse = await readApiResponse(session, 'Google verification failed');
-      const sessionData = sessionResponse.data;
-      if (!session.ok) { setFormError(sessionResponse.error); return; }
-      window.sessionStorage.setItem(HACKATHON_TOKEN_KEY, sessionData.token);
+      const sessionToken = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
+      if (!sessionToken) { setFormError('Google session expired. Please sign in again.'); return; }
       const res = await fetch('/api/mystery-box/teams/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
         body: JSON.stringify({
           code: newCode,
           teamName,
@@ -264,14 +279,14 @@ function MysteryBoxHackathonInner() {
 
       const createdTeam = data.team;
       if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem('mystery-box-hackathon-my-email', email);
+        window.sessionStorage.setItem(MEMBER_EMAIL_KEY, email);
       }
       setMyEmail(email);
       persistTeam(createdTeam);
       setRegisterForm({ email: '', regNo: '', teamName: '', isLeader: true });
       setGoogleUser(null);
       setRegisterOpen(false);
-      navigate('/mystery-box-hackathon/dashboard');
+      navigate('/hackquest/dashboard');
     } catch (err) {
       console.error('Error creating team:', err);
       setFormError(`Could not reach the team server: ${err.message || 'network request failed'}. No local team was created.`);
@@ -302,14 +317,11 @@ function MysteryBoxHackathonInner() {
     }
 
     try {
-      const session = await fetch('/api/mystery-box/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: googleJoinUser.credential }) });
-      const sessionResponse = await readApiResponse(session, 'Google verification failed');
-      const sessionData = sessionResponse.data;
-      if (!session.ok) { setJoinError(sessionResponse.error); return; }
-      window.sessionStorage.setItem(HACKATHON_TOKEN_KEY, sessionData.token);
+      const sessionToken = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
+      if (!sessionToken) { setJoinError('Google session expired. Please sign in again.'); return; }
       const res = await fetch('/api/mystery-box/teams/join', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
         body: JSON.stringify({
           teamCode,
           regNo,
@@ -325,7 +337,7 @@ function MysteryBoxHackathonInner() {
 
       const joinedTeam = data.team;
       if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem('mystery-box-hackathon-my-email', email);
+        window.sessionStorage.setItem(MEMBER_EMAIL_KEY, email);
       }
       setMyEmail(email);
       persistTeam(joinedTeam);
@@ -333,7 +345,7 @@ function MysteryBoxHackathonInner() {
       setJoinForm({ email: '', regNo: '', teamCode: '' });
       setGoogleJoinUser(null);
       setJoinOpen(false);
-      navigate('/mystery-box-hackathon/dashboard');
+      navigate('/hackquest/dashboard');
     } catch (err) {
       console.error('Error joining team:', err);
       setJoinError(`Could not reach the team server: ${err.message || 'network request failed'}. Please try again.`);
@@ -420,6 +432,7 @@ function MysteryBoxHackathonInner() {
               </button>
             </div>
 
+            {googleSessionPending && <p className="text-center text-xs text-primary-container">Verifying your existing HackQuest membership…</p>}
             <div className="space-y-4">
               {/* Google Auth Step */}
               {!googleUser ? (
@@ -573,6 +586,7 @@ function MysteryBoxHackathonInner() {
               </button>
             </div>
 
+            {googleSessionPending && <p className="text-center text-xs text-primary-container">Verifying your existing HackQuest membership…</p>}
             <div className="space-y-4">
               {/* Google Auth Step */}
               {!googleJoinUser ? (
@@ -720,7 +734,7 @@ function MysteryBoxHackathonInner() {
             {isMemberOfTeam ? (
               <button
                 type="button"
-                onClick={() => navigate('/mystery-box-hackathon/dashboard')}
+                onClick={() => navigate('/hackquest/dashboard')}
                 className="bg-primary-container text-background px-5 py-2 text-[13px] font-headline-md uppercase tracking-widest border-0 cursor-pointer hover:bg-primary transition-colors"
               >
                 Go to Dashboard
@@ -745,8 +759,6 @@ function MysteryBoxHackathonInner() {
             )}
           </div>
         </nav>
-        <TeamInvitations onJoined={() => navigate('/mystery-box-hackathon/dashboard')} />
-
         {/* ═══════════ HERO ═══════════ */}
         <section
           className="relative overflow-hidden py-[90px] px-container-padding"
@@ -757,11 +769,8 @@ function MysteryBoxHackathonInner() {
           <div className="max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-[60px] items-center">
             <FadeInSection>
               <h1 className="font-headline-xl text-on-surface leading-[1.05] mb-4 uppercase tracking-widest flex flex-col items-start relative z-10">
-                <span className="text-[clamp(42px,8vw,96px)]">Mystery</span>
-                <span className="text-[clamp(42px,8vw,96px)]">Box</span>
-                <span className="text-[clamp(42px,8vw,96px)] text-primary-container" style={{ textShadow: '0 0 30px rgba(255,153,0,0.4)' }}>
-                  <TypeWriter words={['Hackathon', 'Hack It']} typingDelay={120} />
-                </span>
+                <span className="text-[clamp(42px,8vw,96px)]">Hack</span>
+                <span className="text-[clamp(42px,8vw,96px)] text-primary-container" style={{ textShadow: '0 0 30px rgba(255,153,0,0.4)' }}>Quest</span>
               </h1>
 
               <p className="text-[clamp(18px,2.5vw,24px)] text-primary-container font-headline-md mb-5 uppercase tracking-widest relative z-10">
@@ -1272,7 +1281,7 @@ function MysteryBoxHackathonInner() {
             <img src={awsIcon} alt="AWS Student Builder Club" className="w-5 h-5 rounded-full object-cover" />
             <span className="font-headline-md text-label-md text-primary-container uppercase tracking-widest">AWS Student Builder Club</span>
           </div>
-          <div className="text-[13px] text-on-surface-variant font-label-sm uppercase tracking-widest">Mystery Box Hackathon — Build. Adapt. Survive.</div>
+          <div className="text-[13px] text-on-surface-variant font-label-sm uppercase tracking-widest">HackQuest — Build. Adapt. Survive.</div>
           <div className="text-[13px] text-on-surface-variant font-label-sm uppercase tracking-widest">© 2026 AWS Student Builder Club</div>
         </footer>
 

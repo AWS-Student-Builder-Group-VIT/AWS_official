@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Routes, Route, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
+import { Navigate, Routes, Route, useLocation, useNavigate, useParams } from 'react-router-dom';
 import AwsStudentBuilderLoader from './components/AwsStudentBuilderLoader';
 import MobilePreloader from './components/MobilePreloader';
 import Hero from './components/Hero';
@@ -10,39 +10,44 @@ import TheBuilders from './components/TheBuilders';
 import Callout from './components/Callout';
 import Blog from './components/Blog';
 import Footer from './components/Footer';
-import BlogBedrock from './pages/BlogBedrock';
-import BlogLambda from './pages/BlogLambda';
-import BlogPredictiveAnalytics from './pages/BlogPredictiveAnalytics';
-import BlogGoogleMaps from './pages/BlogGoogleMaps';
 import LoginModal from './components/LoginModal';
-import GridScanIntro from './components/GridScanIntro';
 import StaggeredMenu from './components/StaggeredMenu';
 import MacbookScrollSection from './components/MacbookScrollSection';
 import awsIcon from './assets/aws_icon.jpeg';
 import OfficialGameReceipt from './components/OfficialGameReceipt';
 
-import AdminPage from './pages/AdminPage';
-import AccountPage from './pages/AccountPage';
-import LoginPage from './pages/LoginPage';
 import { checkSessionValidity, getUser, logout } from './utils/auth';
-import MysteryBoxHackathon, { MysteryBoxDashboard } from './pages/MysteryBoxHackathon/index.js';
-import FlappyBird from './pages/games/FlappyBird/FlappyBird.jsx';
-import FruitNinja from './pages/games/FruitNinja/FruitNinja.jsx';
-import SnakeGame from './pages/games/SnakeGame/SnakeGame.jsx';
-import WordleGame from './pages/games/ASCII-Wordle/src/WordleGame.jsx';
-import CrackTheCode from './pages/games/detective and cypher game/CrackTheCode.react.jsx';
-import DetectiveCrime from './pages/games/detective and cypher game/DetectiveCrime.react.jsx';
-import LevelDevilGame from './pages/games/level-devil/src/LevelDevilGame.jsx';
-import MorseGame from './pages/games/Morse-Game/src/MorseGame.jsx';
-import PacmanGame from './pages/games/PacmanGame/PacmanGame.jsx';
-import MarioKart from './pages/games/MarioKart/MarioKart.jsx';
-import WatergirlFireboy from './pages/games/WatergirlFireboy/WatergirlFireboy.jsx';
-import AsteroidCommand from './pages/games/AsteroidCommand/AsteroidCommand.jsx';
-import GunshotRoulette from './pages/games/GunshotRoulette/GunshotRoulette.jsx';
-import HackType from './pages/games/HackType/HackType.jsx';
-import GamesPage from './pages/GamesPage';
 import { games } from './pages/gamesRegistry';
 import { buildOfficialGameReceipt, completeTeamGame, SCORED_TEAM_GAMES, shouldReturnToDashboardAfterOfficialCompletion, startTeamGame } from './utils/teamGameScoring';
+
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const AccountPage = lazy(() => import('./pages/AccountPage'));
+const BlogBedrock = lazy(() => import('./pages/BlogBedrock'));
+const BlogLambda = lazy(() => import('./pages/BlogLambda'));
+const BlogPredictiveAnalytics = lazy(() => import('./pages/BlogPredictiveAnalytics'));
+const BlogGoogleMaps = lazy(() => import('./pages/BlogGoogleMaps'));
+const MysteryBoxHackathon = lazy(() => import('./pages/MysteryBoxHackathon/index.js'));
+const MysteryBoxDashboard = lazy(() => import('./pages/MysteryBoxHackathon/index.js').then((module) => ({ default: module.MysteryBoxDashboard })));
+const GamesPage = lazy(() => import('./pages/GamesPage'));
+const GridScanIntro = lazy(() => import('./components/GridScanIntro'));
+
+const gameComponents = {
+  'flappy-bird': lazy(() => import('./pages/games/FlappyBird/FlappyBird.jsx')),
+  'fruit-ninja': lazy(() => import('./pages/games/FruitNinja/FruitNinja.jsx')),
+  snake: lazy(() => import('./pages/games/SnakeGame/SnakeGame.jsx')),
+  wordle: lazy(() => import('./pages/games/ASCII-Wordle/src/WordleGame.jsx')),
+  'crack-the-code': lazy(() => import('./pages/games/detective and cypher game/CrackTheCode.react.jsx')),
+  'detective-crime': lazy(() => import('./pages/games/detective and cypher game/DetectiveCrime.react.jsx')),
+  'level-devil': lazy(() => import('./pages/games/level-devil/src/LevelDevilGame.jsx')),
+  morse: lazy(() => import('./pages/games/Morse-Game/src/MorseGame.jsx')),
+  pacman: lazy(() => import('./pages/games/PacmanGame/PacmanGame.jsx')),
+  'mario-kart': lazy(() => import('./pages/games/MarioKart/MarioKart.jsx')),
+  'watergirl-fireboy': lazy(() => import('./pages/games/WatergirlFireboy/WatergirlFireboy.jsx')),
+  'asteroid-command': lazy(() => import('./pages/games/AsteroidCommand/AsteroidCommand.jsx')),
+  'gunshot-roulette': lazy(() => import('./pages/games/GunshotRoulette/GunshotRoulette.jsx')),
+  'hack-type': lazy(() => import('./pages/games/HackType/HackType.jsx')),
+};
 
 /**
  * Detect mobile viewport (≤768px).
@@ -85,7 +90,7 @@ function GameRoute({ Component, gameSlug, official = false }) {
   const completionPayloadRef = useRef(null);
   const submissionRef = useRef(null);
   const retrySubmissionRef = useRef(null);
-  const dashboardPath = '/mystery-box-hackathon/dashboard?tab=games';
+  const dashboardPath = '/hackquest/dashboard?tab=games';
 
   useEffect(() => {
     if (!official) return undefined;
@@ -170,22 +175,19 @@ function OfficialGameRoute() {
   return <GameRoute Component={Component} gameSlug={gameSlug} official />;
 }
 
-const gameComponents = {
-  'flappy-bird': FlappyBird,
-  'fruit-ninja': FruitNinja,
-  snake: SnakeGame,
-  wordle: WordleGame,
-  'crack-the-code': CrackTheCode,
-  'detective-crime': DetectiveCrime,
-  'level-devil': LevelDevilGame,
-  morse: MorseGame,
-  pacman: PacmanGame,
-  'mario-kart': MarioKart,
-  'watergirl-fireboy': WatergirlFireboy,
-  'asteroid-command': AsteroidCommand,
-  'gunshot-roulette': GunshotRoulette,
-  'hack-type': HackType,
-};
+function RouteLoading() {
+  return (
+    <main className="min-h-screen bg-[#080b11] text-[#ff9900] grid place-items-center p-6">
+      <p className="uppercase tracking-[0.2em] text-sm animate-pulse">Loading AWS experience…</p>
+    </main>
+  );
+}
+
+function LegacyHackQuestRedirect() {
+  const location = useLocation();
+  const path = location.pathname.replace('/mystery-box-hackathon', '/hackquest');
+  return <Navigate replace to={`${path}${location.search}${location.hash}`} />;
+}
 
 export default function App() {
   const location = useLocation();
@@ -314,7 +316,11 @@ export default function App() {
           ? <MobilePreloader onDone={handlePreloaderDone} />
           : <AwsStudentBuilderLoader onDone={handlePreloaderDone} />
       )}
-      {showIntro && !isGamesRoute && <GridScanIntro onDone={handleIntroDone} onFadeStart={() => setIntroFading(true)} displayDuration={5} />}
+      {showIntro && !isGamesRoute && (
+        <Suspense fallback={null}>
+          <GridScanIntro onDone={handleIntroDone} onFadeStart={() => setIntroFading(true)} displayDuration={5} />
+        </Suspense>
+      )}
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
 
       {/* StaggeredMenu — fixed overlay, shown only on the homepage */}
@@ -345,22 +351,26 @@ export default function App() {
           transformOrigin: 'center center',
         }}
       >
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/blog/aws-bedrock" element={<BlogBedrock />} />
-          <Route path="/blog/aws-lambda" element={<BlogLambda />} />
-          <Route path="/blog/predictive-analytics" element={<BlogPredictiveAnalytics />} />
-          <Route path="/blog/google-maps-traffic" element={<BlogGoogleMaps />} />
+        <Suspense fallback={<RouteLoading />}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/blog/aws-bedrock" element={<BlogBedrock />} />
+            <Route path="/blog/aws-lambda" element={<BlogLambda />} />
+            <Route path="/blog/predictive-analytics" element={<BlogPredictiveAnalytics />} />
+            <Route path="/blog/google-maps-traffic" element={<BlogGoogleMaps />} />
 
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="/account" element={<AccountPage />} />
-          <Route path="/mystery-box-hackathon" element={<MysteryBoxHackathon />} />
-          <Route path="/mystery-box-hackathon/dashboard" element={<MysteryBoxDashboard />} />
-          <Route path="/mystery-box-hackathon/games/:gameSlug" element={<OfficialGameRoute />} />
-          <Route path="/games" element={<GamesPage />} />
-          {games.map((game) => <Route key={game.slug} path={game.path} element={<GameRoute Component={gameComponents[game.slug]} gameSlug={game.slug} />} />)}
-        </Routes>
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/account" element={<AccountPage />} />
+            <Route path="/hackquest" element={<MysteryBoxHackathon />} />
+            <Route path="/hackquest/dashboard" element={<MysteryBoxDashboard />} />
+            <Route path="/hackquest/games/:gameSlug" element={<OfficialGameRoute />} />
+            <Route path="/mystery-box-hackathon" element={<LegacyHackQuestRedirect />} />
+            <Route path="/mystery-box-hackathon/*" element={<LegacyHackQuestRedirect />} />
+            <Route path="/games" element={<GamesPage />} />
+            {games.map((game) => <Route key={game.slug} path={game.path} element={<GameRoute Component={gameComponents[game.slug]} gameSlug={game.slug} />} />)}
+          </Routes>
+        </Suspense>
       </div>
     </>
   );

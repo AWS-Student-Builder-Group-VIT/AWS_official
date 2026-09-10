@@ -44,7 +44,7 @@ export default function LoginPage() {
       window.dispatchEvent(new CustomEvent('auth-success', { detail: { type: 'login', user: data.user } }));
       window.dispatchEvent(new Event('auth-change'));
       setTimeout(() => { navigate('/'); }, 1000);
-    } catch (err) {
+    } catch {
       setMsg({ text: 'Network error. Please try again later.', type: 'error' });
     } finally {
       setIsLoading(false);
@@ -83,7 +83,7 @@ export default function LoginPage() {
       window.dispatchEvent(new CustomEvent('auth-success', { detail: { type: 'register', user: data.user } }));
       window.dispatchEvent(new Event('auth-change'));
       setTimeout(() => { navigate('/'); }, 1000);
-    } catch (err) {
+    } catch {
       setMsg({ text: 'Network error. Please try again later.', type: 'error' });
     } finally {
       setIsLoading(false);

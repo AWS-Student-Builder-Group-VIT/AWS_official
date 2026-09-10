@@ -1,5 +1,3 @@
-/* global process */
-
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
@@ -21,7 +19,13 @@ import {
   getChallengeById,
   listAdminChallenges,
 } from './challengeCatalog.js';
-import { formatHackathonTeam } from './hackathonTeam.js';
+import {
+  createReturningHackathonSession,
+  findReturningHackathonTeamRows,
+  formatHackathonTeam,
+  getTeamRegistrationConflict,
+  isSingleTeamMembershipConflict,
+} from './hackathonTeam.js';
 import { initializeEventRewards, registerEventRewardRoutes } from './eventRewards.js';
 import { isAllowedOrigin } from './corsOrigins.js';
 import dotenv from 'dotenv';
@@ -194,7 +198,7 @@ async function runDatabaseMigrations() {
 async function initDb() {
   const result = await initializeVersionedSchema({
     pool,
-    version: 'v5-wheel-reversible-chaos-ready',
+    version: 'v6-single-team-membership-ready',
     migrate: runDatabaseMigrations,
   });
   console.log(result.migrated ? 'Database tables ready' : 'Database schema already ready');
@@ -214,15 +218,45 @@ async function logHackathonActivity(teamCode, teamName, eventType, message, deta
   }
 }
 
+async function sendSingleTeamConflict(res, error, user, action) {
+  if (!isSingleTeamMembershipConflict(error)) return false;
+  let teamCode;
+  try {
+    teamCode = (await findReturningHackathonTeamRows(pool, user))[0]?.code;
+  } catch (lookupError) {
+    console.error('Could not resolve existing team after membership conflict:', lookupError);
+  }
+  res.status(409).json({
+    error: action === 'join'
+      ? 'You already belong to a different HackQuest team'
+      : 'You already belong to a HackQuest team',
+    ...(teamCode ? { teamCode } : {}),
+  });
+  return true;
+}
+
 // ── Mystery Box Hackathon Team Endpoints ──────────────────────
 app.post('/api/mystery-box/session', async (req, res) => {
+  let payload;
   try {
     const ticket = await googleClient.verifyIdToken({ idToken: req.body?.credential, audience: process.env.GOOGLE_CLIENT_ID });
-    const payload = ticket.getPayload();
-    if (!payload?.email_verified || !payload.email || !payload.sub) return res.status(401).json({ error: 'Verified Google identity required' });
-    const token = jwt.sign({ email: payload.email.toLowerCase(), sub: payload.sub, kind: 'hackathon' }, HACKATHON_JWT_SECRET, { expiresIn: '2h' });
-    res.json({ token, user: { email: payload.email.toLowerCase(), sub: payload.sub, name: payload.name || 'Participant', picture: payload.picture || '' } });
-  } catch { res.status(401).json({ error: 'Invalid Google credential' }); }
+    payload = ticket.getPayload();
+  } catch {
+    return res.status(401).json({ error: 'Invalid Google credential' });
+  }
+  if (!payload?.email_verified || !payload.email || !payload.sub) {
+    return res.status(401).json({ error: 'Verified Google identity required' });
+  }
+  try {
+    const user = { email: payload.email.toLowerCase(), sub: payload.sub, name: payload.name || 'Participant', picture: payload.picture || '' };
+    const session = await createReturningHackathonSession(pool, user, {
+      signToken: (claims) => jwt.sign(claims, HACKATHON_JWT_SECRET, { expiresIn: '2h' }),
+    });
+    res.json(session);
+  } catch (error) {
+    console.error('HackQuest session membership lookup failed:', error);
+    res.status(500).json({ error: 'Could not restore HackQuest membership. Please try again.' });
+  }
 });
 
 app.post('/api/mystery-box/teams/create', hackathonAuth, async (req, res) => {
@@ -231,6 +265,10 @@ app.post('/api/mystery-box/teams/create', hackathonAuth, async (req, res) => {
     if (!code || !teamName || !regNo) {
       return res.status(400).json({ error: 'Missing required team fields' });
     }
+
+    const memberships = await findReturningHackathonTeamRows(pool, req.hackathonUser);
+    const membershipConflict = getTeamRegistrationConflict(memberships, { action: 'create' });
+    if (membershipConflict) return res.status(membershipConflict.status).json(membershipConflict);
 
     const upperCode = code.toUpperCase().trim();
     const existing = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [upperCode]);
@@ -256,6 +294,7 @@ app.post('/api/mystery-box/teams/create', hackathonAuth, async (req, res) => {
     void logHackathonActivity(upperCode, teamName, 'TEAM_CREATED', `Squad "${teamName}" registered with code #${upperCode}`, { membersCount: members.length });
     res.status(201).json({ success: true, team: formatHackathonTeam(row, members) });
   } catch (error) {
+    if (await sendSingleTeamConflict(res, error, req.hackathonUser, 'create')) return;
     console.error('Create team error:', error);
     res.status(500).json({ error: 'Failed to create team' });
   }
@@ -267,6 +306,19 @@ app.post('/api/mystery-box/teams/join', hackathonAuth, async (req, res) => {
     const searchCode = normalizeTeamCode(code || teamCode || '');
     if (!searchCode) {
       return res.status(400).json({ error: 'Team code is required' });
+    }
+
+    const memberships = await findReturningHackathonTeamRows(pool, req.hackathonUser);
+    const membershipConflict = getTeamRegistrationConflict(memberships, { action: 'join', teamCode: searchCode });
+    if (membershipConflict) return res.status(membershipConflict.status).json(membershipConflict);
+
+    const existingTeam = memberships.find((team) => team.code === searchCode);
+    if (existingTeam) {
+      return res.json({
+        success: true,
+        team: formatHackathonTeam(existingTeam, await listHackathonMembers(pool, existingTeam.id)),
+        resumed: true,
+      });
     }
 
     const result = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [searchCode]);
@@ -315,6 +367,7 @@ app.post('/api/mystery-box/teams/join', hackathonAuth, async (req, res) => {
     void logHackathonActivity(searchCode, updatedRow.team_name, 'MEMBER_JOINED', `${joinMember.name || joinMember.email} joined squad "${updatedRow.team_name}"`, { email: joinMember.email });
     res.json({ success: true, team: formatHackathonTeam(updatedRow, normalizedMembers) });
   } catch (error) {
+    if (await sendSingleTeamConflict(res, error, req.hackathonUser, 'join')) return;
     console.error('Join team error:', error);
     res.status(500).json({ error: 'Failed to join team' });
   }
@@ -677,7 +730,6 @@ app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
              owned_items, has_changed_question, max_game_attempts, created_at, updated_at,
              spins_used, free_change_cards, chaos_version,
              COALESCE((SELECT jsonb_agg(s ORDER BY s.created_at DESC) FROM team_wheel_spins s WHERE s.team_id=hackathon_teams.id),'[]'::jsonb) AS spin_history,
-             COALESCE((SELECT jsonb_agg(i ORDER BY i.created_at DESC) FROM team_member_invitations i WHERE i.team_id=hackathon_teams.id),'[]'::jsonb) AS invitations,
              COALESCE((
                SELECT jsonb_agg(jsonb_build_object(
                  'attemptId', a.id,
@@ -716,7 +768,6 @@ app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
       freeChangeCards: row.free_change_cards,
       chaosVersion: row.chaos_version,
       spinHistory: row.spin_history,
-      invitations: row.invitations,
       code: row.code,
       teamName: row.team_name,
       mysteryQuestion: row.mystery_question,

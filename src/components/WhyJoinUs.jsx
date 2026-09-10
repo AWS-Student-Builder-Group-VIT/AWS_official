@@ -1,15 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
-const cards = [
-  { icon: '☁', num: '01', title: 'HANDS-ON WORKSHOPS', desc: 'Dive deep into AWS services. From EC2 basics to serverless architectures — you build, not just watch.' },
-  { icon: '🏅', num: '02', title: 'AWS CREDITS & VOUCHERS', desc: '$25 AWS credits for core team. Certification exam vouchers to get you officially certified.' },
-  { icon: '🎤', num: '03', title: 'SPEAKER SESSIONS', desc: 'Direct access to industry veterans, AWS community builders, and certified cloud architects.' },
-  { icon: '🤝', num: '04', title: 'REAL NETWORKING', desc: 'Connect with the global AWS Cloud Clubs community and build relationships that outlast college.' },
-  { icon: '🛠', num: '05', title: 'BUILD & DEPLOY', desc: 'Work on actual cloud projects. Ship real things. Add AWS-powered work to your resume.' },
-  { icon: '📜', num: '06', title: 'CERTIFICATION TRACK', desc: 'Structured learning paths toward AWS certifications. Go from zero to certified with club support.' },
-  { icon: '🌐', num: '07', title: 'COMMUNITY DAY', desc: 'Participate in AWS Student Community Day — a large-scale student-led event with clubs nationwide.' },
-];
-
 /* ── Special interactive Card 1 ── */
 function WorkshopCard({ expanded, onToggle }) {
   return (

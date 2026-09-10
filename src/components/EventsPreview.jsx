@@ -6,7 +6,6 @@
  * transition feels seamless.
  */
 
-import React from "react";
 import { motion } from "framer-motion";
 
 /* ── Data mirrors EventTimeline.jsx ── */

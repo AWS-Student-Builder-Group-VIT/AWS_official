@@ -7,7 +7,7 @@
  *  • showGradient still supported
  */
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 
 function cn(...classes) {

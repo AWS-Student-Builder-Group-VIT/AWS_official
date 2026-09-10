@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
 async function setupDatabase() {
   try {
     console.log('Connecting to database...');
-    const res = await pool.query(createTableText);
+    await pool.query(createTableText);
     console.log('Users table created or already exists.');
   } catch (err) {
     console.error('Error creating table:', err);

@@ -44,10 +44,6 @@ export async function initializeEventRewards(pool) {
       team_id INTEGER NOT NULL REFERENCES hackathon_teams(id) ON DELETE CASCADE,
       request_id UUID NOT NULL, topic_id TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY(team_id, request_id));
-    CREATE TABLE IF NOT EXISTS team_member_invitations (
-      id UUID PRIMARY KEY, team_id INTEGER NOT NULL REFERENCES hackathon_teams(id) ON DELETE CASCADE,
-      email TEXT NOT NULL, reg_no TEXT NOT NULL DEFAULT '', accepted_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(team_id,email));
     INSERT INTO hackathon_event_settings(key,value)
       SELECT 'chaos_enabled', to_jsonb(COALESCE(value <> 'null'::jsonb,FALSE))
       FROM hackathon_event_settings WHERE key='chaos_mode_revealed_at'
@@ -175,7 +171,7 @@ export function registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddl
       if(!Array.isArray(input.members)||!input.members.length||input.members.filter(m=>m.isLeader===true).length!==1) reject('Exactly one team leader is required');
       if(new Set(input.members.map(m=>m.email)).size!==input.members.length) reject('Duplicate members');
       for(const member of input.members) {
-        if(!existing.some(m=>m.email===member.email) || typeof member.isLeader!=='boolean' || typeof member.regNo!=='string'||member.regNo.length>64) reject('Invite new members using the invitation action');
+        if(!existing.some(m=>m.email===member.email) || typeof member.isLeader!=='boolean' || typeof member.regNo!=='string'||member.regNo.length>64) reject('New members must join using the team code');
       }
       for(const member of existing) {
         const next=input.members.find(m=>m.email===member.email);
@@ -212,37 +208,5 @@ export function registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddl
     await audit(client,found.rows[0],`admin:${req.admin.role}`,'TEAM_DELETED',req.body.reason,found.rows[0],null);
     await client.query('DELETE FROM hackathon_teams WHERE id=$1',[found.rows[0].id]);
     return {success:true};
-  })));
-
-  app.post('/api/admin/mystery-box/teams/:code/invitations',adminMiddleware,route(req=>transact(pool,async client=>{
-    validateAttemptResetReason(req.body.reason);
-    const email=String(req.body.email||'').trim().toLowerCase();
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>320) reject('Invalid email');
-    const found=await client.query('SELECT * FROM hackathon_teams WHERE code=$1 FOR UPDATE',[normalizeTeamCode(req.params.code)]);
-    const team=found.rows[0]; if(!team) reject('Team not found',404);
-    if((await listHackathonMembers(client,team.id)).some(m=>m.email===email)) reject('Already a member',409);
-    await client.query(`INSERT INTO team_member_invitations(id,team_id,email) VALUES($1,$2,$3) ON CONFLICT(team_id,email) DO UPDATE SET accepted_at=NULL`,[randomUUID(),team.id,email]);
-    await audit(client,team,`admin:${req.admin.role}`,'MEMBER_INVITED',req.body.reason,null,{email});
-    return {success:true,email};
-  })));
-  app.get('/api/mystery-box/invitations',hackathonAuth,route(async req=>{
-    const result=await pool.query(`SELECT i.id,t.code,t.team_name AS "teamName" FROM team_member_invitations i JOIN hackathon_teams t ON t.id=i.team_id WHERE i.email=$1 AND i.accepted_at IS NULL`,[req.hackathonUser.email.toLowerCase()]);
-    return {invitations:result.rows};
-  }));
-  app.post('/api/mystery-box/invitations/:id/accept',hackathonAuth,route(req=>transact(pool,async client=>{
-    requestId(req.params.id);
-    const invited=await client.query('SELECT * FROM team_member_invitations WHERE id=$1 AND email=$2',[req.params.id,req.hackathonUser.email.toLowerCase()]);
-    const invite=invited.rows[0]; if(!invite) reject('Invitation not found',404);
-    const found=await client.query('SELECT * FROM hackathon_teams WHERE id=$1 FOR UPDATE',[invite.team_id]);
-    const team=found.rows[0]; if(!team) reject('Team not found',404);
-    const accepted=await client.query('SELECT accepted_at FROM team_member_invitations WHERE id=$1 FOR UPDATE',[invite.id]);
-    if(!accepted.rows[0].accepted_at) {
-      await client.query(`INSERT INTO hackathon_team_members(team_id,email,google_sub,reg_no,is_leader) VALUES($1,$2,$3,'',FALSE) ON CONFLICT(team_id,email) DO NOTHING`,[team.id,req.hackathonUser.email.toLowerCase(),req.hackathonUser.sub]);
-      await client.query('UPDATE team_member_invitations SET accepted_at=NOW() WHERE id=$1',[invite.id]);
-      const members=await listHackathonMembers(client,team.id);
-      await client.query('UPDATE hackathon_teams SET members=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(members),team.id]);
-      await audit(client,team,req.hackathonUser.sub,'INVITATION_ACCEPTED','Verified member accepted invitation',null,{email:req.hackathonUser.email});
-    }
-    return {success:true,code:team.code};
   })));
 }

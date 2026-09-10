@@ -330,8 +330,9 @@ function Dashboard({ token, onLogout }) {
 
   const handleTriggerChaos = async (resolve = false) => {
     if (!resolve) {
-      const reason = window.prompt(`Reason to ${chaosEnabled ? 'disable and reseal' : 'enable'} Chaos Mode (at least 5 characters):`);
-      if (!reason || reason.trim().length < 5) return;
+      const action = chaosEnabled ? 'disable Chaos Mode and reseal every team card' : 'enable Chaos Mode for every team';
+      if (!window.confirm(`Do you want to ${action}?`)) return;
+      const reason = `Organizer confirmed: ${action}`;
       try {
         await eventRequest('admin/mystery-box/chaos-mode', {adminToken:token,method:'POST',body:{enabled:!chaosEnabled,reason}});
         setChaosEnabled(!chaosEnabled); setChaosModalTeam(null);
@@ -602,7 +603,7 @@ function Dashboard({ token, onLogout }) {
                 : 'text-[#dbc2ad] hover:text-white'
             }`}
           >
-            🎁 Mystery Box Hackathon ({hackathonTeams.length})
+            🎁 HackQuest ({hackathonTeams.length})
           </button>
           <button
             onClick={() => setActiveTab('quiz')}
@@ -631,7 +632,7 @@ function Dashboard({ token, onLogout }) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
 
         {/* ═══════════════════════════════════════════════════════════
-            TAB 1: MYSTERY BOX HACKATHON OPERATIONS
+            TAB 1: HACKQUEST OPERATIONS
            ═══════════════════════════════════════════════════════════ */}
         {activeTab === 'hackathon' && (
           <div>
@@ -643,7 +644,7 @@ function Dashboard({ token, onLogout }) {
                   Live Event Operations &amp; Real-time Audit
                 </div>
                 <h2 className="font-mono text-2xl font-bold text-white uppercase tracking-wider m-0">
-                  Mystery Box Hackathon Hub
+                  HackQuest Hub
                 </h2>
                 <p className="font-mono text-xs text-[#dbc2ad] mt-1 mb-0">Live team telemetry, topic swaps, vendor shop purchases, and chaos injection controls.</p>
               </div>

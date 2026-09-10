@@ -3,10 +3,9 @@ import { readApiResponse } from './apiResponse.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
-function adminReason() {
-  const reason = window.prompt('Reason for this organizer change (at least 5 characters):');
-  if (!reason || reason.trim().length < 5) throw new Error('A reason of at least five characters is required');
-  return reason.trim();
+function adminReason(action = 'perform this organizer action') {
+  if (!window.confirm(`Do you want to ${action}?`)) throw new Error('Organizer action cancelled');
+  return `Organizer confirmed: ${action}`;
 }
 
 // Session duration: 24 hours in milliseconds
@@ -252,7 +251,7 @@ export async function fetchAdminHackathonTeams(adminToken) {
 /** Update / Inject points for a team */
 export async function updateAdminTeamPoints(adminToken, { code, delta }) {
   try {
-    const reason = adminReason();
+    const reason = adminReason(`adjust points for team #${code}`);
     const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/points`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
@@ -279,7 +278,7 @@ export async function fetchAdminGameMode(adminToken) {
 
 export async function updateAdminGameMode(adminToken, enabled) {
   try {
-    const reason = adminReason();
+    const reason = adminReason(`${enabled ? 'enable' : 'disable'} Game Mode`);
     const res = await fetch(`${API_URL}/api/admin/mystery-box/games-mode`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
@@ -294,7 +293,7 @@ export async function updateAdminGameMode(adminToken, enabled) {
 
 export async function updateAdminTeamGameLimit(adminToken, { code, maxAttempts }) {
   try {
-    const reason = adminReason();
+    const reason = adminReason(`set team #${code}'s official game limit to ${maxAttempts}`);
     const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/${code}/games-limit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
@@ -379,7 +378,7 @@ export async function fetchAdminChallenges(adminToken) {
 
 export async function revealAdminChaosMode(adminToken) {
   try {
-    const reason = adminReason();
+    const reason = adminReason('reveal Chaos Mode for every team');
     const res = await fetch(`${API_URL}/api/admin/mystery-box/chaos/reveal`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({reason}) });
     const data = await res.json();
     return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
@@ -388,7 +387,7 @@ export async function revealAdminChaosMode(adminToken) {
 
 export async function resolveAdminTeamChaos(adminToken, code) {
   try {
-    const reason = adminReason();
+    const reason = adminReason(`mark team #${code}'s Chaos adaptation as resolved`);
     const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/${code}/chaos/resolve`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({reason}) });
     const data = await res.json();
     return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
@@ -398,7 +397,7 @@ export async function resolveAdminTeamChaos(adminToken, code) {
 /** Reassign challenge question */
 export async function reassignAdminTeamTopic(adminToken, { code, challengeId, resetSwapUsed }) {
   try {
-    const reason = adminReason();
+    const reason = adminReason(`reassign team #${code}'s challenge`);
     const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/reassign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
@@ -414,7 +413,7 @@ export async function reassignAdminTeamTopic(adminToken, { code, challengeId, re
 /** Delete / Disband hackathon team */
 export async function deleteAdminHackathonTeam(adminToken, code) {
   try {
-    const reason = adminReason();
+    const reason = adminReason(`permanently delete team #${code}`);
     const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/${code}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
@@ -429,7 +428,7 @@ export async function deleteAdminHackathonTeam(adminToken, code) {
 
 export async function removeAdminHackathonMember(adminToken, { code, email }) {
   try {
-    const reason = adminReason();
+    const reason = adminReason(`remove ${email} from team #${code}`);
     const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/${code}/members/remove`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
