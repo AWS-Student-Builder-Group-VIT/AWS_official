@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 
 /**
  * Desktop Preloader — Pac-Man eats "AWS STUDENT BUILDER GROUP"

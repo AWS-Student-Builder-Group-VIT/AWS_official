@@ -4,10 +4,11 @@ import { getUser, updateProfile, updatePassword, isLoggedIn } from '../utils/aut
 
 export default function AccountPage() {
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
+  const [initialUser] = useState(() => getUser());
+  const [user, setUser] = useState(initialUser);
   
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [firstName, setFirstName] = useState(initialUser?.first_name || '');
+  const [lastName, setLastName] = useState(initialUser?.last_name || '');
   const [profileMsg, setProfileMsg] = useState({ text: '', type: '' });
   const [profileLoading, setProfileLoading] = useState(false);
 
@@ -22,12 +23,6 @@ export default function AccountPage() {
       navigate('/');
       window.dispatchEvent(new Event('open-login-modal'));
       return;
-    }
-    const u = getUser();
-    setUser(u);
-    if (u) {
-      setFirstName(u.first_name || '');
-      setLastName(u.last_name || '');
     }
   }, [navigate]);
 

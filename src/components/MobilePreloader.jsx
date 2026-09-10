@@ -1,4 +1,19 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
+
+const PROGRESS_KEYFRAMES = [
+  { t: 0, v: 0 },
+  { t: 300, v: 8 },
+  { t: 800, v: 28 },
+  { t: 1300, v: 45 },
+  { t: 1800, v: 62 },
+  { t: 2200, v: 74 },
+  { t: 2700, v: 85 },
+  { t: 3100, v: 93 },
+  { t: 3500, v: 100 },
+];
+
+const STEP_THRESHOLDS = [0, 25, 55, 90];
+const lerp = (a, b, t) => a + (b - a) * t;
 
 /**
  * MobilePreloader — AWS Student Builder Group · VIT Vellore
@@ -17,28 +32,11 @@ export default function MobilePreloader({ onDone }) {
   const doneRef      = useRef(false);
   const currentStep  = useRef(-1);
 
-  // ── Progress keyframes (ms from bar start → percentage) ──
-  const keyframes = [
-    { t: 0,    v: 0 },
-    { t: 300,  v: 8 },
-    { t: 800,  v: 28 },
-    { t: 1300, v: 45 },
-    { t: 1800, v: 62 },
-    { t: 2200, v: 74 },
-    { t: 2700, v: 85 },
-    { t: 3100, v: 93 },
-    { t: 3500, v: 100 },
-  ];
-
-  const stepThresholds = [0, 25, 55, 90];
-
-  const lerp = (a, b, t) => a + (b - a) * t;
-
   const getProgress = useCallback((elapsed) => {
     if (elapsed <= 0) return 0;
-    if (elapsed >= keyframes[keyframes.length - 1].t) return 100;
-    for (let i = 1; i < keyframes.length; i++) {
-      const prev = keyframes[i - 1], curr = keyframes[i];
+    if (elapsed >= PROGRESS_KEYFRAMES[PROGRESS_KEYFRAMES.length - 1].t) return 100;
+    for (let i = 1; i < PROGRESS_KEYFRAMES.length; i++) {
+      const prev = PROGRESS_KEYFRAMES[i - 1], curr = PROGRESS_KEYFRAMES[i];
       if (elapsed >= prev.t && elapsed <= curr.t) {
         const t = (elapsed - prev.t) / (curr.t - prev.t);
         const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
@@ -76,8 +74,8 @@ export default function MobilePreloader({ onDone }) {
       if (pctRef.current) pctRef.current.textContent = rounded + '%';
 
       // Update step message
-      for (let i = stepThresholds.length - 1; i >= 0; i--) {
-        if (pct >= stepThresholds[i]) { setStep(i); break; }
+      for (let i = STEP_THRESHOLDS.length - 1; i >= 0; i--) {
+        if (pct >= STEP_THRESHOLDS[i]) { setStep(i); break; }
       }
 
       if (pct < 100) {

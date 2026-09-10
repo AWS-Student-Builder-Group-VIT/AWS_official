@@ -5,18 +5,11 @@ import ScrollFloat from './ScrollFloat';
 import hqSvg from '../assets/aws_club_hq.svg';
 
 export default function Hero() {
-  const [welcomeMsg, setWelcomeMsg] = useState(null);
-  const [displayedMsg, setDisplayedMsg] = useState('');
-
-  // Initialize welcome message from stored session on mount
-  useEffect(() => {
+  const [welcomeMsg, setWelcomeMsg] = useState(() => {
     const user = getUser();
-    if (user) {
-      const text = `Welcome back ${user.first_name}`;
-      setWelcomeMsg(text);
-      setDisplayedMsg(''); // Start empty to trigger typewriter animation
-    }
-  }, []);
+    return user ? `Welcome back ${user.first_name}` : null;
+  });
+  const [displayedMsg, setDisplayedMsg] = useState('');
 
   // Listen for fresh login/register events (typewriter effect)
   useEffect(() => {
@@ -43,19 +36,14 @@ export default function Hero() {
     return () => window.removeEventListener('auth-change', handler);
   }, []);
 
-  // Typewriter effect — only runs when displayedMsg is reset to ''
+  // Typewriter effect.
   useEffect(() => {
-    if (!welcomeMsg || displayedMsg === welcomeMsg) return;
-    let i = displayedMsg.length;
-    const interval = setInterval(() => {
-      setDisplayedMsg(welcomeMsg.substring(0, i + 1));
-      i++;
-      if (i >= welcomeMsg.length) {
-        clearInterval(interval);
-      }
+    if (!welcomeMsg || displayedMsg === welcomeMsg) return undefined;
+    const timeout = setTimeout(() => {
+      setDisplayedMsg(welcomeMsg.substring(0, displayedMsg.length + 1));
     }, 100);
-    return () => clearInterval(interval);
-  }, [welcomeMsg, displayedMsg === '']);
+    return () => clearTimeout(timeout);
+  }, [welcomeMsg, displayedMsg]);
   const levitateTransition = (delay) => ({
     repeat: Infinity,
     duration: 5,

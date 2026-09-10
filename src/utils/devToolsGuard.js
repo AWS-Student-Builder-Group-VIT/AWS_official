@@ -109,7 +109,7 @@ export function initDevToolsGuard() {
     methods.forEach((method) => {
       try {
         window.console[method] = noop;
-      } catch (_) {
+      } catch {
         // Some environments lock console
       }
     });

@@ -79,8 +79,10 @@ export function TypeWriter({ words = ['Hackathon', 'Hack It'], typingDelay = 120
           setDisplayed(currentWord.substring(0, displayed.length - 1));
         }, currentErasingDelay);
       } else {
-        setIsDeleting(false);
-        setLoopNum(loopNum + 1);
+        timeout = setTimeout(() => {
+          setIsDeleting(false);
+          setLoopNum((value) => value + 1);
+        }, 0);
       }
     } else {
       // Typing

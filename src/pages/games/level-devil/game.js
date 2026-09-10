@@ -1812,14 +1812,6 @@ const DEATH_LINES = [
   "YOU FELL FOR IT.", "THE DEVIL LAUGHS.", "CLASSIC.", "WHO PUT THAT THERE?",
   "OOPS.", "TRY WALKING SLOWER.", "THAT ONE'S ON YOU.", "HE-HE.", "NICE ONE.",
 ];
-const ROASTS = [
-  [0, "wait... flawless?!"],
-  [25, "pretty respectable, honestly."],
-  [75, "the devil enjoyed every single one."],
-  [150, "have you considered walking?"],
-  [9999, "the floor knows you personally now."],
-];
-
 // ================================================================ GAME
 const Game = {
   state: "menu",
@@ -2189,7 +2181,9 @@ const practicePanelEl = document.getElementById("practice-panel");
 
 function persistOfficial() {
   if (!officialState?.official) return;
-  try { localStorage.setItem(STORAGE_KEY, AWSLevelDevilCore.serializeState(officialState)); } catch {}
+  try { localStorage.setItem(STORAGE_KEY, AWSLevelDevilCore.serializeState(officialState)); } catch {
+    // Storage can be unavailable in privacy modes; gameplay should continue.
+  }
 }
 
 function loadOfficial() {
@@ -2199,7 +2193,9 @@ function loadOfficial() {
     const restored = AWSLevelDevilCore.restoreState(raw, Date.now());
     if (!restored) { localStorage.removeItem(STORAGE_KEY); return null; }
     return restored;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function updateHud() {
@@ -2287,7 +2283,9 @@ function toggleFullscreen() {
     } else {
       (d.exitFullscreen || d.webkitExitFullscreen || d.msExitFullscreen)?.call(d);
     }
-  } catch {}
+  } catch {
+    // Fullscreen may be blocked when the request lacks a user gesture.
+  }
 }
 document.addEventListener("fullscreenchange", () => { setFsIcon(); fit(); });
 

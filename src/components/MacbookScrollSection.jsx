@@ -10,7 +10,7 @@
  *  - Floating orange squares (continuing the Hero aesthetic)
  */
 
-import React, { memo } from "react";
+import { memo } from "react";
 import { motion } from "framer-motion";
 import { MacbookScroll } from "./ui/macbook-scroll";
 import EventsPreview from "./EventsPreview";
@@ -94,58 +94,6 @@ const FloatingBlock = memo(({ className, delay = 0 }) => (
     className={className}
   />
 ));
-
-/* ── Section title ── */
-const SectionTitle = () => (
-  <div className="text-center">
-    {/* main heading */}
-    <h2
-      className="font-bold uppercase leading-tight mb-4 text-white"
-      style={{
-        fontFamily: "'Space Mono', monospace",
-        fontSize: "clamp(22px, 4vw, 38px)",
-        letterSpacing: "0.06em",
-      }}
-    >
-      Experience <span style={{ color: "#FF9900" }}>AWS</span> Student Builder Group
-    </h2>
-
-    {/* stacked keywords */}
-    <div className="flex flex-col items-center gap-0 mb-5">
-      {["Build.", "Learn.", "Deploy.", "Experience."].map((word, i) => (
-        <motion.span
-          key={word}
-          initial={{ opacity: 0, x: -20 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
-          className="font-bold uppercase leading-tight"
-          style={{
-            fontFamily: "'Space Mono', monospace",
-            fontSize: "clamp(18px, 3vw, 28px)",
-            letterSpacing: "0.08em",
-            color: i === 3 ? "#FF9900" : "#ffffff",
-          }}
-        >
-          {word}
-        </motion.span>
-      ))}
-    </div>
-
-    {/* subtitle */}
-    <p
-      className="max-w-md mx-auto leading-relaxed"
-      style={{
-        fontFamily: "'Inter', sans-serif",
-        fontSize: "13px",
-        color: "#dbc2ad",
-        letterSpacing: "0.02em",
-      }}
-    >
-      Scroll to preview our flagship events before exploring them.
-    </p>
-  </div>
-);
 
 /* ── MacbookScrollSection (default export) ── */
 export default function MacbookScrollSection() {

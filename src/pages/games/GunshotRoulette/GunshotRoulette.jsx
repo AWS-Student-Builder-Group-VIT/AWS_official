@@ -5,6 +5,7 @@ import './gunshotRoulette.css';
 // canvas engines used by the other game route components.
 function useGunshotRoulette(rootRef) {
   useEffect(() => {
+    const rootElement = rootRef.current;
     let disposed = false;
     let script;
     let style;
@@ -14,22 +15,22 @@ function useGunshotRoulette(rootRef) {
         return response.text();
       })
       .then((source) => {
-        if (disposed || !rootRef.current) return;
+        if (disposed || !rootElement) return;
         const documentNode = new DOMParser().parseFromString(source, 'text/html');
         const legacyScript = documentNode.querySelector('script');
         const legacyStyle = documentNode.querySelector('style');
 
         // Mount the original markup before its stylesheet. Setting innerHTML after
         // appending the style used to delete the stylesheet and expand the SVGs.
-        rootRef.current.innerHTML = documentNode.body.innerHTML.replace(legacyScript?.outerHTML || '', '');
+        rootElement.innerHTML = documentNode.body.innerHTML.replace(legacyScript?.outerHTML || '', '');
 
         if (legacyStyle) {
           style = document.createElement('style');
           style.textContent = legacyStyle.textContent;
-          rootRef.current.appendChild(style);
+          rootElement.appendChild(style);
         }
 
-        const startButton = rootRef.current.querySelector('#overlay .primary');
+        const startButton = rootElement.querySelector('#overlay .primary');
         startButton?.removeAttribute('onclick');
 
         script = document.createElement('script');
@@ -40,11 +41,11 @@ function useGunshotRoulette(rootRef) {
         // Keep the original game implementation intact while isolating its names
         // so a React Strict Mode remount cannot redeclare global const/let values.
         script.textContent = `(() => {\n${gameSource}\nconst startButton = document.querySelector('.aws-roulette-original #overlay .primary');\nif (startButton) startButton.onclick = closeModal;\n})();`;
-        rootRef.current.appendChild(script);
+        rootElement.appendChild(script);
       })
       .catch((error) => {
-        if (!disposed && rootRef.current) {
-          rootRef.current.textContent = error.message;
+        if (!disposed && rootElement) {
+          rootElement.textContent = error.message;
         }
       });
 
@@ -52,7 +53,7 @@ function useGunshotRoulette(rootRef) {
       disposed = true;
       script?.remove();
       style?.remove();
-      if (rootRef.current) rootRef.current.innerHTML = '';
+      if (rootElement) rootElement.innerHTML = '';
     };
   }, [rootRef]);
 }

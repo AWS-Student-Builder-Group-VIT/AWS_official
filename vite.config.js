@@ -8,6 +8,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  resolve: {
+    // Embedded games keep their own development dependencies. Force every
+    // imported game component to share the application's React dispatcher.
+    dedupe: ['react', 'react-dom'],
+  },
   server: {
     host: true,
     proxy: {
