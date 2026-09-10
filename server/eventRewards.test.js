@@ -64,6 +64,11 @@ test('PostgreSQL reward, chaos and team administration transactions',async t=>{
   }
   const team=async(code='TEAM01')=>(await query('SELECT * FROM hackathon_teams WHERE code=$1',[code])).rows[0];
   const edit=(body)=>request('patch','/api/admin/mystery-box/teams/:code',{reason:'Test adjustment',...body});
+  await t.test('organizer invitation routes are not exposed',()=>{
+    assert.equal(routes.has('post:/api/admin/mystery-box/teams/:code/invitations'),false);
+    assert.equal(routes.has('get:/api/mystery-box/invitations'),false);
+    assert.equal(routes.has('post:/api/mystery-box/invitations/:id/accept'),false);
+  });
   await t.test('verified members may spin, while cross-team users remain blocked',async()=>{
     await assert.rejects(spinWheel(pool,{code:'TEAM02',user,id:randomUUID()}),{status:403});
     const id=randomUUID();
@@ -124,14 +129,10 @@ test('PostgreSQL reward, chaos and team administration transactions',async t=>{
     assert.notEqual((await team()).team_name,before.team_name);
     assert.ok((await query("SELECT * FROM hackathon_activity_logs WHERE event_type='ADMIN_TEAM_EDIT'")).rows.length>0);
   });
-  await t.test('invited Google identity must match and accepts once; leader transfer precedes removal',async()=>{
-    const invited=await request('post','/api/admin/mystery-box/teams/:code/invitations',{email:'new@test.local',reason:'Add teammate'});assert.equal(invited.status,200);
-    const invitation=(await query('SELECT * FROM team_member_invitations')).rows[0];
-    const denied=await request('post','/api/mystery-box/invitations/:id/accept',{}, {id:invitation.id});assert.equal(denied.status,404);
-    const accepted=await request('post','/api/mystery-box/invitations/:id/accept',{}, {id:invitation.id},{email:'new@test.local',sub:'new-google'});assert.equal(accepted.status,200);
+  await t.test('leader transfer precedes member removal',async()=>{
     assert.equal((await edit({members:[]})).status,400);
-    assert.equal((await edit({members:[{email:'TEAM01@test.local',regNo:'A',isLeader:false},{email:'new@test.local',regNo:'B',isLeader:true}]})).status,200);
-    const result=await edit({members:[{email:'new@test.local',regNo:'B',isLeader:true}]});assert.equal(result.status,200);
+    assert.equal((await edit({members:[{email:'TEAM01@test.local',regNo:'A',isLeader:false},{email:'member@test.local',regNo:'B',isLeader:true}]})).status,200);
+    const result=await edit({members:[{email:'member@test.local',regNo:'B',isLeader:true}]});assert.equal(result.status,200);
     await assert.rejects(spinWheel(pool,{code:'TEAM01',user,id:randomUUID()}),{status:403});
   });
   await t.test('migration replay preserves spins, points and card usage',async()=>{

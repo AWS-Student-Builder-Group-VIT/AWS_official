@@ -3,7 +3,6 @@ import { eventRequest } from '../utils/eventRewards';
 
 export default function TeamAdminEditor({ team, token, challenges, onClose, onSaved }) {
   const [form,setForm]=useState(()=>({teamName:team.teamName,points:team.points,freeChangeCards:team.freeChangeCards||0,spinsUsed:team.spinsUsed||0,maxGameAttempts:team.maxGameAttempts,isOpened:team.isOpened,isChaosResolved:team.isChaosResolved,hasChangedQuestion:team.hasChangedQuestion,challengeId:team.mysteryQuestion.id,ownedItems:team.ownedItems.join('\n'),members:team.members.map(m=>({...m,regNo:m.regNo||''})),reason:''}));
-  const [email,setEmail]=useState('');
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
   const [resetId,setResetId]=useState('');
@@ -33,9 +32,7 @@ export default function TeamAdminEditor({ team, token, challenges, onClose, onSa
       <label><input type="radio" name="leader" checked={m.isLeader} onChange={()=>update('members',form.members.map((v,i)=>({...v,isLeader:i===index})))}/> Leader</label>
       <button disabled={m.isLeader} onClick={()=>update('members',form.members.filter((_,i)=>i!==index))} className="text-red-300 disabled:opacity-30">Remove</button>
     </div>)}
-    <p className="text-xs mt-2">Transfer leadership before removing the leader. New members must accept an invitation with Google.</p>
-    <div className="flex gap-2 my-3"><input aria-label="Invitation email" type="email" className={inputClass} value={email} onChange={e=>setEmail(e.target.value)} placeholder="Member email"/><button disabled={busy||!email} onClick={()=>run(()=>eventRequest(`admin/mystery-box/teams/${team.code}/invitations`,{adminToken:token,method:'POST',body:{email,reason:form.reason}}))}>Invite</button></div>
-    {team.invitations?.map(i=><p className="text-xs" key={i.id}>{i.email}: {i.accepted_at?'Accepted':'Awaiting verified acceptance'}</p>)}
+    <p className="text-xs mt-2">Transfer leadership before removing the leader. New members join from the HackQuest landing page using the team code.</p>
     <h3 className="text-orange-400 my-3">Official attempts</h3>
     <select aria-label="Attempt to reset" className={inputClass} value={resetId} onChange={e=>setResetId(e.target.value)}><option value="">Select an attempt to void</option>{team.gameAttempts.filter(a=>!a.voidedAt).map(a=><option key={a.attemptId} value={a.gameSlug}>{a.gameSlug} — {a.status} — {a.points} pts</option>)}</select>
     <button disabled={busy||!resetId} className="text-red-300 my-2" onClick={()=>run(()=>eventRequest(`admin/mystery-box/teams/${team.code}/games/${resetId}/reset`,{adminToken:token,method:'POST',body:{reason:form.reason}}))}>Void attempt and reverse its points</button>

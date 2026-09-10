@@ -57,7 +57,6 @@ export default function SpinWheel({ team = { code: 'preview' }, isMember = false
         <text x="180" y="185" textAnchor="middle" fill="#ff9900" fontWeight="bold">SPIN</text>
       </svg>
     </div>
-    <p className="text-xs text-center text-on-surface-variant">Better luck: 90% · +50 points: 5% · Free change card: 5%<br />Sector sizes are decorative; each spin uses these odds.</p>
     <button onClick={spin} disabled={busy || !isMember || (used>=5 && !pending)} className="bg-primary-container text-black font-bold px-8 py-3 rounded-lg disabled:opacity-40">{busy?'Spinning…':!isMember?'Team members only':pending?'Retry pending spin':used>=5?'All five spins used':'Spin the wheel'}</button>
     <p role="status" className="text-center text-primary-container min-h-6">{message}</p>
   </div>;

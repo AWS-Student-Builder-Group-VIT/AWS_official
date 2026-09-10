@@ -330,8 +330,9 @@ function Dashboard({ token, onLogout }) {
 
   const handleTriggerChaos = async (resolve = false) => {
     if (!resolve) {
-      const reason = window.prompt(`Reason to ${chaosEnabled ? 'disable and reseal' : 'enable'} Chaos Mode (at least 5 characters):`);
-      if (!reason || reason.trim().length < 5) return;
+      const action = chaosEnabled ? 'disable Chaos Mode and reseal every team card' : 'enable Chaos Mode for every team';
+      if (!window.confirm(`Do you want to ${action}?`)) return;
+      const reason = `Organizer confirmed: ${action}`;
       try {
         await eventRequest('admin/mystery-box/chaos-mode', {adminToken:token,method:'POST',body:{enabled:!chaosEnabled,reason}});
         setChaosEnabled(!chaosEnabled); setChaosModalTeam(null);
