@@ -60,7 +60,8 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '35mb' }));
+app.use(express.urlencoded({ extended: true, limit: '35mb' }));
 
 // ── Auth middleware ───────────────────────────────────────────
 function authMiddleware(req, res, next) {
@@ -178,8 +179,20 @@ async function runDatabaseMigrations() {
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS members JSONB DEFAULT '[]'::jsonb;
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS has_changed_question BOOLEAN DEFAULT FALSE;
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS max_game_attempts INTEGER NOT NULL DEFAULT 5;
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS presentation JSONB;
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+    CREATE TABLE IF NOT EXISTS hackathon_team_presentations (
+      team_code VARCHAR(16) PRIMARY KEY,
+      file_name TEXT,
+      file_size BIGINT,
+      mime_type TEXT,
+      file_data TEXT,
+      link TEXT,
+      uploaded_by TEXT,
+      uploaded_at TIMESTAMPTZ DEFAULT NOW()
+    );
 
     CREATE TABLE IF NOT EXISTS hackathon_activity_logs (
       id SERIAL PRIMARY KEY,
@@ -198,7 +211,7 @@ async function runDatabaseMigrations() {
 async function initDb() {
   const result = await initializeVersionedSchema({
     pool,
-    version: 'v6-single-team-membership-ready',
+    version: 'v7-team-presentation-upload-ready',
     migrate: runDatabaseMigrations,
   });
   console.log(result.migrated ? 'Database tables ready' : 'Database schema already ready');
@@ -398,6 +411,113 @@ app.get('/api/mystery-box/teams/:code', hackathonAuth, async (req, res) => {
 
 registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddleware });
 registerHackathonScoringRoutes(app, { pool, hackathonAuth, adminMiddleware });
+
+// ── Presentation Upload / Management Endpoints ───────────────
+app.post('/api/mystery-box/teams/:code/presentation', async (req, res) => {
+  try {
+    const rawCode = String(req.params.code || req.body.code || '').trim();
+    const code = normalizeTeamCode(rawCode);
+    const { fileName, fileSize, mimeType, fileData, link, uploaderName, uploaderEmail } = req.body;
+
+    if (!code) return res.status(400).json({ error: 'Team code is required' });
+    if (!fileData && !link) return res.status(400).json({ error: 'Please provide either a presentation file or a presentation link' });
+
+    const teamCheck = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [code]);
+    if (teamCheck.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
+
+    const team = teamCheck.rows[0];
+    const uploadedBy = uploaderName ? `${uploaderName}${uploaderEmail ? ` (${uploaderEmail})` : ''}` : (uploaderEmail || 'Team Member');
+    const uploadedAt = new Date().toISOString();
+
+    const presentationMeta = {
+      fileName: fileName || (link ? 'External Presentation Link' : 'Presentation.pptx'),
+      fileSize: fileSize || null,
+      mimeType: mimeType || (link ? 'link' : 'application/vnd.openxmlformats-officedocument.presentationml.presentation'),
+      link: link || null,
+      hasFile: Boolean(fileData),
+      uploadedBy,
+      uploadedAt,
+    };
+
+    await pool.query(`
+      INSERT INTO hackathon_team_presentations (team_code, file_name, file_size, mime_type, file_data, link, uploaded_by, uploaded_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      ON CONFLICT (team_code) DO UPDATE SET
+        file_name = EXCLUDED.file_name,
+        file_size = EXCLUDED.file_size,
+        mime_type = EXCLUDED.mime_type,
+        file_data = EXCLUDED.file_data,
+        link = EXCLUDED.link,
+        uploaded_by = EXCLUDED.uploaded_by,
+        uploaded_at = NOW()
+    `, [code, presentationMeta.fileName, presentationMeta.fileSize, presentationMeta.mimeType, fileData || null, link || null, uploadedBy]);
+
+    await pool.query(
+      'UPDATE hackathon_teams SET presentation = $1, updated_at = NOW() WHERE code = $2',
+      [JSON.stringify(presentationMeta), code]
+    );
+
+    await logHackathonActivity(
+      team.code,
+      team.team_name,
+      'PRESENTATION_UPLOADED',
+      `Uploaded presentation: ${presentationMeta.fileName}`,
+      { fileName: presentationMeta.fileName, uploadedBy }
+    );
+
+    res.json({ ok: true, success: true, presentation: presentationMeta });
+  } catch (error) {
+    console.error('Presentation upload error:', error);
+    res.status(500).json({ error: 'Failed to upload presentation' });
+  }
+});
+
+app.get('/api/mystery-box/teams/:code/presentation/download', async (req, res) => {
+  try {
+    const rawCode = String(req.params.code || '').trim();
+    const code = normalizeTeamCode(rawCode);
+    if (!code) return res.status(400).json({ error: 'Team code is required' });
+
+    const result = await pool.query(
+      'SELECT file_name, file_size, mime_type, file_data, link FROM hackathon_team_presentations WHERE team_code = $1',
+      [code]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No presentation found for this team' });
+    }
+
+    const row = result.rows[0];
+    if (row.link && !row.file_data) {
+      return res.redirect(row.link);
+    }
+
+    if (!row.file_data) {
+      return res.status(404).json({ error: 'Presentation file data not available' });
+    }
+
+    let base64Clean = row.file_data;
+    if (base64Clean.includes('base64,')) {
+      base64Clean = base64Clean.split('base64,')[1];
+    }
+
+    const fileBuffer = Buffer.from(base64Clean, 'base64');
+    const safeFilename = encodeURIComponent(row.file_name || `team_${code}_presentation.pptx`).replace(/['()]/g, escape);
+    
+    res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${row.file_name || `team_${code}_presentation.pptx`}"; filename*=UTF-8''${safeFilename}`);
+    res.setHeader('Content-Length', fileBuffer.length);
+    return res.send(fileBuffer);
+  } catch (error) {
+    console.error('Presentation download error:', error);
+    res.status(500).json({ error: 'Failed to download presentation' });
+  }
+});
+
+app.get('/api/admin/mystery-box/teams/:code/presentation/download', adminMiddleware, async (req, res) => {
+  const code = normalizeTeamCode(String(req.params.code || '').trim());
+  return res.redirect(`/api/mystery-box/teams/${code}/presentation/download`);
+});
 
 app.post('/api/mystery-box/activity/log', async (req, res) => {
   try {
@@ -728,7 +848,7 @@ app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
       SELECT id, code, team_name, mystery_question, is_opened, points,
              members, chaos_event, is_chaos_opened, is_chaos_resolved,
              owned_items, has_changed_question, max_game_attempts, created_at, updated_at,
-             spins_used, free_change_cards, chaos_version,
+             spins_used, free_change_cards, chaos_version, presentation,
              COALESCE((SELECT jsonb_agg(s ORDER BY s.created_at DESC) FROM team_wheel_spins s WHERE s.team_id=hackathon_teams.id),'[]'::jsonb) AS spin_history,
              COALESCE((
                SELECT jsonb_agg(jsonb_build_object(
@@ -780,6 +900,7 @@ app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
       ownedItems: row.owned_items || [],
       hasChangedQuestion: row.has_changed_question || false,
       maxGameAttempts: row.max_game_attempts ?? 5,
+      presentation: row.presentation || null,
       gameAttempts: row.game_attempts || [],
       pointLedger: row.point_ledger || [],
       registeredAt: new Date(row.created_at).getTime(),

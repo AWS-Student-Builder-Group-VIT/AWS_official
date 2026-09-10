@@ -8,6 +8,8 @@ import {
   MEMBER_EMAIL_KEY,
   TEAM_STORAGE_KEY,
   consumeVerifiedHackathonSession,
+  persistVerifiedHackathonTeam,
+  getStoredTeam,
 } from './teamSessionSync';
 
 // Global assets (shared across the whole app)
@@ -78,19 +80,14 @@ function MysteryBoxHackathonInner() {
 
   const [team, setTeam] = useState(() => {
     if (typeof window === 'undefined') return null;
-    try {
-      const savedTeam = window.localStorage.getItem(TEAM_STORAGE_KEY);
-      return savedTeam ? JSON.parse(savedTeam) : null;
-    } catch {
-      return null;
-    }
+    return getStoredTeam({ localStorage: window.localStorage, sessionStorage: window.sessionStorage });
   });
   const [myEmail, setMyEmail] = useState(() => {
     if (typeof window === 'undefined') return '';
-    return window.sessionStorage.getItem('mystery-box-hackathon-my-email') || '';
+    return window.sessionStorage.getItem(MEMBER_EMAIL_KEY) || '';
   });
 
-  const isMemberOfTeam = team && myEmail && team.members?.some((m) => m.email === myEmail);
+  const isMemberOfTeam = Boolean(team && myEmail && team.members?.some((m) => (m.email || '').trim().toLowerCase() === myEmail.trim().toLowerCase()));
 
 
 
@@ -278,11 +275,12 @@ function MysteryBoxHackathonInner() {
       }
 
       const createdTeam = data.team;
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(MEMBER_EMAIL_KEY, email);
-      }
+      persistVerifiedHackathonTeam(createdTeam, { email }, {
+        localStorage: window.localStorage,
+        sessionStorage: window.sessionStorage,
+      });
       setMyEmail(email);
-      persistTeam(createdTeam);
+      setTeam(createdTeam);
       setRegisterForm({ email: '', regNo: '', teamName: '', isLeader: true });
       setGoogleUser(null);
       setRegisterOpen(false);
@@ -336,11 +334,12 @@ function MysteryBoxHackathonInner() {
       }
 
       const joinedTeam = data.team;
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(MEMBER_EMAIL_KEY, email);
-      }
+      persistVerifiedHackathonTeam(joinedTeam, { email }, {
+        localStorage: window.localStorage,
+        sessionStorage: window.sessionStorage,
+      });
       setMyEmail(email);
-      persistTeam(joinedTeam);
+      setTeam(joinedTeam);
 
       setJoinForm({ email: '', regNo: '', teamCode: '' });
       setGoogleJoinUser(null);

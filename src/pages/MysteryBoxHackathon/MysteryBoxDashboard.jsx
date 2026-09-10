@@ -13,7 +13,7 @@ import TeamActivity from './components/TeamActivity';
 import { eventRequest, pendingRequest } from '../../utils/eventRewards';
 import { games } from '../gamesRegistry';
 import { SCORED_TEAM_GAMES } from '../../utils/teamGameScoring';
-import { fetchMysteryTopics, fetchTeamGameScores, swapTeamTopic } from '../../utils/auth';
+import { fetchMysteryTopics, fetchTeamGameScores, swapTeamTopic, uploadTeamPresentation } from '../../utils/auth';
 import { readApiResponse } from '../../utils/apiResponse';
 import {
   HACKATHON_TOKEN_KEY,
@@ -22,6 +22,8 @@ import {
   TEAM_STORAGE_KEY,
   clearHackathonBrowserSession,
   consumeTeamRefreshResponse,
+  persistVerifiedHackathonTeam,
+  getStoredTeam,
 } from './teamSessionSync';
 import { getOfficialGameCardAccess } from './officialGameAccess';
 import { startGameScorePolling } from './gameScorePolling';
@@ -40,14 +42,10 @@ export default function MysteryBoxDashboard() {
   const [topicSwapPending, setTopicSwapPending] = useState(false);
   const [chaosRevealed, setChaosRevealed] = useState(false);
 
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [team, setTeam] = useState(() => {
     if (typeof window === 'undefined') return null;
-    try {
-      const stored = window.localStorage.getItem(TEAM_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
+    return getStoredTeam({ localStorage: window.localStorage, sessionStorage: window.sessionStorage });
   });
 
   const [myEmail, setMyEmail] = useState(() => {
@@ -70,6 +68,12 @@ export default function MysteryBoxDashboard() {
 
   // Success message notification state
   const [notification, setNotification] = useState('');
+  const [pptUploading, setPptUploading] = useState(false);
+  const [pptReplacing, setPptReplacing] = useState(false);
+  const [pptSelectedFile, setPptSelectedFile] = useState(null);
+  const [pptLinkInput, setPptLinkInput] = useState('');
+  const [pptError, setPptError] = useState('');
+
   const scoredGames = games.filter((game) => SCORED_TEAM_GAMES.includes(game.slug));
   const playedGameSlugs = new Set(gameScores?.playedGameSlugs || []);
   const activeGameAttempts = gameScores?.activeAttempts || (gameScores?.activeAttempt ? [gameScores.activeAttempt] : []);
@@ -149,21 +153,96 @@ export default function MysteryBoxDashboard() {
     });
   }, [activeTab, team?.code]);
 
-  // Redirect to landing page if not in a team
+  // Initial session recovery & validation
   useEffect(() => {
-    const isMemberOfTeam = team && myEmail && team.members?.some((m) => m.email === myEmail);
-    if (!isMemberOfTeam) {
-      navigate('/hackquest');
+    let active = true;
+    const verifySession = async () => {
+      const token = typeof window !== 'undefined' ? window.sessionStorage.getItem(HACKATHON_TOKEN_KEY) : null;
+      if (!token) {
+        if (active) {
+          setSessionLoading(false);
+          navigate('/hackquest', { replace: true });
+        }
+        return;
+      }
+
+      let email = myEmail;
+      if (!email) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          if (payload?.email) {
+            email = payload.email.trim().toLowerCase();
+            window.sessionStorage.setItem(MEMBER_EMAIL_KEY, email);
+            if (active) setMyEmail(email);
+          }
+        } catch {}
+      }
+
+      if (team?.code) {
+        try {
+          const res = await fetch(`/api/mystery-box/teams/${team.code}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const result = await consumeTeamRefreshResponse(res, {
+            localStorage: window.localStorage,
+            sessionStorage: window.sessionStorage,
+          });
+
+          if (!active) return;
+
+          if (result.kind === 'invalidated') {
+            setTeam(null);
+            setSessionLoading(false);
+            navigate('/hackquest', { replace: true, state: { teamSessionInvalidated: result.reason } });
+            return;
+          }
+
+          if (result.kind === 'updated') {
+            setTeam(result.team);
+            setOwnedItems(result.ownedItems);
+          }
+        } catch (e) {
+          console.error('Session verify error:', e);
+        }
+      }
+
+      if (active) setSessionLoading(false);
+    };
+
+    verifySession();
+    return () => { active = false; };
+  }, [team?.code]);
+
+  const isMemberOfTeam = Boolean(
+    team &&
+    myEmail &&
+    team.members?.some(
+      (m) => (m.email || '').trim().toLowerCase() === myEmail.trim().toLowerCase()
+    )
+  );
+
+  // Redirect to landing page if definitively not in a team after session resolution
+  useEffect(() => {
+    if (sessionLoading) return;
+    if (!team || !myEmail || !isMemberOfTeam) {
+      navigate('/hackquest', { replace: true });
     }
-  }, [team, myEmail, navigate]);
+  }, [team, myEmail, isMemberOfTeam, sessionLoading, navigate]);
 
-
-  if (!team || !myEmail) {
-    return null; // Will redirect in useEffect
+  if (sessionLoading || !team || !myEmail || !isMemberOfTeam) {
+    return (
+      <div className="min-h-screen bg-background text-on-surface bg-grid-pattern flex flex-col items-center justify-center p-6 font-mono text-center">
+        <div className="w-10 h-10 border-3 border-primary-container border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-xs uppercase tracking-widest text-primary-container font-bold">
+          Connecting to HackQuest Command Center...
+        </p>
+        <p className="text-[10px] text-on-surface-variant/60 mt-1">Synchronizing squad session</p>
+      </div>
+    );
   }
 
   const leader = team.members?.find((member) => member.isLeader) || null;
-  const isCurrentLeader = leader && leader.email === myEmail;
+  const isCurrentLeader = Boolean(leader && (leader.email || '').trim().toLowerCase() === myEmail.trim().toLowerCase());
 
   // Primary Box Problem Details
   const parsedQuestion = (() => {
@@ -184,9 +263,15 @@ export default function MysteryBoxDashboard() {
     setTeam(nextTeam);
     if (typeof window !== 'undefined') {
       if (nextTeam) {
-        window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(nextTeam));
+        persistVerifiedHackathonTeam(nextTeam, { email: myEmail }, {
+          localStorage: window.localStorage,
+          sessionStorage: window.sessionStorage,
+        });
       } else {
-        window.localStorage.removeItem(TEAM_STORAGE_KEY);
+        clearHackathonBrowserSession({
+          localStorage: window.localStorage,
+          sessionStorage: window.sessionStorage,
+        });
       }
     }
   };
@@ -333,6 +418,78 @@ export default function MysteryBoxDashboard() {
       setNotification(error.message);
     } finally {
       setTopicSwapPending(false);
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const handlePresentationFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      setPptError('File size exceeds 25MB limit. Please select a smaller file or provide a cloud presentation link.');
+      return;
+    }
+    setPptError('');
+    setPptSelectedFile(file);
+  };
+
+  const handlePresentationSubmit = async (e) => {
+    e?.preventDefault();
+    if (!pptSelectedFile && !pptLinkInput.trim()) {
+      setPptError('Please select a presentation file (.ppt, .pptx, .pdf) or paste a link.');
+      return;
+    }
+    setPptUploading(true);
+    setPptError('');
+
+    try {
+      let fileData = null;
+      if (pptSelectedFile) {
+        fileData = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(pptSelectedFile);
+        });
+      }
+
+      const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
+      const memberInfo = (team.members || []).find((m) => m.email?.toLowerCase() === myEmail.toLowerCase());
+      const uploaderName = memberInfo?.name || '';
+      
+      const res = await uploadTeamPresentation({
+        code: team.code,
+        fileName: pptSelectedFile ? pptSelectedFile.name : 'External Presentation Link',
+        fileSize: pptSelectedFile ? pptSelectedFile.size : null,
+        mimeType: pptSelectedFile ? pptSelectedFile.type : 'link',
+        fileData,
+        link: pptLinkInput.trim() || null,
+        uploaderName,
+        uploaderEmail: myEmail,
+        token,
+      });
+
+      if (res.ok) {
+        const freshTeam = { ...team, presentation: res.presentation };
+        persistTeamLocally(freshTeam);
+        setPptSelectedFile(null);
+        setPptLinkInput('');
+        setPptReplacing(false);
+        setNotification('Presentation uploaded successfully!');
+        setTimeout(() => setNotification(''), 4000);
+      } else {
+        setPptError(res.error || 'Failed to upload presentation');
+      }
+    } catch (err) {
+      setPptError(err.message || 'Error processing file upload');
+    } finally {
+      setPptUploading(false);
     }
   };
 
@@ -648,6 +805,176 @@ export default function MysteryBoxDashboard() {
                       </p>
                     </div>
                     </GiftReveal>
+                  </div>
+
+                  {/* WIDGET 3: Team Presentation (PPT) Submission */}
+                  <div className="rounded-[24px] border border-primary-container/30 bg-[rgba(255,153,0,0.03)] p-6 shadow-[0_15px_45px_rgba(255,153,0,0.04)] relative overflow-hidden">
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary-container/40 via-[#00a8e0]/30 to-transparent" />
+                    
+                    <div className="flex justify-between items-center mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl">📊</span>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-primary-container font-label-sm m-0">Final Deliverable Submission</p>
+                          <h4 className="text-base font-headline-md text-on-surface uppercase tracking-wider m-0">Pitch Deck / PPT</h4>
+                        </div>
+                      </div>
+                      <span className={`px-2.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider font-label-sm ${
+                        team.presentation ? 'bg-green-500/10 border border-green-500/30 text-green-400' : 'bg-amber-500/10 border border-amber-500/30 text-amber-300'
+                      }`}>
+                        {team.presentation ? '✓ Uploaded' : 'Pending'}
+                      </span>
+                    </div>
+
+                    {/* Active Upload Card (if already uploaded and not in edit/replace mode) */}
+                    {team.presentation && !pptReplacing ? (
+                      <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="w-12 h-12 rounded-xl bg-primary-container/10 border border-primary-container/30 flex items-center justify-center text-2xl shrink-0">
+                              📊
+                            </div>
+                            <div className="min-w-0">
+                              <h5 className="text-sm font-bold text-white truncate m-0">{team.presentation.fileName}</h5>
+                              <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-on-surface-variant">
+                                {team.presentation.fileSize && (
+                                  <span className="bg-white/5 px-2 py-0.5 rounded font-mono">{formatFileSize(team.presentation.fileSize)}</span>
+                                )}
+                                {team.presentation.uploadedBy && (
+                                  <span>Uploaded by <strong className="text-white">{team.presentation.uploadedBy}</strong></span>
+                                )}
+                              </div>
+                              {team.presentation.uploadedAt && (
+                                <p className="text-[10px] text-on-surface-variant/70 mt-1 m-0">
+                                  Last modified: {new Date(team.presentation.uploadedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                            {team.presentation.hasFile && (
+                              <a
+                                href={`/api/mystery-box/teams/${team.code}/presentation/download`}
+                                download
+                                className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-green-500/15 hover:bg-green-500/25 border border-green-500/40 text-green-300 rounded-xl text-xs font-headline-md font-bold uppercase transition-all cursor-pointer no-underline"
+                              >
+                                <span>⬇️</span> Download PPT
+                              </a>
+                            )}
+                            {team.presentation.link && (
+                              <a
+                                href={team.presentation.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-[#00a8e0]/15 hover:bg-[#00a8e0]/25 border border-[#00a8e0]/40 text-[#00a8e0] rounded-xl text-xs font-headline-md font-bold uppercase transition-all cursor-pointer no-underline"
+                              >
+                                <span>🔗</span> Open Deck
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPptReplacing(true);
+                                setPptSelectedFile(null);
+                                setPptLinkInput(team.presentation.link || '');
+                                setPptError('');
+                              }}
+                              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl text-xs font-headline-md font-bold uppercase transition-all cursor-pointer"
+                            >
+                              <span>✏️</span> Edit / Replace
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-on-surface-variant/60 mt-3 mb-0">
+                          💡 Any teammate can edit/replace this presentation anytime. Only the single latest uploaded PPT is kept.
+                        </p>
+                      </div>
+                    ) : (
+                      /* Upload / Edit Form */
+                      <form onSubmit={handlePresentationSubmit} className="bg-white/[0.02] border border-white/10 rounded-2xl p-5">
+                        <div className="mb-4">
+                          <label className="text-[10px] uppercase tracking-wider text-on-surface-variant font-label-sm block mb-2 font-bold">
+                            {pptReplacing ? 'Select Updated Presentation File (.ppt, .pptx, .pdf):' : 'Upload Team Presentation (.ppt, .pptx, .pdf):'}
+                          </label>
+                          
+                          <div className="border-2 border-dashed border-white/15 hover:border-primary-container/60 transition-colors rounded-xl p-6 text-center bg-white/[0.01]">
+                            <input
+                              type="file"
+                              id="ppt-file-input"
+                              accept=".ppt,.pptx,.pdf,.odp,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/pdf"
+                              onChange={handlePresentationFileSelect}
+                              className="hidden"
+                            />
+                            <label htmlFor="ppt-file-input" className="cursor-pointer block">
+                              <div className="text-3xl mb-2">📁</div>
+                              {pptSelectedFile ? (
+                                <div>
+                                  <p className="text-sm font-bold text-white m-0 truncate">{pptSelectedFile.name}</p>
+                                  <span className="text-[11px] text-primary-container font-mono">{formatFileSize(pptSelectedFile.size)}</span>
+                                  <p className="text-[10px] text-on-surface-variant mt-1 mb-0 underline">Click to change file</p>
+                                </div>
+                              ) : (
+                                <div>
+                                  <p className="text-xs font-bold text-white m-0">Click to browse or drop your presentation file</p>
+                                  <p className="text-[10px] text-on-surface-variant mt-1 mb-0">Supported formats: .pptx, .ppt, .pdf (Max 25MB)</p>
+                                </div>
+                              )}
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="mb-4">
+                          <label className="text-[10px] uppercase tracking-wider text-on-surface-variant font-label-sm block mb-1.5 font-bold">
+                            Optional: Cloud Presentation Link (Google Slides, Canva, OneDrive)
+                          </label>
+                          <input
+                            type="url"
+                            value={pptLinkInput}
+                            onChange={(e) => setPptLinkInput(e.target.value)}
+                            placeholder="https://docs.google.com/presentation/d/... or Canva link"
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-primary-container"
+                          />
+                        </div>
+
+                        {pptError && (
+                          <div className="mb-4 text-xs text-red-400 bg-red-950/30 border border-red-500/30 p-3 rounded-xl">
+                            {pptError}
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="submit"
+                            disabled={pptUploading || (!pptSelectedFile && !pptLinkInput.trim())}
+                            className="bg-primary-container text-black font-headline-md text-xs font-bold uppercase px-6 py-3 rounded-xl border-0 cursor-pointer hover:bg-primary transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(255,153,0,0.3)] flex items-center gap-2"
+                          >
+                            {pptUploading ? (
+                              <>
+                                <span className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                                <span>Uploading Presentation...</span>
+                              </>
+                            ) : (
+                              <span>🚀 {pptReplacing ? 'Save Updated PPT' : 'Submit Presentation'}</span>
+                            )}
+                          </button>
+
+                          {pptReplacing && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPptReplacing(false);
+                                setPptSelectedFile(null);
+                                setPptError('');
+                              }}
+                              className="bg-transparent hover:bg-white/5 border border-white/10 text-on-surface-variant hover:text-white font-headline-md text-xs uppercase px-4 py-3 rounded-xl cursor-pointer transition-all"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                      </form>
+                    )}
                   </div>
 
                   {/* Sandbox Deliverables Widget */}
