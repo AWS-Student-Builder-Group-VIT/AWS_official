@@ -117,7 +117,7 @@ test('verified session with no membership continues registration or joining', ()
   assert.equal(storage.localStorage.getItem(TEAM_STORAGE_KEY), null);
 });
 
-test('verified session exposes multiple authorized teams for an explicit choice', () => {
+test('verified session defensively resumes only the oldest authorized team', () => {
   assert.equal(typeof teamSessionSync.consumeVerifiedHackathonSession, 'function');
   const storage = createSession();
   const teams = [{ code: 'FIRST1' }, { code: 'SECOND' }];
@@ -128,8 +128,8 @@ test('verified session exposes multiple authorized teams for an explicit choice'
     teams,
   }, storage);
 
-  assert.deepEqual(result, { kind: 'choose-team', teams });
-  assert.equal(storage.localStorage.getItem(TEAM_STORAGE_KEY), null);
+  assert.deepEqual(result, { kind: 'resume', team: teams[0] });
+  assert.equal(storage.localStorage.getItem(TEAM_STORAGE_KEY), JSON.stringify(teams[0]));
 });
 
 test('sign out clears browser credentials without changing server membership', () => {

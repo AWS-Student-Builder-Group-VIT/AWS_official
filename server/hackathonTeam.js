@@ -27,13 +27,14 @@ export async function findReturningHackathonTeamRows(db, user) {
   if (!googleSub || !email) return [];
 
   const result = await db.query(
-    `SELECT DISTINCT ON (t.id) t.*, m.id AS actor_member_id,
+    `SELECT t.*, m.id AS actor_member_id,
             m.google_sub AS actor_google_sub
      FROM hackathon_team_members m
      JOIN hackathon_teams t ON t.id = m.team_id
      WHERE m.google_sub = $1
-        OR (m.google_sub IS NULL AND LOWER(m.email) = $2)
-     ORDER BY t.id, m.joined_at ASC`,
+        OR LOWER(m.email) = $2
+     ORDER BY m.joined_at ASC, m.id ASC
+     LIMIT 1`,
     [googleSub, email],
   );
 
@@ -49,7 +50,16 @@ export async function findReturningHackathonTeamRows(db, user) {
     }
   }
 
-  return result.rows;
+  return result.rows.slice(0, 1);
+}
+
+const SINGLE_TEAM_CONSTRAINTS = new Set([
+  'uq_hackathon_member_email_global',
+  'uq_hackathon_member_google_sub_global',
+]);
+
+export function isSingleTeamMembershipConflict(error) {
+  return error?.code === '23505' && SINGLE_TEAM_CONSTRAINTS.has(error?.constraint);
 }
 
 export function getTeamRegistrationConflict(memberships, { action, teamCode } = {}) {

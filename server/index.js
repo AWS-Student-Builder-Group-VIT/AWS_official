@@ -24,6 +24,7 @@ import {
   findReturningHackathonTeamRows,
   formatHackathonTeam,
   getTeamRegistrationConflict,
+  isSingleTeamMembershipConflict,
 } from './hackathonTeam.js';
 import { initializeEventRewards, registerEventRewardRoutes } from './eventRewards.js';
 import { isAllowedOrigin } from './corsOrigins.js';
@@ -197,7 +198,7 @@ async function runDatabaseMigrations() {
 async function initDb() {
   const result = await initializeVersionedSchema({
     pool,
-    version: 'v5-wheel-reversible-chaos-ready',
+    version: 'v6-single-team-membership-ready',
     migrate: runDatabaseMigrations,
   });
   console.log(result.migrated ? 'Database tables ready' : 'Database schema already ready');
@@ -215,6 +216,23 @@ async function logHackathonActivity(teamCode, teamName, eventType, message, deta
   } catch (e) {
     console.error('Error logging hackathon activity:', e.message);
   }
+}
+
+async function sendSingleTeamConflict(res, error, user, action) {
+  if (!isSingleTeamMembershipConflict(error)) return false;
+  let teamCode;
+  try {
+    teamCode = (await findReturningHackathonTeamRows(pool, user))[0]?.code;
+  } catch (lookupError) {
+    console.error('Could not resolve existing team after membership conflict:', lookupError);
+  }
+  res.status(409).json({
+    error: action === 'join'
+      ? 'You already belong to a different HackQuest team'
+      : 'You already belong to a HackQuest team',
+    ...(teamCode ? { teamCode } : {}),
+  });
+  return true;
 }
 
 // ── Mystery Box Hackathon Team Endpoints ──────────────────────
@@ -276,6 +294,7 @@ app.post('/api/mystery-box/teams/create', hackathonAuth, async (req, res) => {
     void logHackathonActivity(upperCode, teamName, 'TEAM_CREATED', `Squad "${teamName}" registered with code #${upperCode}`, { membersCount: members.length });
     res.status(201).json({ success: true, team: formatHackathonTeam(row, members) });
   } catch (error) {
+    if (await sendSingleTeamConflict(res, error, req.hackathonUser, 'create')) return;
     console.error('Create team error:', error);
     res.status(500).json({ error: 'Failed to create team' });
   }
@@ -348,6 +367,7 @@ app.post('/api/mystery-box/teams/join', hackathonAuth, async (req, res) => {
     void logHackathonActivity(searchCode, updatedRow.team_name, 'MEMBER_JOINED', `${joinMember.name || joinMember.email} joined squad "${updatedRow.team_name}"`, { email: joinMember.email });
     res.json({ success: true, team: formatHackathonTeam(updatedRow, normalizedMembers) });
   } catch (error) {
+    if (await sendSingleTeamConflict(res, error, req.hackathonUser, 'join')) return;
     console.error('Join team error:', error);
     res.status(500).json({ error: 'Failed to join team' });
   }

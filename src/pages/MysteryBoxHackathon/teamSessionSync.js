@@ -25,11 +25,10 @@ export function consumeVerifiedHackathonSession(session, storage) {
   storage.sessionStorage.setItem(HACKATHON_TOKEN_KEY, session?.token || '');
   clearTeamCache(storage);
 
-  if (teams.length === 1) {
+  if (teams.length >= 1) {
     persistVerifiedHackathonTeam(teams[0], session.user, storage);
     return { kind: 'resume', team: teams[0] };
   }
-  if (teams.length > 1) return { kind: 'choose-team', teams };
   return { kind: 'new-member', teams: [] };
 }
 

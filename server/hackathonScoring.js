@@ -217,20 +217,28 @@ export async function initializeHackathonScoring(pool) {
   `);
 
   await pool.query(`
-    INSERT INTO hackathon_team_members (team_id, email, google_sub, reg_no, is_leader)
-    SELECT t.id,
-           LOWER(member->>'email'),
-           NULLIF(member->>'googleSub', ''),
-           NULLIF(member->>'regNo', ''),
-           COALESCE((member->>'isLeader')::boolean, FALSE)
-    FROM hackathon_teams t
-    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(t.members, '[]'::jsonb)) AS member
-    WHERE NULLIF(member->>'email', '') IS NOT NULL
-    ON CONFLICT (team_id, email) DO UPDATE SET
-      google_sub = COALESCE(EXCLUDED.google_sub, hackathon_team_members.google_sub),
-      reg_no = COALESCE(EXCLUDED.reg_no, hackathon_team_members.reg_no),
-      is_leader = EXCLUDED.is_leader OR hackathon_team_members.is_leader;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM hackathon_scoring_migrations WHERE key='v0-normalized-members-backfill') THEN
+        INSERT INTO hackathon_team_members (team_id, email, google_sub, reg_no, is_leader)
+        SELECT t.id,
+               LOWER(member->>'email'),
+               NULLIF(member->>'googleSub', ''),
+               NULLIF(member->>'regNo', ''),
+               COALESCE((member->>'isLeader')::boolean, FALSE)
+        FROM hackathon_teams t
+        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(t.members, '[]'::jsonb)) AS member
+        WHERE NULLIF(member->>'email', '') IS NOT NULL
+        ON CONFLICT (team_id, email) DO UPDATE SET
+          google_sub = COALESCE(EXCLUDED.google_sub, hackathon_team_members.google_sub),
+          reg_no = COALESCE(EXCLUDED.reg_no, hackathon_team_members.reg_no),
+          is_leader = EXCLUDED.is_leader OR hackathon_team_members.is_leader;
+        INSERT INTO hackathon_scoring_migrations (key) VALUES ('v0-normalized-members-backfill');
+      END IF;
+    END $$;
   `);
+
+  await applySingleTeamMembershipMigration(pool);
 
   await pool.query(`
     DO $$
@@ -262,6 +270,136 @@ export async function initializeHackathonScoring(pool) {
   await applyPrelaunchOfficialGameMigration(pool);
   await applyChallengeCatalogV2Migration(pool);
   await applyChallengeCatalogDetailsMigration(pool);
+}
+
+function memberSnapshot(member, legacyMembers = []) {
+  const email = String(member.email || '').toLowerCase();
+  const legacy = legacyMembers.find((entry) => String(entry?.email || '').toLowerCase() === email) || {};
+  return {
+    ...legacy,
+    email,
+    googleSub: member.googleSub || null,
+    regNo: member.regNo || null,
+    isLeader: Boolean(member.isLeader),
+  };
+}
+
+export async function applySingleTeamMembershipMigration(pool) {
+  const migrationKey = 'v6-single-team-membership';
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const marker = await client.query(
+      `INSERT INTO hackathon_scoring_migrations (key) VALUES ($1)
+       ON CONFLICT (key) DO NOTHING RETURNING key`,
+      [migrationKey],
+    );
+    if (!marker.rows.length) {
+      await client.query('COMMIT');
+      return { applied: false };
+    }
+
+    const result = await client.query(
+      `SELECT m.id, m.team_id AS "teamId", LOWER(m.email) AS email,
+              m.google_sub AS "googleSub", m.reg_no AS "regNo",
+              m.is_leader AS "isLeader", m.joined_at AS "joinedAt",
+              t.code, t.team_name AS "teamName", t.members
+       FROM hackathon_team_members m
+       JOIN hackathon_teams t ON t.id=m.team_id
+       ORDER BY m.joined_at ASC, m.id ASC
+       FOR UPDATE OF m, t`,
+    );
+
+    const parent = result.rows.map((_, index) => index);
+    const find = (index) => {
+      while (parent[index] !== index) {
+        parent[index] = parent[parent[index]];
+        index = parent[index];
+      }
+      return index;
+    };
+    const unite = (left, right) => {
+      const leftRoot = find(left);
+      const rightRoot = find(right);
+      if (leftRoot !== rightRoot) parent[rightRoot] = leftRoot;
+    };
+    const identityOwner = new Map();
+    result.rows.forEach((member, index) => {
+      const keys = [`email:${member.email}`];
+      if (member.googleSub) keys.push(`sub:${member.googleSub}`);
+      for (const key of keys) {
+        if (identityOwner.has(key)) unite(index, identityOwner.get(key));
+        else identityOwner.set(key, index);
+      }
+    });
+    const groups = new Map();
+    result.rows.forEach((_, index) => {
+      const root = find(index);
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root).push(index);
+    });
+    const removeIds = [];
+    for (const indexes of groups.values()) {
+      indexes.sort((left, right) => left - right);
+      for (const index of indexes.slice(1)) removeIds.push(result.rows[index].id);
+    }
+    if (removeIds.length) {
+      for (const member of result.rows.filter((entry) => removeIds.includes(entry.id))) {
+        await client.query(
+          `INSERT INTO hackathon_activity_logs(team_code,team_name,event_type,message,details)
+           VALUES($1,$2,'DUPLICATE_MEMBERSHIP_REMOVED',$3,$4)`,
+          [member.code, member.teamName, `${member.email} removed from squad "${member.teamName}" by single-team migration`, JSON.stringify({ email: member.email, googleSub: member.googleSub, migrationKey })],
+        );
+      }
+      await client.query('DELETE FROM hackathon_team_members WHERE id = ANY($1::bigint[])', [removeIds]);
+    }
+
+    const teams = await client.query('SELECT id, code, team_name AS "teamName", members FROM hackathon_teams ORDER BY id FOR UPDATE');
+    let deletedTeams = 0;
+    for (const team of teams.rows) {
+      const membersResult = await client.query(
+        `SELECT id, LOWER(email) AS email, google_sub AS "googleSub", reg_no AS "regNo",
+                is_leader AS "isLeader", joined_at AS "joinedAt"
+         FROM hackathon_team_members WHERE team_id=$1 ORDER BY joined_at ASC, id ASC`,
+        [team.id],
+      );
+      const members = membersResult.rows;
+      if (!members.length) {
+        await client.query(
+          `INSERT INTO hackathon_activity_logs(team_code,team_name,event_type,message,details)
+           VALUES($1,$2,'EMPTY_TEAM_REMOVED',$3,$4)`,
+          [team.code, team.teamName, `Squad "${team.teamName}" removed after duplicate-membership cleanup`, JSON.stringify({ migrationKey })],
+        );
+        await client.query('DELETE FROM hackathon_teams WHERE id=$1', [team.id]);
+        deletedTeams += 1;
+        continue;
+      }
+
+      const existingLeader = members.find((member) => member.isLeader);
+      const leader = existingLeader || members[0];
+      for (const member of members) member.isLeader = member.id === leader.id;
+      await client.query('UPDATE hackathon_team_members SET is_leader=(id=$1) WHERE team_id=$2', [leader.id, team.id]);
+      if (!existingLeader) {
+        await client.query(
+          `INSERT INTO hackathon_activity_logs(team_code,team_name,event_type,message,details)
+           VALUES($1,$2,'LEADERSHIP_TRANSFERRED',$3,$4)`,
+          [team.code, team.teamName, `${leader.email} automatically promoted to leader`, JSON.stringify({ email: leader.email, migrationKey })],
+        );
+      }
+      const snapshot = members.map((member) => memberSnapshot(member, Array.isArray(team.members) ? team.members : []));
+      await client.query('UPDATE hackathon_teams SET members=$1,updated_at=NOW() WHERE id=$2', [JSON.stringify(snapshot), team.id]);
+    }
+
+    await client.query('CREATE UNIQUE INDEX IF NOT EXISTS uq_hackathon_member_email_global ON hackathon_team_members (LOWER(email))');
+    await client.query('CREATE UNIQUE INDEX IF NOT EXISTS uq_hackathon_member_google_sub_global ON hackathon_team_members (google_sub) WHERE google_sub IS NOT NULL');
+    await client.query('COMMIT');
+    return { applied: true, removedMemberships: removeIds.length, deletedTeams };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function applyChallengeCatalogV2Migration(pool) {
@@ -751,22 +889,39 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
   app.post('/api/mystery-box/teams/:code/leave', hackathonAuth, async (req, res) => {
     try {
       const response = await transact(pool, async (client) => {
-        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { leader: true, lock: true });
-        if (team.actor_is_leader) {
-          const error = new Error('The team leader cannot leave without transferring leadership');
-          error.status = 409;
-          throw error;
-        }
+        const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { lock: true });
         await client.query('DELETE FROM hackathon_team_members WHERE id=$1', [team.actor_member_id]);
-        await client.query(
-          `UPDATE hackathon_teams t
-           SET members=(SELECT COALESCE(jsonb_agg(member), '[]'::jsonb)
-                        FROM jsonb_array_elements(COALESCE(t.members, '[]'::jsonb)) member
-                        WHERE LOWER(member->>'email') <> $1), updated_at=NOW()
-           WHERE t.id=$2`,
-          [String(req.hackathonUser.email || '').toLowerCase(), team.id],
+        const remainingResult = await client.query(
+          `SELECT id, LOWER(email) AS email, google_sub AS "googleSub", reg_no AS "regNo",
+                  is_leader AS "isLeader", joined_at AS "joinedAt"
+           FROM hackathon_team_members WHERE team_id=$1 ORDER BY joined_at ASC, id ASC`,
+          [team.id],
         );
-        return { left: true };
+        if (!remainingResult.rows.length) {
+          await client.query(
+            `INSERT INTO hackathon_activity_logs(team_code,team_name,event_type,message,details)
+             VALUES($1,$2,'TEAM_LEFT_AND_DELETED',$3,$4)`,
+            [team.code, team.team_name, `${req.hackathonUser.email} left and the empty squad was deleted`, JSON.stringify({ email: req.hackathonUser.email })],
+          );
+          await client.query('DELETE FROM hackathon_teams WHERE id=$1', [team.id]);
+          return { left: true, leadershipTransferred: false, teamDeleted: true };
+        }
+
+        let newLeader = null;
+        if (team.actor_is_leader) {
+          const successor = remainingResult.rows[0];
+          await client.query('UPDATE hackathon_team_members SET is_leader=(id=$1) WHERE team_id=$2', [successor.id, team.id]);
+          for (const member of remainingResult.rows) member.isLeader = member.id === successor.id;
+          newLeader = memberSnapshot(successor);
+        }
+        const snapshot = remainingResult.rows.map((member) => memberSnapshot(member, Array.isArray(team.members) ? team.members : []));
+        await client.query('UPDATE hackathon_teams SET members=$1,updated_at=NOW() WHERE id=$2', [JSON.stringify(snapshot), team.id]);
+        await client.query(
+          `INSERT INTO hackathon_activity_logs(team_code,team_name,event_type,message,details)
+           VALUES($1,$2,$3,$4,$5)`,
+          [team.code, team.team_name, newLeader ? 'LEADER_LEFT' : 'MEMBER_LEFT', `${req.hackathonUser.email} left squad "${team.team_name}"`, JSON.stringify({ email: req.hackathonUser.email, newLeader: newLeader?.email || null })],
+        );
+        return { left: true, leadershipTransferred: Boolean(newLeader), teamDeleted: false, ...(newLeader ? { newLeader } : {}) };
       });
       res.json(response);
     } catch (error) { sendError(res, error); }

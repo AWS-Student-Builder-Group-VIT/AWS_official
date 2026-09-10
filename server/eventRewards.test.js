@@ -49,6 +49,11 @@ test('PostgreSQL reward, chaos and team administration transactions',async t=>{
     const team=await query('INSERT INTO hackathon_teams(code,team_name,mystery_question,chaos_event) VALUES($1,$1,$2,$3) RETURNING id',[code,JSON.stringify(snapshot.challenge),JSON.stringify(snapshot.chaosEvent)]);
     await query('INSERT INTO hackathon_team_members(team_id,email,google_sub,is_leader) VALUES($1,$2,$3,TRUE)',[team.rows[0].id,`${code}@test.local`,code]);
   }
+  for (const code of ['LEAVE1','LEAVE2']) {
+    const leaveTeam=await query('INSERT INTO hackathon_teams(code,team_name,mystery_question,chaos_event) VALUES($1,$1,$2,$3) RETURNING id',[code,JSON.stringify(snapshot.challenge),JSON.stringify(snapshot.chaosEvent)]);
+    await query('INSERT INTO hackathon_team_members(team_id,email,google_sub,is_leader,joined_at) VALUES($1,$2,$3,TRUE,$4)',[leaveTeam.rows[0].id,`${code}@test.local`,code,'2026-01-01T00:00:00Z']);
+    if(code==='LEAVE1') await query('INSERT INTO hackathon_team_members(team_id,email,google_sub,is_leader,joined_at) VALUES($1,$2,$3,FALSE,$4)',[leaveTeam.rows[0].id,'leave-member@test.local','LEAVE1-member','2026-01-02T00:00:00Z']);
+  }
   const user={sub:'TEAM01',email:'TEAM01@test.local'};
   const member={sub:'TEAM01-member',email:'member@test.local'};
   await query('INSERT INTO hackathon_team_members(team_id,email,google_sub,is_leader) VALUES((SELECT id FROM hackathon_teams WHERE code=$1),$2,$3,FALSE)',['TEAM01',member.email,member.sub]);
@@ -68,6 +73,26 @@ test('PostgreSQL reward, chaos and team administration transactions',async t=>{
     assert.equal(routes.has('post:/api/admin/mystery-box/teams/:code/invitations'),false);
     assert.equal(routes.has('get:/api/mystery-box/invitations'),false);
     assert.equal(routes.has('post:/api/mystery-box/invitations/:id/accept'),false);
+  });
+  await t.test('any verified member can leave without leader approval',async()=>{
+    const left=await request('post','/api/mystery-box/teams/:code/leave',{}, {code:'LEAVE1'}, {sub:'LEAVE1-member',email:'leave-member@test.local'});
+    assert.equal(left.status,200);
+    assert.deepEqual(left.data,{left:true,leadershipTransferred:false,teamDeleted:false});
+    assert.equal((await query("SELECT COUNT(*)::integer AS count FROM hackathon_team_members WHERE google_sub='LEAVE1-member'")).rows[0].count,0);
+  });
+  await t.test('leader leaving transfers leadership to the oldest remaining member',async()=>{
+    await query("INSERT INTO hackathon_team_members(team_id,email,google_sub,is_leader,joined_at) VALUES((SELECT id FROM hackathon_teams WHERE code='LEAVE1'),'successor@test.local','LEAVE1-successor',FALSE,'2026-01-03T00:00:00Z')");
+    const left=await request('post','/api/mystery-box/teams/:code/leave',{}, {code:'LEAVE1'}, {sub:'LEAVE1',email:'LEAVE1@test.local'});
+    assert.equal(left.status,200);
+    assert.equal(left.data.leadershipTransferred,true);
+    assert.equal(left.data.newLeader.email,'successor@test.local');
+    assert.equal((await query("SELECT is_leader FROM hackathon_team_members WHERE google_sub='LEAVE1-successor'")).rows[0].is_leader,true);
+  });
+  await t.test('last member leaving deletes the empty team',async()=>{
+    const left=await request('post','/api/mystery-box/teams/:code/leave',{}, {code:'LEAVE2'}, {sub:'LEAVE2',email:'LEAVE2@test.local'});
+    assert.equal(left.status,200);
+    assert.deepEqual(left.data,{left:true,leadershipTransferred:false,teamDeleted:true});
+    assert.equal((await query("SELECT COUNT(*)::integer AS count FROM hackathon_teams WHERE code='LEAVE2'")).rows[0].count,0);
   });
   await t.test('verified members may spin, while cross-team users remain blocked',async()=>{
     await assert.rejects(spinWheel(pool,{code:'TEAM02',user,id:randomUUID()}),{status:403});

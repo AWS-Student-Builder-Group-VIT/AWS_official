@@ -43,7 +43,7 @@ test('returning-team lookup uses verified Google identity and backfills legacy e
   const db = {
     async query(sql, params) {
       calls.push({ sql, params });
-      if (sql.includes('SELECT DISTINCT ON')) return { rows: [legacyTeam] };
+      if (sql.includes('FROM hackathon_team_members m')) return { rows: [legacyTeam] };
       if (sql.includes('UPDATE hackathon_team_members')) return { rowCount: 1, rows: [] };
       throw new Error(`Unexpected query: ${sql}`);
     },
@@ -58,16 +58,16 @@ test('returning-team lookup uses verified Google identity and backfills legacy e
   assert.equal(result[0].actor_google_sub, 'google-sub-123');
   assert.deepEqual(calls[0].params, ['google-sub-123', 'member@example.com']);
   assert.match(calls[0].sql, /m\.google_sub = \$1/);
-  assert.match(calls[0].sql, /m\.google_sub IS NULL AND LOWER\(m\.email\) = \$2/);
+  assert.match(calls[0].sql, /LOWER\(m\.email\) = \$2/);
   assert.deepEqual(calls[1].params, ['google-sub-123', 44]);
 });
 
-test('returning-team lookup retains every authorized legacy membership for selection', async () => {
+test('returning-team lookup keeps only the oldest authorized membership defensively', async () => {
   assert.equal(typeof hackathonTeam.findReturningHackathonTeamRows, 'function');
 
   const db = {
     async query(sql) {
-      if (sql.includes('SELECT DISTINCT ON')) {
+      if (sql.includes('FROM hackathon_team_members m')) {
         return {
           rows: [
             { ...row, id: 1, code: 'FIRST1', actor_google_sub: 'google-sub-123' },
@@ -84,7 +84,14 @@ test('returning-team lookup retains every authorized legacy membership for selec
     email: 'member@example.com',
   });
 
-  assert.deepEqual(result.map((team) => team.code), ['FIRST1', 'SECOND']);
+  assert.deepEqual(result.map((team) => team.code), ['FIRST1']);
+});
+
+test('global membership uniqueness violations are recognized for a friendly conflict response', () => {
+  assert.equal(hackathonTeam.isSingleTeamMembershipConflict({ code: '23505', constraint: 'uq_hackathon_member_email_global' }), true);
+  assert.equal(hackathonTeam.isSingleTeamMembershipConflict({ code: '23505', constraint: 'uq_hackathon_member_google_sub_global' }), true);
+  assert.equal(hackathonTeam.isSingleTeamMembershipConflict({ code: '23505', constraint: 'hackathon_teams_code_key' }), false);
+  assert.equal(hackathonTeam.isSingleTeamMembershipConflict({ code: '22001', constraint: 'uq_hackathon_member_email_global' }), false);
 });
 
 test('existing membership blocks creating another team', () => {
@@ -111,7 +118,7 @@ test('session payload returns every server-authorized team with the renewed toke
   const teamRow = { ...row, id: 12, actor_google_sub: 'google-sub-123' };
   const db = {
     async query(sql) {
-      if (sql.includes('SELECT DISTINCT ON')) return { rows: [teamRow] };
+      if (sql.includes('FROM hackathon_team_members m')) return { rows: [teamRow] };
       if (sql.includes('FROM hackathon_team_members')) {
         return { rows: [{ email: 'member@example.com', googleSub: 'google-sub-123', regNo: '22ABC', isLeader: false }] };
       }

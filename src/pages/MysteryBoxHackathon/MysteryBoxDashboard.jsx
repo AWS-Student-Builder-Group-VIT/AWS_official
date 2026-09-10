@@ -253,11 +253,8 @@ export default function MysteryBoxDashboard() {
   };
 
   const handleLeaveTeam = async () => {
-    if (isCurrentLeader) {
-      setNotification('Transfer leadership before leaving the team.');
-      return;
-    }
-    if (!window.confirm('Leave this HackQuest team? You will need a new invitation or team code to join again.')) return;
+    const leaderNote = isCurrentLeader ? ' Leadership will transfer automatically, or the team will be deleted if you are its last member.' : '';
+    if (!window.confirm(`Leave this HackQuest team permanently?${leaderNote}`)) return;
     try {
       const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
       const response = await fetch(`/api/mystery-box/teams/${team.code}/leave`, {
@@ -415,15 +412,13 @@ export default function MysteryBoxDashboard() {
           >
             Sign Out
           </button>
-          {!isCurrentLeader && (
-            <button
-              type="button"
-              onClick={handleLeaveTeam}
-              className="w-full bg-transparent border border-white/10 text-on-surface-variant hover:border-red-500/50 hover:text-red-400 transition-all py-2.5 rounded-xl text-[10px] uppercase font-headline-md tracking-wider cursor-pointer"
-            >
-              Leave Team Permanently
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleLeaveTeam}
+            className="w-full bg-transparent border border-white/10 text-on-surface-variant hover:border-red-500/50 hover:text-red-400 transition-all py-2.5 rounded-xl text-[10px] uppercase font-headline-md tracking-wider cursor-pointer"
+          >
+            Leave Team Permanently
+          </button>
         </div>
       </aside>
 

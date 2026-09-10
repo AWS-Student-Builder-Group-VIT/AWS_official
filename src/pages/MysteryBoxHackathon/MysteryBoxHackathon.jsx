@@ -8,7 +8,6 @@ import {
   MEMBER_EMAIL_KEY,
   TEAM_STORAGE_KEY,
   consumeVerifiedHackathonSession,
-  persistVerifiedHackathonTeam,
 } from './teamSessionSync';
 
 // Global assets (shared across the whole app)
@@ -74,28 +73,6 @@ const createTeamCode = () => {
   return code;
 };
 
-function ReturningTeamChooser({ teams, onSelect }) {
-  return (
-    <div className="space-y-3">
-      <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4">
-        <h4 className="m-0 text-sm font-semibold text-emerald-300">Your Google account belongs to multiple teams</h4>
-        <p className="mt-1 mb-0 text-xs text-on-surface-variant">Choose the dashboard you want to resume.</p>
-      </div>
-      {teams.map((team) => (
-        <button
-          key={team.code}
-          type="button"
-          onClick={() => onSelect(team)}
-          className="w-full rounded-xl border border-[#ff9900]/30 bg-[#221b16] p-4 text-left transition hover:border-[#ff9900] cursor-pointer"
-        >
-          <span className="block text-sm font-semibold text-white">{team.teamName}</span>
-          <span className="mt-1 block text-xs font-mono text-primary-container">#{team.code}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function MysteryBoxHackathonInner() {
   const navigate = useNavigate();
 
@@ -154,8 +131,6 @@ function MysteryBoxHackathonInner() {
   });
   const [formError, setFormError] = useState('');
   const [joinError, setJoinError] = useState('');
-  const [returningTeams, setReturningTeams] = useState([]);
-  const [verifiedSessionUser, setVerifiedSessionUser] = useState(null);
   const [googleSessionPending, setGoogleSessionPending] = useState(false);
 
   useEffect(() => {
@@ -224,8 +199,6 @@ function MysteryBoxHackathonInner() {
         localStorage: window.localStorage,
         sessionStorage: window.sessionStorage,
       });
-      setVerifiedSessionUser(sessionData.user);
-
       if (sessionResult.kind === 'resume') {
         setTeam(sessionResult.team);
         setMyEmail(sessionData.user.email);
@@ -234,11 +207,6 @@ function MysteryBoxHackathonInner() {
         navigate('/hackquest/dashboard');
         return;
       }
-      if (sessionResult.kind === 'choose-team') {
-        setReturningTeams(sessionResult.teams);
-        return;
-      }
-
       const verifiedUser = {
         email: sessionData.user.email,
         name: sessionData.user.name || decoded.name || 'Participant',
@@ -260,19 +228,6 @@ function MysteryBoxHackathonInner() {
 
   const handleGoogleRegisterSuccess = (response) => handleGoogleSuccess(response, 'register');
   const handleGoogleJoinSuccess = (response) => handleGoogleSuccess(response, 'join');
-
-  const resumeSelectedTeam = (selectedTeam) => {
-    persistVerifiedHackathonTeam(selectedTeam, verifiedSessionUser, {
-      localStorage: window.localStorage,
-      sessionStorage: window.sessionStorage,
-    });
-    setTeam(selectedTeam);
-    setMyEmail(verifiedSessionUser.email);
-    setReturningTeams([]);
-    setRegisterOpen(false);
-    setJoinOpen(false);
-    navigate('/hackquest/dashboard');
-  };
 
   const handleRegisterSubmit = async (event) => {
     event.preventDefault();
@@ -450,7 +405,6 @@ function MysteryBoxHackathonInner() {
           onClick={() => {
             setRegisterOpen(false);
             setFormError('');
-            setReturningTeams([]);
           }}
         >
           <div
@@ -471,7 +425,6 @@ function MysteryBoxHackathonInner() {
                 onClick={() => {
                   setRegisterOpen(false);
                   setFormError('');
-                  setReturningTeams([]);
                 }}
                 className="text-xl text-on-surface-variant transition-colors hover:text-primary-container bg-transparent border-none cursor-pointer"
               >
@@ -479,9 +432,8 @@ function MysteryBoxHackathonInner() {
               </button>
             </div>
 
-            {returningTeams.length > 1 && <ReturningTeamChooser teams={returningTeams} onSelect={resumeSelectedTeam} />}
             {googleSessionPending && <p className="text-center text-xs text-primary-container">Verifying your existing HackQuest membership…</p>}
-            <div className={returningTeams.length > 1 ? 'hidden' : 'space-y-4'}>
+            <div className="space-y-4">
               {/* Google Auth Step */}
               {!googleUser ? (
                 <div className="rounded-2xl border border-[#ff9900]/30 bg-[#221b16]/70 p-5 text-center flex flex-col items-center justify-center space-y-3">
@@ -607,7 +559,6 @@ function MysteryBoxHackathonInner() {
           onClick={() => {
             setJoinOpen(false);
             setJoinError('');
-            setReturningTeams([]);
           }}
         >
           <div
@@ -628,7 +579,6 @@ function MysteryBoxHackathonInner() {
                 onClick={() => {
                   setJoinOpen(false);
                   setJoinError('');
-                  setReturningTeams([]);
                 }}
                 className="text-xl text-on-surface-variant transition-colors hover:text-primary-container bg-transparent border-none cursor-pointer"
               >
@@ -636,9 +586,8 @@ function MysteryBoxHackathonInner() {
               </button>
             </div>
 
-            {returningTeams.length > 1 && <ReturningTeamChooser teams={returningTeams} onSelect={resumeSelectedTeam} />}
             {googleSessionPending && <p className="text-center text-xs text-primary-container">Verifying your existing HackQuest membership…</p>}
-            <div className={returningTeams.length > 1 ? 'hidden' : 'space-y-4'}>
+            <div className="space-y-4">
               {/* Google Auth Step */}
               {!googleJoinUser ? (
                 <div className="rounded-2xl border border-[#ff9900]/30 bg-[#221b16]/70 p-5 text-center flex flex-col items-center justify-center space-y-3">
