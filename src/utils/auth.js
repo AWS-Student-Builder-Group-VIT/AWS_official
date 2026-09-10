@@ -468,3 +468,27 @@ export async function logMysteryBoxActivity({ code, teamName, eventType, message
   }
 }
 
+/** Upload or update team PPT presentation */
+export async function uploadTeamPresentation({ code, fileName, fileSize, mimeType, fileData, link, uploaderName, uploaderEmail, token }) {
+  try {
+    const res = await fetch(`${API_URL}/api/mystery-box/teams/${code}/presentation`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ code, fileName, fileSize, mimeType, fileData, link, uploaderName, uploaderEmail }),
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, presentation: data.presentation } : { ok: false, error: data.error || 'Failed to upload presentation' };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Network error during presentation upload' };
+  }
+}
+
+/** Get direct download URL for a team presentation */
+export function getPresentationDownloadUrl(teamCode) {
+  return `${API_URL}/api/mystery-box/teams/${teamCode}/presentation/download`;
+}
+
+

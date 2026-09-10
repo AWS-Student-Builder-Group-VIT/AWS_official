@@ -37,6 +37,7 @@ const ACTIVITY_TYPE_CONFIG = {
   TEAM_CREATED:    { icon: '👥', label: 'Squad Created',  bg: 'rgba(192,132,252,0.15)',border: 'rgba(192,132,252,0.4)',text: '#c084fc' },
   MEMBER_JOINED:   { icon: '👤', label: 'Member Joined',  bg: 'rgba(129,140,248,0.15)',border: 'rgba(129,140,248,0.4)',text: '#818cf8' },
   POINTS_ADJUSTED: { icon: '⚡', label: 'Points Adjusted',bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', text: '#fbbf24' },
+  PRESENTATION_UPLOADED: { icon: '📊', label: 'PPT Uploaded', bg: 'rgba(52,211,153,0.15)', border: 'rgba(52,211,153,0.4)', text: '#34d399' },
 };
 
 function fmt(dateStr) {
@@ -907,59 +908,95 @@ function Dashboard({ token, onLogout }) {
                               </td>
 
                               {/* Action Buttons */}
-                              <td className="py-3.5 px-4 align-top text-right space-x-1 whitespace-nowrap">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setPointsModalTeam(t);
-                                    setPointDeltaInput('');
-                                  }}
-                                  title="Inject / Deduct Points"
-                                  className="px-2.5 py-1.5 bg-white/5 hover:bg-[#FF9900] hover:text-[#111] border border-white/10 text-white font-mono text-[11px] font-bold uppercase transition-all cursor-pointer rounded"
-                                >
-                                  ⚡ Points
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setChaosModalTeam(t);
-                                  }}
-                                  title="Chaos Event Controls"
-                                  className="px-2.5 py-1.5 bg-white/5 hover:bg-red-500 hover:text-white border border-white/10 text-red-300 font-mono text-[11px] font-bold uppercase transition-all cursor-pointer rounded"
-                                >
-                                  🌪️ Chaos
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setReassignModalTeam(t);
-                                    setSelectedReassignQuestion(challenges[0]?.id || '');
-                                    setResetSwapCheckbox(false);
-                                  }}
-                                  title="Reassign Problem Topic"
-                                  className="px-2.5 py-1.5 bg-white/5 hover:bg-[#00a8e0] hover:text-white border border-white/10 text-[#00a8e0] font-mono text-[11px] font-bold uppercase transition-all cursor-pointer rounded"
-                                >
-                                  🔄 Reassign
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setGameLimitTeam(t);
-                                    setGameLimitInput(String(t.maxGameAttempts ?? 5));
-                                  }}
-                                  title="Set Official Game Limit"
-                                  className="px-2.5 py-1.5 bg-white/5 hover:bg-[#a8e063] hover:text-[#111] border border-white/10 text-[#a8e063] font-mono text-[11px] font-bold uppercase transition-all cursor-pointer rounded"
-                                >
-                                  🎮 Games
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setDeleteConfirmTeam(t)}
-                                  title="Delete / Disband Team"
-                                  className="px-2 py-1.5 bg-red-950/30 hover:bg-red-600 hover:text-white border border-red-500/30 text-red-400 font-mono text-[11px] transition-all cursor-pointer rounded"
-                                >
-                                  🗑️
-                                </button>
+                              <td className="py-3.5 px-4 align-top text-right whitespace-nowrap">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPointsModalTeam(t);
+                                      setPointDeltaInput('');
+                                    }}
+                                    title="Inject / Deduct Points"
+                                    className="px-2.5 py-1.5 bg-white/5 hover:bg-[#FF9900] hover:text-[#111] border border-white/10 text-white font-mono text-[11px] font-bold uppercase transition-all cursor-pointer rounded"
+                                  >
+                                    ⚡ Points
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setChaosModalTeam(t);
+                                    }}
+                                    title="Chaos Event Controls"
+                                    className="px-2.5 py-1.5 bg-white/5 hover:bg-red-500 hover:text-white border border-white/10 text-red-300 font-mono text-[11px] font-bold uppercase transition-all cursor-pointer rounded"
+                                  >
+                                    🌪️ Chaos
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReassignModalTeam(t);
+                                      setSelectedReassignQuestion(challenges[0]?.id || '');
+                                      setResetSwapCheckbox(false);
+                                    }}
+                                    title="Reassign Problem Topic"
+                                    className="px-2.5 py-1.5 bg-white/5 hover:bg-[#00a8e0] hover:text-white border border-white/10 text-[#00a8e0] font-mono text-[11px] font-bold uppercase transition-all cursor-pointer rounded"
+                                  >
+                                    🔄 Reassign
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setGameLimitTeam(t);
+                                      setGameLimitInput(String(t.maxGameAttempts ?? 5));
+                                    }}
+                                    title="Set Official Game Limit"
+                                    className="px-2.5 py-1.5 bg-white/5 hover:bg-[#a8e063] hover:text-[#111] border border-white/10 text-[#a8e063] font-mono text-[11px] font-bold uppercase transition-all cursor-pointer rounded"
+                                  >
+                                    🎮 Games
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteConfirmTeam(t)}
+                                    title="Delete / Disband Team"
+                                    className="px-2 py-1.5 bg-red-950/30 hover:bg-red-600 hover:text-white border border-red-500/30 text-red-400 font-mono text-[11px] transition-all cursor-pointer rounded"
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
+
+                                {/* PPT Submission Row (Directly below the 5 buttons, centered and prominent) */}
+                                <div className="mt-2.5 flex items-center justify-center">
+                                  {t.presentation?.hasFile ? (
+                                    <a
+                                      href={`/api/mystery-box/teams/${t.code}/presentation/download`}
+                                      download
+                                      title={`Download PPT (${t.presentation.fileName})`}
+                                      className="w-full py-2 px-3 bg-emerald-500/20 hover:bg-emerald-500 border border-emerald-500/50 text-emerald-300 hover:text-white font-mono text-xs font-bold uppercase tracking-wider transition-all cursor-pointer rounded-lg inline-flex items-center justify-center gap-2 no-underline shadow-[0_0_15px_rgba(16,185,129,0.2)] active:scale-[0.98]"
+                                    >
+                                      <span className="text-sm">📊</span>
+                                      <span>Download PPT</span>
+                                    </a>
+                                  ) : t.presentation?.link ? (
+                                    <a
+                                      href={t.presentation.link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      title="Open Cloud Presentation Deck"
+                                      className="w-full py-2 px-3 bg-[#00a8e0]/20 hover:bg-[#00a8e0] border border-[#00a8e0]/50 text-[#00a8e0] hover:text-white font-mono text-xs font-bold uppercase tracking-wider transition-all cursor-pointer rounded-lg inline-flex items-center justify-center gap-2 no-underline shadow-[0_0_15px_rgba(0,168,224,0.2)] active:scale-[0.98]"
+                                    >
+                                      <span className="text-sm">🔗</span>
+                                      <span>Open Cloud PPT</span>
+                                    </a>
+                                  ) : (
+                                    <div
+                                      title="No presentation uploaded yet"
+                                      className="w-full py-1.5 px-3 bg-white/5 border border-dashed border-white/15 text-white/40 font-mono text-xs rounded-lg inline-flex items-center justify-center gap-1.5 cursor-default"
+                                    >
+                                      <span>⏳</span>
+                                      <span>No PPT Uploaded</span>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1338,6 +1375,71 @@ function Dashboard({ token, onLogout }) {
                 </div>
               ) : (
                 <div className="text-xs text-[#dbc2ad]/60 italic">No shop buffs purchased yet.</div>
+              )}
+            </div>
+
+            {/* Pitch Deck / PPT Presentation Submission */}
+            <div className="mb-6 p-4 rounded-xl border border-white/10 bg-white/[0.02]">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <span>📊</span> Final Pitch Presentation
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                  inspectTeam.presentation ? 'bg-green-500/20 text-green-300 border border-green-500/40' : 'bg-white/5 text-[#dbc2ad]/60 border border-white/10'
+                }`}>
+                  {inspectTeam.presentation ? '✓ Uploaded' : 'Not Uploaded'}
+                </span>
+              </div>
+
+              {inspectTeam.presentation ? (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/3 p-3.5 rounded-lg border border-white/5">
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-white flex items-center gap-2 flex-wrap">
+                      <span className="truncate">{inspectTeam.presentation.fileName}</span>
+                      {inspectTeam.presentation.fileSize && (
+                        <span className="text-[10px] text-[#00a8e0] font-mono bg-[#00a8e0]/10 px-1.5 py-0.5 rounded">
+                          {inspectTeam.presentation.fileSize < 1024 * 1024
+                            ? `${(inspectTeam.presentation.fileSize / 1024).toFixed(1)} KB`
+                            : `${(inspectTeam.presentation.fileSize / (1024 * 1024)).toFixed(1)} MB`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-[#dbc2ad] mt-1">
+                      {inspectTeam.presentation.uploadedBy && (
+                        <span>Uploaded by: <strong className="text-white">{inspectTeam.presentation.uploadedBy}</strong></span>
+                      )}
+                      {inspectTeam.presentation.uploadedAt && (
+                        <span className="ml-2">• {fmt(inspectTeam.presentation.uploadedAt)}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    {inspectTeam.presentation.hasFile && (
+                      <a
+                        href={`/api/mystery-box/teams/${inspectTeam.code}/presentation/download`}
+                        download
+                        className="px-3.5 py-2 bg-green-600 hover:bg-green-500 text-white rounded font-bold text-xs uppercase cursor-pointer no-underline flex items-center gap-1.5 shadow-[0_0_15px_rgba(34,197,94,0.3)] transition-all"
+                      >
+                        <span>⬇️</span> Download PPT
+                      </a>
+                    )}
+                    {inspectTeam.presentation.link && (
+                      <a
+                        href={inspectTeam.presentation.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3.5 py-2 bg-[#00a8e0] hover:bg-[#0090c0] text-white rounded font-bold text-xs uppercase cursor-pointer no-underline flex items-center gap-1.5 transition-all"
+                      >
+                        <span>🔗</span> Open Deck Link
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-[#dbc2ad]/60 italic py-1">
+                  This squad has not uploaded a presentation yet.
+                </div>
               )}
             </div>
 
