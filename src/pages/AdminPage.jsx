@@ -156,6 +156,14 @@ function Dashboard({ token, onLogout }) {
   const [hackathonFilter, setHackathonFilter] = useState('all');
   const [hackathonSort, setHackathonSort] = useState('points'); // points | newest | name
   const [hackathonSubView, setHackathonSubView] = useState('teams'); // 'teams' | 'activity'
+  const [expandedRosters, setExpandedRosters] = useState({}); // { [teamCode]: boolean }
+
+  const toggleRoster = (teamCode) => {
+    setExpandedRosters(prev => ({
+      ...prev,
+      [teamCode]: !prev[teamCode],
+    }));
+  };
 
   // Live Activity & Alerts State
   const [activities, setActivities] = useState([]);
@@ -459,11 +467,13 @@ function Dashboard({ token, onLogout }) {
       alert('No hackathon teams to export.');
       return;
     }
-    const headers = ['Team Code', 'Team Name', 'Points', 'Track', 'Question Title', 'Topic Changed', 'Chaos Active', 'Members Count', 'Leader Email', 'All Members', 'Registered Date'];
+    const headers = ['Team Code', 'Team Name', 'Points', 'Track', 'Question Title', 'Topic Changed', 'Chaos Active', 'Members Count', 'Leader Email', 'Leader RegNo', 'All Members (Email & RegNo)', 'Registered Date'];
     const rows = hackathonTeams.map(t => {
       const q = typeof t.mysteryQuestion === 'object' ? t.mysteryQuestion : {};
-      const leader = (t.members || []).find(m => m.isLeader)?.email || '';
-      const allEmails = (t.members || []).map(m => m.email).join('; ');
+      const leader = (t.members || []).find(m => m.isLeader);
+      const leaderEmail = leader?.email || '';
+      const leaderReg = leader?.regNo || leader?.reg_no || '';
+      const allMembers = (t.members || []).map(m => `${m.email}${m.regNo || m.reg_no ? ` [${m.regNo || m.reg_no}]` : ''}`).join('; ');
       return [
         `"${t.code}"`,
         `"${(t.teamName || '').replace(/"/g, '""')}"`,
@@ -473,8 +483,9 @@ function Dashboard({ token, onLogout }) {
         t.hasChangedQuestion ? 'YES' : 'NO',
         t.isChaosOpened ? (t.isChaosResolved ? 'RESOLVED' : 'ACTIVE') : 'NO',
         (t.members || []).length,
-        `"${leader}"`,
-        `"${allEmails}"`,
+        `"${leaderEmail}"`,
+        `"${leaderReg}"`,
+        `"${allMembers}"`,
         `"${fmt(t.registeredAt)}"`
       ];
     });
@@ -492,11 +503,15 @@ function Dashboard({ token, onLogout }) {
   // Hackathon filtered & sorted teams
   const filteredHackathonTeams = hackathonTeams
     .filter(t => {
-      const q = hackathonSearch.toLowerCase();
+      const q = hackathonSearch.toLowerCase().trim();
       const matchSearch = !q ||
         t.code.toLowerCase().includes(q) ||
         (t.teamName || '').toLowerCase().includes(q) ||
-        (t.members || []).some(m => (m.email || '').toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q));
+        (t.members || []).some(m =>
+          (m.email || '').toLowerCase().includes(q) ||
+          (m.name || '').toLowerCase().includes(q) ||
+          (m.regNo || m.reg_no || '').toLowerCase().includes(q)
+        );
 
       const parsedQ = typeof t.mysteryQuestion === 'object' ? t.mysteryQuestion : {};
       const track = (parsedQ.track || '').toLowerCase();
@@ -748,13 +763,26 @@ function Dashboard({ token, onLogout }) {
               <div>
                 {/* Filter & Search Controls */}
                 <div className="flex flex-col md:flex-row gap-3 mb-6">
-                  <input
-                    type="text"
-                    value={hackathonSearch}
-                    onChange={e => setHackathonSearch(e.target.value)}
-                    placeholder="Search by Team Name, Code (e.g. AB12CD), or Member Email..."
-                    className="flex-1 bg-white/5 border border-white/10 px-4 py-2.5 font-mono text-sm text-white focus:outline-none focus:border-[#FF9900] transition-colors placeholder-white/30"
-                  />
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={hackathonSearch}
+                      onChange={e => setHackathonSearch(e.target.value)}
+                      placeholder="Search by Registration No. (e.g. 22BCE9876), Team Name, Code, or Member..."
+                      className="w-full bg-white/5 border border-white/10 pl-10 pr-10 py-2.5 font-mono text-sm text-white focus:outline-none focus:border-[#FF9900] transition-colors placeholder-white/30 rounded"
+                    />
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-lg pointer-events-none">search</span>
+                    {hackathonSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setHackathonSearch('')}
+                        title="Clear search"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white bg-transparent border-0 cursor-pointer text-sm font-mono"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                   <select
                     value={hackathonFilter}
                     onChange={e => setHackathonFilter(e.target.value)}
@@ -779,6 +807,22 @@ function Dashboard({ token, onLogout }) {
                   </select>
                 </div>
 
+                {/* Search query feedback */}
+                {hackathonSearch.trim() && (
+                  <div className="mb-4 -mt-2 flex items-center justify-between text-xs font-mono text-[#dbc2ad] bg-white/5 border border-white/10 px-3.5 py-2 rounded">
+                    <span>
+                      Showing <strong className="text-[#FF9900]">{filteredHackathonTeams.length}</strong> squads matching &ldquo;<span className="text-white">{hackathonSearch}</span>&rdquo;
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setHackathonSearch('')}
+                      className="text-[#FF9900] hover:underline bg-transparent border-0 cursor-pointer p-0 text-xs font-mono"
+                    >
+                      Clear Filter
+                    </button>
+                  </div>
+                )}
+
                 {/* Teams Table */}
                 {hackathonLoading ? (
                   <div className="text-center py-20 font-mono text-[#dbc2ad]">Loading hackathon squads...</div>
@@ -792,7 +836,7 @@ function Dashboard({ token, onLogout }) {
                       <thead>
                         <tr className="bg-white/5 border-b border-white/10 font-mono text-[10px] text-[#dbc2ad] uppercase tracking-widest">
                           <th className="py-3.5 px-4">Squad / Code</th>
-                          <th className="py-3.5 px-4">Roster (Leader / Members)</th>
+                          <th className="py-3.5 px-4 min-w-[260px]">Roster (Members Dropdown)</th>
                           <th className="py-3.5 px-4">Active Problem Statement</th>
                           <th className="py-3.5 px-4 text-center">Score / Buffs</th>
                           <th className="py-3.5 px-4 text-center">Chaos Mode</th>
@@ -804,6 +848,11 @@ function Dashboard({ token, onLogout }) {
                           const q = typeof t.mysteryQuestion === 'object' && t.mysteryQuestion ? t.mysteryQuestion : null;
                           const leader = (t.members || []).find(m => m.isLeader);
                           const tierColor = '#00a8e0';
+                          const isRosterOpen = Boolean(expandedRosters[t.code] || (hackathonSearch.trim() && (t.members || []).some(m =>
+                            (m.regNo || m.reg_no || '').toLowerCase().includes(hackathonSearch.toLowerCase().trim()) ||
+                            (m.email || '').toLowerCase().includes(hackathonSearch.toLowerCase().trim()) ||
+                            (m.name || '').toLowerCase().includes(hackathonSearch.toLowerCase().trim())
+                          )));
 
                           return (
                             <tr key={t.code} className="hover:bg-white/3 transition-colors">
@@ -827,18 +876,99 @@ function Dashboard({ token, onLogout }) {
                                 </button>
                               </td>
 
-                              {/* Roster */}
-                              <td className="py-3.5 px-4 align-top max-w-[220px]">
-                                <div className="font-bold text-white flex items-center gap-1 truncate">
-                                  <span className="text-[10px] bg-primary-container/20 text-primary-container px-1.5 rounded uppercase">Leader</span>
-                                  <span className="truncate">{leader?.name || leader?.email || 'N/A'}</span>
+                              {/* Roster with Dropdown Menu */}
+                              <td className="py-3.5 px-4 align-top min-w-[260px] max-w-[320px]">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="font-bold text-white flex items-center gap-1.5 truncate">
+                                    <span className="text-[9px] bg-[#FF9900]/20 text-[#FF9900] border border-[#FF9900]/30 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
+                                      Leader
+                                    </span>
+                                    <span className="truncate text-xs text-white" title={leader?.name || leader?.email || 'N/A'}>
+                                      {leader?.name || leader?.email?.split('@')[0] || 'N/A'}
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleRoster(t.code)}
+                                    title={isRosterOpen ? 'Collapse Members' : 'Expand Members Dropdown'}
+                                    className="px-2 py-1 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#FF9900]/50 text-[#dbc2ad] hover:text-white font-mono text-[10px] rounded transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                                  >
+                                    <span>👥</span>
+                                    <span>{(t.members || []).length}</span>
+                                    <span className="text-[9px]">{isRosterOpen ? '▲' : '▼'}</span>
+                                  </button>
                                 </div>
-                                <div className="text-[10px] text-[#dbc2ad] mt-1">
-                                  {(t.members || []).length} Members registered:
-                                  <div className="truncate text-white/60">
+
+                                {leader?.regNo && !isRosterOpen && (
+                                  <div className="text-[10px] text-[#00a8e0] font-mono mt-0.5">
+                                    Reg: {leader.regNo}
+                                  </div>
+                                )}
+
+                                {/* Dropdown Menu showing full team roster */}
+                                {isRosterOpen ? (
+                                  <div className="mt-2 p-2.5 bg-black/50 border border-white/15 rounded-lg space-y-2 shadow-xl">
+                                    <div className="text-[9px] text-[#dbc2ad] font-bold uppercase tracking-wider border-b border-white/10 pb-1 flex justify-between items-center">
+                                      <span>Squad Members Dropdown</span>
+                                      <span className="text-white/60">{(t.members || []).length} Total</span>
+                                    </div>
+                                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                      {(t.members || []).map((m, idx) => {
+                                        const query = hackathonSearch.toLowerCase().trim();
+                                        const reg = m.regNo || m.reg_no || '';
+                                        const isMatch = query && (
+                                          reg.toLowerCase().includes(query) ||
+                                          (m.email || '').toLowerCase().includes(query) ||
+                                          (m.name || '').toLowerCase().includes(query)
+                                        );
+                                        return (
+                                          <div
+                                            key={idx}
+                                            className={`p-2 rounded border text-[11px] transition-all ${
+                                              isMatch
+                                                ? 'bg-[#FF9900]/20 border-[#FF9900]/60 text-white shadow-[0_0_10px_rgba(255,153,0,0.25)]'
+                                                : 'bg-white/5 border-white/10 text-white/90'
+                                            }`}
+                                          >
+                                            <div className="flex items-center justify-between gap-1">
+                                              <span className="font-bold truncate text-white" title={m.name || m.email}>
+                                                {m.name || m.email?.split('@')[0]}
+                                              </span>
+                                              {m.isLeader ? (
+                                                <span className="px-1.5 py-0.2 text-[8px] bg-[#FF9900]/20 text-[#FF9900] border border-[#FF9900]/40 rounded font-bold uppercase shrink-0">
+                                                  Leader
+                                                </span>
+                                              ) : (
+                                                <span className="px-1.5 py-0.2 text-[8px] bg-white/10 text-[#dbc2ad] rounded uppercase shrink-0">
+                                                  Member
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="text-[10px] text-[#dbc2ad] truncate mt-0.5" title={m.email}>
+                                              {m.email}
+                                            </div>
+                                            <div className="mt-1 flex items-center justify-between text-[10px]">
+                                              <span className="text-[#dbc2ad]/70">Reg No:</span>
+                                              <span className={`font-mono font-bold px-1.5 py-0.2 rounded text-[10px] ${
+                                                reg
+                                                  ? isMatch
+                                                    ? 'bg-[#FF9900] text-black font-extrabold'
+                                                    : 'bg-[#00a8e0]/20 text-[#00a8e0] border border-[#00a8e0]/40'
+                                                  : 'text-white/30 italic'
+                                              }`}>
+                                                {reg || 'Not provided'}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-[10px] text-[#dbc2ad]/70 mt-1 truncate" title={(t.members || []).map(m => m.name || m.email.split('@')[0]).join(', ')}>
                                     {(t.members || []).map(m => m.name || m.email.split('@')[0]).join(', ')}
                                   </div>
-                                </div>
+                                )}
                               </td>
 
                               {/* Problem Statement */}
@@ -1346,7 +1476,11 @@ function Dashboard({ token, onLogout }) {
                       <div className="text-[11px] text-[#dbc2ad] mt-0.5">{m.email}</div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {m.regNo && <div className="text-[10px] text-white/50">{m.regNo}</div>}
+                      {m.regNo && (
+                        <span className="px-2 py-0.5 bg-[#00a8e0]/15 text-[#00a8e0] border border-[#00a8e0]/30 rounded font-mono text-[10px] font-bold">
+                          Reg: {m.regNo}
+                        </span>
+                      )}
                       {!m.isLeader && (
                         <button
                           type="button"
