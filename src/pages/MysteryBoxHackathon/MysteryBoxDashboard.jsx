@@ -68,11 +68,10 @@ export default function MysteryBoxDashboard() {
 
   // Success message notification state
   const [notification, setNotification] = useState('');
-  const [pptUploading, setPptUploading] = useState(false);
-  const [pptReplacing, setPptReplacing] = useState(false);
-  const [pptSelectedFile, setPptSelectedFile] = useState(null);
-  const [pptLinkInput, setPptLinkInput] = useState('');
-  const [pptError, setPptError] = useState('');
+  const [linkSubmitting, setLinkSubmitting] = useState(false);
+  const [linkReplacing, setLinkReplacing] = useState(false);
+  const [linkInput, setLinkInput] = useState('');
+  const [linkError, setLinkError] = useState('');
 
   const scoredGames = games.filter((game) => SCORED_TEAM_GAMES.includes(game.slug));
   const playedGameSlugs = new Set(gameScores?.playedGameSlugs || []);
@@ -428,48 +427,34 @@ export default function MysteryBoxDashboard() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const handlePresentationFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 25 * 1024 * 1024) {
-      setPptError('File size exceeds 25MB limit. Please select a smaller file or provide a cloud presentation link.');
-      return;
-    }
-    setPptError('');
-    setPptSelectedFile(file);
-  };
-
-  const handlePresentationSubmit = async (e) => {
+  const handleLinkSubmit = async (e) => {
     e?.preventDefault();
-    if (!pptSelectedFile && !pptLinkInput.trim()) {
-      setPptError('Please select a presentation file (.ppt, .pptx, .pdf) or paste a link.');
+    const cleanLink = linkInput.trim();
+    if (!cleanLink) {
+      setLinkError('Please enter a submission link (e.g. Google Drive link).');
       return;
     }
-    setPptUploading(true);
-    setPptError('');
+
+    let finalUrl = cleanLink;
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = 'https://' + finalUrl;
+    }
+
+    setLinkSubmitting(true);
+    setLinkError('');
 
     try {
-      let fileData = null;
-      if (pptSelectedFile) {
-        fileData = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(pptSelectedFile);
-        });
-      }
-
       const token = window.sessionStorage.getItem(HACKATHON_TOKEN_KEY);
       const memberInfo = (team.members || []).find((m) => m.email?.toLowerCase() === myEmail.toLowerCase());
       const uploaderName = memberInfo?.name || '';
       
       const res = await uploadTeamPresentation({
         code: team.code,
-        fileName: pptSelectedFile ? pptSelectedFile.name : 'External Presentation Link',
-        fileSize: pptSelectedFile ? pptSelectedFile.size : null,
-        mimeType: pptSelectedFile ? pptSelectedFile.type : 'link',
-        fileData,
-        link: pptLinkInput.trim() || null,
+        fileName: 'Google Drive / Submission Link',
+        fileSize: null,
+        mimeType: 'link',
+        fileData: null,
+        link: finalUrl,
         uploaderName,
         uploaderEmail: myEmail,
         token,
@@ -478,18 +463,17 @@ export default function MysteryBoxDashboard() {
       if (res.ok) {
         const freshTeam = { ...team, presentation: res.presentation };
         persistTeamLocally(freshTeam);
-        setPptSelectedFile(null);
-        setPptLinkInput('');
-        setPptReplacing(false);
-        setNotification('Presentation uploaded successfully!');
+        setLinkInput('');
+        setLinkReplacing(false);
+        setNotification('Submission link saved successfully!');
         setTimeout(() => setNotification(''), 4000);
       } else {
-        setPptError(res.error || 'Failed to upload presentation');
+        setLinkError(res.error || 'Failed to save link');
       }
     } catch (err) {
-      setPptError(err.message || 'Error processing file upload');
+      setLinkError(err.message || 'Error processing link submission');
     } finally {
-      setPptUploading(false);
+      setLinkSubmitting(false);
     }
   };
 
@@ -807,41 +791,50 @@ export default function MysteryBoxDashboard() {
                     </GiftReveal>
                   </div>
 
-                  {/* WIDGET 3: Team Presentation (PPT) Submission */}
+                  {/* WIDGET 3: Team Submission Link */}
                   <div className="rounded-[24px] border border-primary-container/30 bg-[rgba(255,153,0,0.03)] p-6 shadow-[0_15px_45px_rgba(255,153,0,0.04)] relative overflow-hidden">
                     <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary-container/40 via-[#00a8e0]/30 to-transparent" />
                     
                     <div className="flex justify-between items-center mb-4">
                       <div className="flex items-center gap-2.5">
-                        <span className="text-xl">📊</span>
+                        <span className="text-xl">🔗</span>
                         <div>
                           <p className="text-[10px] uppercase tracking-[0.2em] text-primary-container font-label-sm m-0">Final Deliverable Submission</p>
-                          <h4 className="text-base font-headline-md text-on-surface uppercase tracking-wider m-0">Pitch Deck / PPT</h4>
+                          <h4 className="text-base font-headline-md text-on-surface uppercase tracking-wider m-0">Project / GDrive Link</h4>
                         </div>
                       </div>
                       <span className={`px-2.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider font-label-sm ${
-                        team.presentation ? 'bg-green-500/10 border border-green-500/30 text-green-400' : 'bg-amber-500/10 border border-amber-500/30 text-amber-300'
+                        team.presentation?.link ? 'bg-green-500/10 border border-green-500/30 text-green-400' : 'bg-amber-500/10 border border-amber-500/30 text-amber-300'
                       }`}>
-                        {team.presentation ? '✓ Uploaded' : 'Pending'}
+                        {team.presentation?.link ? '✓ Link Submitted' : 'Pending'}
                       </span>
                     </div>
 
-                    {/* Active Upload Card (if already uploaded and not in edit/replace mode) */}
-                    {team.presentation && !pptReplacing ? (
+                    {/* Active Link Display Card (if already submitted and not in edit mode) */}
+                    {team.presentation?.link && !linkReplacing ? (
                       <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <div className="flex items-start gap-3 min-w-0">
                             <div className="w-12 h-12 rounded-xl bg-primary-container/10 border border-primary-container/30 flex items-center justify-center text-2xl shrink-0">
-                              📊
+                              🔗
                             </div>
-                            <div className="min-w-0">
-                              <h5 className="text-sm font-bold text-white truncate m-0">{team.presentation.fileName}</h5>
-                              <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-on-surface-variant">
-                                {team.presentation.fileSize && (
-                                  <span className="bg-white/5 px-2 py-0.5 rounded font-mono">{formatFileSize(team.presentation.fileSize)}</span>
-                                )}
+                            <div className="min-w-0 flex-1">
+                              <h5 className="text-sm font-bold text-white truncate m-0">
+                                {team.presentation.fileName || 'Google Drive / Submission Link'}
+                              </h5>
+                              <div className="flex items-center gap-1.5 mt-1 text-xs text-[#00a8e0] font-mono truncate">
+                                <a
+                                  href={team.presentation.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[#00a8e0] hover:underline truncate"
+                                >
+                                  {team.presentation.link}
+                                </a>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[11px] text-on-surface-variant">
                                 {team.presentation.uploadedBy && (
-                                  <span>Uploaded by <strong className="text-white">{team.presentation.uploadedBy}</strong></span>
+                                  <span>Submitted by <strong className="text-white">{team.presentation.uploadedBy}</strong></span>
                                 )}
                               </div>
                               {team.presentation.uploadedAt && (
@@ -853,119 +846,82 @@ export default function MysteryBoxDashboard() {
                           </div>
 
                           <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
-                            {team.presentation.hasFile && (
-                              <a
-                                href={`/api/mystery-box/teams/${team.code}/presentation/download`}
-                                download
-                                className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-green-500/15 hover:bg-green-500/25 border border-green-500/40 text-green-300 rounded-xl text-xs font-headline-md font-bold uppercase transition-all cursor-pointer no-underline"
-                              >
-                                <span>⬇️</span> Download PPT
-                              </a>
-                            )}
-                            {team.presentation.link && (
-                              <a
-                                href={team.presentation.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-[#00a8e0]/15 hover:bg-[#00a8e0]/25 border border-[#00a8e0]/40 text-[#00a8e0] rounded-xl text-xs font-headline-md font-bold uppercase transition-all cursor-pointer no-underline"
-                              >
-                                <span>🔗</span> Open Deck
-                              </a>
-                            )}
+                            <a
+                              href={team.presentation.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-[#00a8e0]/15 hover:bg-[#00a8e0]/25 border border-[#00a8e0]/40 text-[#00a8e0] rounded-xl text-xs font-headline-md font-bold uppercase transition-all cursor-pointer no-underline"
+                            >
+                              <span>🔗</span> Open Link
+                            </a>
                             <button
                               type="button"
                               onClick={() => {
-                                setPptReplacing(true);
-                                setPptSelectedFile(null);
-                                setPptLinkInput(team.presentation.link || '');
-                                setPptError('');
+                                setLinkReplacing(true);
+                                setLinkInput(team.presentation.link || '');
+                                setLinkError('');
                               }}
                               className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl text-xs font-headline-md font-bold uppercase transition-all cursor-pointer"
                             >
-                              <span>✏️</span> Edit / Replace
+                              <span>✏️</span> Edit Link
                             </button>
                           </div>
                         </div>
                         <p className="text-[10px] text-on-surface-variant/60 mt-3 mb-0">
-                          💡 Any teammate can edit/replace this presentation anytime. Only the single latest uploaded PPT is kept.
+                          💡 Any teammate can edit/replace this link anytime. Only the single latest submitted link is kept.
                         </p>
                       </div>
                     ) : (
-                      /* Upload / Edit Form */
-                      <form onSubmit={handlePresentationSubmit} className="bg-white/[0.02] border border-white/10 rounded-2xl p-5">
+                      /* Link Input / Edit Form */
+                      <form onSubmit={handleLinkSubmit} className="bg-white/[0.02] border border-white/10 rounded-2xl p-5">
                         <div className="mb-4">
                           <label className="text-[10px] uppercase tracking-wider text-on-surface-variant font-label-sm block mb-2 font-bold">
-                            {pptReplacing ? 'Select Updated Presentation File (.ppt, .pptx, .pdf):' : 'Upload Team Presentation (.ppt, .pptx, .pdf):'}
+                            {linkReplacing ? 'Update Submission Link (Google Drive / Cloud Folder):' : 'Upload Team Submission Link (Google Drive / Cloud Folder):'}
                           </label>
-                          
-                          <div className="border-2 border-dashed border-white/15 hover:border-primary-container/60 transition-colors rounded-xl p-6 text-center bg-white/[0.01]">
+                          <div className="relative">
                             <input
-                              type="file"
-                              id="ppt-file-input"
-                              accept=".ppt,.pptx,.pdf,.odp,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/pdf"
-                              onChange={handlePresentationFileSelect}
-                              className="hidden"
+                              type="url"
+                              value={linkInput}
+                              onChange={(e) => setLinkInput(e.target.value)}
+                              placeholder="https://drive.google.com/drive/folders/... or cloud link"
+                              className="w-full bg-white/5 border border-white/15 rounded-xl px-4 py-3 text-xs sm:text-sm text-white placeholder-white/25 focus:outline-none focus:border-primary-container transition-colors"
+                              required
                             />
-                            <label htmlFor="ppt-file-input" className="cursor-pointer block">
-                              <div className="text-3xl mb-2">📁</div>
-                              {pptSelectedFile ? (
-                                <div>
-                                  <p className="text-sm font-bold text-white m-0 truncate">{pptSelectedFile.name}</p>
-                                  <span className="text-[11px] text-primary-container font-mono">{formatFileSize(pptSelectedFile.size)}</span>
-                                  <p className="text-[10px] text-on-surface-variant mt-1 mb-0 underline">Click to change file</p>
-                                </div>
-                              ) : (
-                                <div>
-                                  <p className="text-xs font-bold text-white m-0">Click to browse or drop your presentation file</p>
-                                  <p className="text-[10px] text-on-surface-variant mt-1 mb-0">Supported formats: .pptx, .ppt, .pdf (Max 25MB)</p>
-                                </div>
-                              )}
-                            </label>
                           </div>
+                          <p className="text-[10px] text-on-surface-variant/70 mt-2 mb-0">
+                            💡 Please make sure your Google Drive folder or link sharing permission is set to <strong>&ldquo;Anyone with the link can view&rdquo;</strong>.
+                          </p>
                         </div>
 
-                        <div className="mb-4">
-                          <label className="text-[10px] uppercase tracking-wider text-on-surface-variant font-label-sm block mb-1.5 font-bold">
-                            Optional: Cloud Presentation Link (Google Slides, Canva, OneDrive)
-                          </label>
-                          <input
-                            type="url"
-                            value={pptLinkInput}
-                            onChange={(e) => setPptLinkInput(e.target.value)}
-                            placeholder="https://docs.google.com/presentation/d/... or Canva link"
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-primary-container"
-                          />
-                        </div>
-
-                        {pptError && (
+                        {linkError && (
                           <div className="mb-4 text-xs text-red-400 bg-red-950/30 border border-red-500/30 p-3 rounded-xl">
-                            {pptError}
+                            {linkError}
                           </div>
                         )}
 
                         <div className="flex items-center gap-3">
                           <button
                             type="submit"
-                            disabled={pptUploading || (!pptSelectedFile && !pptLinkInput.trim())}
+                            disabled={linkSubmitting || !linkInput.trim()}
                             className="bg-primary-container text-black font-headline-md text-xs font-bold uppercase px-6 py-3 rounded-xl border-0 cursor-pointer hover:bg-primary transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(255,153,0,0.3)] flex items-center gap-2"
                           >
-                            {pptUploading ? (
+                            {linkSubmitting ? (
                               <>
                                 <span className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                                <span>Uploading Presentation...</span>
+                                <span>Saving Link...</span>
                               </>
                             ) : (
-                              <span>🚀 {pptReplacing ? 'Save Updated PPT' : 'Submit Presentation'}</span>
+                              <span>🚀 {linkReplacing ? 'Save Updated Link' : 'Submit Link'}</span>
                             )}
                           </button>
 
-                          {pptReplacing && (
+                          {linkReplacing && (
                             <button
                               type="button"
                               onClick={() => {
-                                setPptReplacing(false);
-                                setPptSelectedFile(null);
-                                setPptError('');
+                                setLinkReplacing(false);
+                                setLinkInput('');
+                                setLinkError('');
                               }}
                               className="bg-transparent hover:bg-white/5 border border-white/10 text-on-surface-variant hover:text-white font-headline-md text-xs uppercase px-4 py-3 rounded-xl cursor-pointer transition-all"
                             >
