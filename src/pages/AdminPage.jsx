@@ -42,6 +42,7 @@ const ACTIVITY_TYPE_CONFIG = {
   POINTS_ADJUSTED: { icon: '⚡', label: 'Points Adjusted',bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', text: '#fbbf24' },
   PRESENTATION_UPLOADED: { icon: '🔗', label: 'Link Submitted', bg: 'rgba(52,211,153,0.15)', border: 'rgba(52,211,153,0.4)', text: '#34d399' },
   PRIMARY_BOXES_UNLOCKED: { icon: '🎁', label: 'Boxes Unlocked', bg: 'rgba(168,224,99,0.15)', border: 'rgba(168,224,99,0.4)', text: '#a8e063' },
+  PRIMARY_BOXES_LOCKED: { icon: '🔒', label: 'Boxes Locked', bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.4)', text: '#f87171' },
 };
 
 function fmt(dateStr) {
@@ -340,18 +341,19 @@ function Dashboard({ token, onLogout }) {
   };
 
   // Hackathon Handlers
-  const handleUnlockPrimaryBoxes = async () => {
-    if (primaryBoxesUnlocked) return;
-    if (!window.confirm('Unlock Mystery Boxes for all registered and future teams? This kickoff action cannot be reversed.')) return;
+  const handlePrimaryBoxesToggle = async () => {
+    const nextEnabled = !primaryBoxesUnlocked;
+    const action = nextEnabled ? 'unlock' : 'lock';
+    if (!window.confirm(`${nextEnabled ? 'Unlock' : 'Lock'} Mystery Boxes for all teams?`)) return;
     try {
-      const result = await eventRequest('admin/mystery-box/primary/unlock', { adminToken: token, method: 'POST' });
+      const result = await eventRequest('admin/mystery-box/primary-mode', { adminToken: token, method: 'POST', body: { enabled: nextEnabled } });
       setPrimaryBoxesUnlocked(result.unlocked === true);
       setPrimaryBoxesUnlockedAt(result.unlockedAt || null);
-      notify(result.unchanged ? 'Mystery Boxes were already unlocked.' : 'Mystery Boxes unlocked. Teams can now open their challenges.');
+      notify(result.unchanged ? `Mystery Boxes were already ${action}ed.` : `Mystery Boxes ${action}ed successfully.`);
       loadHackathonData();
       pollActivities();
     } catch (error) {
-      notify(error.message || 'Failed to unlock Mystery Boxes');
+      notify(error.message || `Failed to ${action} Mystery Boxes`);
     }
   };
 
@@ -906,12 +908,11 @@ ${(t.members || []).map((m, idx) => `  ${idx + 1}. ${m.name || 'Member'} (${m.em
               <div className="flex items-center gap-3 flex-wrap w-full md:w-auto">
                 <button
                   type="button"
-                  onClick={handleUnlockPrimaryBoxes}
-                  disabled={primaryBoxesUnlocked}
-                  className={`${primaryBoxesUnlocked ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-[#FF9900]/20 border-[#FF9900]/60 text-[#FF9900] hover:bg-[#FF9900] hover:text-black'} border font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all flex items-center gap-2 disabled:cursor-default`}
-                  title={primaryBoxesUnlockedAt ? `Unlocked ${fmt(primaryBoxesUnlockedAt)}` : 'Allow every verified team member to open their shared Mystery Box'}
+                  onClick={handlePrimaryBoxesToggle}
+                  className={`${primaryBoxesUnlocked ? 'bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500 hover:text-white' : 'bg-[#FF9900]/20 border-[#FF9900]/60 text-[#FF9900] hover:bg-[#FF9900] hover:text-black'} border font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all flex items-center gap-2 cursor-pointer`}
+                  title={primaryBoxesUnlockedAt ? `Unlocked ${fmt(primaryBoxesUnlockedAt)} — click to lock and hide challenges` : 'Allow every verified team member to open their shared Mystery Box'}
                 >
-                  <span>🎁</span> {primaryBoxesUnlocked ? 'Mystery Boxes Unlocked' : 'Unlock Mystery Boxes'}
+                  <span>{primaryBoxesUnlocked ? '🔒' : '🎁'}</span> {primaryBoxesUnlocked ? 'Lock Mystery Boxes' : 'Unlock Mystery Boxes'}
                 </button>
                 <button
                   type="button"

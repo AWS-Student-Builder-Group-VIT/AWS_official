@@ -158,4 +158,8 @@ test('primary reveal access distinguishes organizer wait, member-ready, and reve
     teamSessionSync.getPrimaryRevealAccess({ isOpened: true, primaryBoxesUnlocked: true }),
     { state: 'revealed', canOpen: false },
   );
+  assert.deepEqual(
+    teamSessionSync.getPrimaryRevealAccess({ isOpened: true, primaryBoxesUnlocked: false }),
+    { state: 'waiting-for-admin', canOpen: false },
+  );
 });

@@ -1,12 +1,16 @@
 export function formatHackathonTeam(row, members = row.members || [], options = {}) {
   const includePrivateChaos = options.includePrivateChaos === true;
-  const primaryBoxesUnlockedAt = options.primaryBoxesUnlockedAt ?? row.primary_boxes_unlocked_at ?? null;
+  const includePrivateChallenge = options.includePrivateChallenge === true;
+  const primaryBoxesUnlockedAt = Object.hasOwn(options, 'primaryBoxesUnlockedAt')
+    ? options.primaryBoxesUnlockedAt
+    : row.primary_boxes_unlocked_at ?? null;
+  const primaryBoxesUnlocked = Boolean(primaryBoxesUnlockedAt);
   return {
     code: row.code,
     teamName: row.team_name,
-    mysteryQuestion: row.mystery_question,
+    mysteryQuestion: includePrivateChallenge || (primaryBoxesUnlocked && row.is_opened) ? row.mystery_question : null,
     isOpened: Boolean(row.is_opened),
-    primaryBoxesUnlocked: Boolean(primaryBoxesUnlockedAt),
+    primaryBoxesUnlocked,
     primaryBoxesUnlockedAt,
     points: Number(row.points || 0),
     spinsUsed: Number(row.spins_used || 0),

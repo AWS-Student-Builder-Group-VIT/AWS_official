@@ -123,6 +123,38 @@ test('PostgreSQL reward, chaos and team administration transactions',async t=>{
     const denied=await request('post','/api/mystery-box/teams/:code/reveal',{}, {code:'TEAM02'}, member);
     assert.equal(denied.status,403);
   });
+  await t.test('admin can lock opened boxes, hiding participant challenge data until re-unlock',async()=>{
+    const routeKey='post:/api/admin/mystery-box/primary-mode';
+    assert.equal(routeHandlers.get(routeKey)?.[0],adminMiddleware);
+    const locked=await request('post','/api/admin/mystery-box/primary-mode',{enabled:false});
+    assert.equal(locked.status,200);
+    assert.equal(locked.data.unlocked,false);
+    const openedTeam=await team('REVEAL');
+    assert.equal(openedTeam.is_opened,true);
+    const hidden=formatHackathonTeam(openedTeam,[],{primaryBoxesUnlockedAt:null});
+    assert.equal(hidden.isOpened,true);
+    assert.equal(hidden.primaryBoxesUnlocked,false);
+    assert.equal(hidden.mysteryQuestion,null);
+    await query("UPDATE hackathon_teams SET free_change_cards=1,points=100,has_changed_question=FALSE WHERE code='TEAM01'");
+    const freeSwap=await request('post','/api/mystery-box/teams/:code/free-topic-swap',{requestId:randomUUID(),topicId:challengeIds[1]},{code:'TEAM01'},member);
+    assert.equal(freeSwap.status,409);
+    assert.match(freeSwap.data.error,/locked/i);
+    const paidSwap=await request('post','/api/mystery-box/teams/:code/topic-swap',{topicId:challengeIds[1]},{code:'TEAM01'},member);
+    assert.equal(paidSwap.status,409);
+    assert.match(paidSwap.data.error,/locked/i);
+    const lockLogs=await query("SELECT * FROM hackathon_activity_logs WHERE event_type='PRIMARY_BOXES_LOCKED'");
+    assert.equal(lockLogs.rows.length,1);
+
+    const restored=await request('post','/api/admin/mystery-box/primary-mode',{enabled:true});
+    assert.equal(restored.status,200);
+    assert.equal(restored.data.unlocked,true);
+    assert.ok(restored.data.unlockedAt);
+    assert.deepEqual(
+      formatHackathonTeam(openedTeam,[],{primaryBoxesUnlockedAt:restored.data.unlockedAt}).mysteryQuestion,
+      openedTeam.mystery_question,
+    );
+    await query("UPDATE hackathon_teams SET free_change_cards=0 WHERE code='TEAM01'");
+  });
   await t.test('a team registered after unlock remains sealed until a member opens it',async()=>{
     const late=await query('INSERT INTO hackathon_teams(code,team_name,mystery_question,chaos_event) VALUES($1,$1,$2,$3) RETURNING *',['LATE01',JSON.stringify(snapshot.challenge),JSON.stringify(snapshot.chaosEvent)]);
     await query('INSERT INTO hackathon_team_members(team_id,email,google_sub,is_leader) VALUES($1,$2,$3,TRUE)',[late.rows[0].id,'late@test.local','LATE01']);

@@ -1150,7 +1150,7 @@ app.post('/api/admin/mystery-box/teams/:code/members/remove', adminMiddleware, a
       return { team: updated.rows[0], removedEmail: email };
     });
     void logHackathonActivity(result.team.code, result.team.team_name, 'MEMBER_REMOVED', `${email} removed from squad "${result.team.team_name}" by admin`, { email });
-    res.json({ success: true, team: formatHackathonTeam(result.team, await listHackathonMembers(pool, result.team.id)) });
+    res.json({ success: true, team: formatHackathonTeam(result.team, await listHackathonMembers(pool, result.team.id), { includePrivateChallenge: true }) });
   } catch (error) {
     res.status(error.status || 500).json({ error: error.status ? error.message : 'Failed to remove member' });
   }

@@ -104,11 +104,14 @@ export async function setChaosMode(pool, { enabled, reason, actor }) {
   });
 }
 
-export async function unlockPrimaryBoxes(pool, { actor }) {
+export async function setPrimaryBoxesUnlocked(pool, { enabled, actor }) {
+  if (typeof enabled !== 'boolean') reject('Enabled must be a boolean');
   return transact(pool, async client => {
     const current = await getPrimaryBoxesUnlockState(client, 'FOR UPDATE');
-    if (current.primaryBoxesUnlocked) return { unlocked: true, unlockedAt: current.primaryBoxesUnlockedAt, unchanged: true };
-    const unlockedAt = new Date().toISOString();
+    if (current.primaryBoxesUnlocked === enabled) {
+      return { unlocked: enabled, unlockedAt: current.primaryBoxesUnlockedAt, unchanged: true };
+    }
+    const unlockedAt = enabled ? new Date().toISOString() : null;
     await client.query(
       "UPDATE hackathon_event_settings SET value=$1::jsonb,updated_at=NOW() WHERE key='primary_boxes_unlocked_at'",
       [JSON.stringify(unlockedAt)],
@@ -117,13 +120,17 @@ export async function unlockPrimaryBoxes(pool, { actor }) {
       client,
       {},
       actor,
-      'PRIMARY_BOXES_UNLOCKED',
-      'Organizer unlocked primary Mystery Boxes',
-      { unlocked: false, unlockedAt: null },
-      { unlocked: true, unlockedAt },
+      enabled ? 'PRIMARY_BOXES_UNLOCKED' : 'PRIMARY_BOXES_LOCKED',
+      enabled ? 'Organizer unlocked primary Mystery Boxes' : 'Organizer locked primary Mystery Boxes',
+      current,
+      { primaryBoxesUnlocked: enabled, primaryBoxesUnlockedAt: unlockedAt },
     );
-    return { unlocked: true, unlockedAt, unchanged: false };
+    return { unlocked: enabled, unlockedAt, unchanged: false };
   });
+}
+
+export function unlockPrimaryBoxes(pool, { actor }) {
+  return setPrimaryBoxesUnlocked(pool, { enabled: true, actor });
 }
 
 export function registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddleware }) {
@@ -140,6 +147,7 @@ export function registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddl
   app.post('/api/admin/mystery-box/chaos-mode',adminMiddleware,route(req => setChaosMode(pool,{...req.body,actor:`admin:${req.admin.role}`})));
   app.post('/api/admin/mystery-box/chaos/reveal',adminMiddleware,route(req => setChaosMode(pool,{...req.body,enabled:true,actor:`admin:${req.admin.role}`})));
   app.post('/api/admin/mystery-box/primary/unlock',adminMiddleware,route(req => unlockPrimaryBoxes(pool,{actor:`admin:${req.admin.role}`})));
+  app.post('/api/admin/mystery-box/primary-mode',adminMiddleware,route(req => setPrimaryBoxesUnlocked(pool,{enabled:req.body.enabled,actor:`admin:${req.admin.role}`})));
   app.post('/api/admin/mystery-box/games-mode',adminMiddleware,route(req=>transact(pool,async client=>{
     validateAttemptResetReason(req.body.reason);
     if(typeof req.body.enabled !== 'boolean') reject('Enabled must be a boolean');
@@ -151,6 +159,8 @@ export function registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddl
 
   app.post('/api/mystery-box/teams/:code/free-topic-swap',hackathonAuth,route(req => transact(pool,async client => {
     const id=requestId(req.body.requestId);
+    const primary=await getPrimaryBoxesUnlockState(client,'FOR SHARE');
+    if (!primary.primaryBoxesUnlocked) reject('Challenge changes are locked while Mystery Boxes are locked',409);
     const enabled=await chaosState(client,'FOR SHARE');
     const team=await findAuthorizedTeam(client,req.params.code,req.hackathonUser,{lock:true});
     const previous=await client.query('SELECT topic_id FROM team_card_redemptions WHERE team_id=$1 AND request_id=$2',[team.id,id]);
@@ -219,7 +229,7 @@ export function registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddl
       free_change_cards=$5,spins_used=$6,max_game_attempts=$7,owned_items=$8,mystery_question=$9,chaos_event=$10,members=$11,updated_at=NOW() WHERE id=$12`,
       [team.team_name,team.is_opened,team.is_chaos_resolved,team.has_changed_question,team.free_change_cards,team.spins_used,team.max_game_attempts,JSON.stringify(team.owned_items),JSON.stringify(team.mystery_question),JSON.stringify(team.chaos_event),JSON.stringify(members),team.id]);
     await audit(client,team,`admin:${req.admin.role}`,'ADMIN_TEAM_EDIT',input.reason,before,{...team,members});
-    return {success:true,code:team.code,maxAttempts:team.max_game_attempts,team:formatHackathonTeam(team,members)};
+    return {success:true,code:team.code,maxAttempts:team.max_game_attempts,team:formatHackathonTeam(team,members,{includePrivateChallenge:true})};
   }));
   app.patch('/api/admin/mystery-box/teams/:code',adminMiddleware,editTeam);
   app.post('/api/admin/mystery-box/teams/reassign',adminMiddleware,(req,res)=>{

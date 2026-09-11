@@ -46,6 +46,16 @@ test('team payload exposes the event-wide primary box unlock state', () => {
   assert.equal(unlocked.primaryBoxesUnlockedAt, unlockedAt);
 });
 
+test('an explicit current lock overrides a stale unlock timestamp on the team row', () => {
+  const locked = formatHackathonTeam(
+    { ...row, primary_boxes_unlocked_at: '2026-09-12T08:30:00.000Z' },
+    [],
+    { primaryBoxesUnlockedAt: null },
+  );
+  assert.equal(locked.primaryBoxesUnlocked, false);
+  assert.equal(locked.mysteryQuestion, null);
+});
+
 test('returning-team lookup uses verified Google identity and backfills legacy email membership', async () => {
   assert.equal(typeof hackathonTeam.findReturningHackathonTeamRows, 'function');
 
