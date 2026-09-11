@@ -14,5 +14,12 @@ export function calculateStats({ correctCharacters, incorrectCharacters, elapsed
   const accuracy = correctCharacters + incorrectCharacters === 0 ? 100 : Math.round((correctCharacters / (correctCharacters + incorrectCharacters)) * 1000) / 10;
   return { wpm, accuracy, score: Math.round(wpm * (accuracy / 100) * 10) / 10 };
 }
+export function getHackTypeCompletion(results = []) {
+  const bestScore = results.reduce((best, result) => {
+    const score = Number(result?.score);
+    return Number.isFinite(score) ? Math.max(best, score) : best;
+  }, 0);
+  return { score: bestScore };
+}
 export function createAttempt(attempt = 1) { return { version: 1, attempt, results: [], completed: false }; }
 export function restoreState(raw) { try { const state = JSON.parse(raw); return state?.version === 1 && state.attempt >= 1 && state.attempt <= TOTAL_ATTEMPTS ? state : createAttempt(); } catch { return createAttempt(); } }

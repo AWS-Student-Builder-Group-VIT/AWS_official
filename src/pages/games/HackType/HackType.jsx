@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   calculateStats,
   GAME_TIME_MS,
+  getHackTypeCompletion,
   restoreState,
   STORAGE_KEY,
   TOTAL_ATTEMPTS,
@@ -9,11 +10,12 @@ import {
 } from './hackTypeCore.js';
 import './hackType.css';
 
-export default function HackType({ onExit }) {
+export default function HackType({ onExit, onComplete }) {
   const [screen, setScreen] = useState('landing');
   const [save, setSave] = useState(() => restoreState(localStorage.getItem(STORAGE_KEY)));
   const [run, setRun] = useState(null);
   const saveRef = useRef(save);
+  const completionReportedRef = useRef(false);
   const raf = useRef();
   const runStartedAt = run?.started;
 
@@ -55,6 +57,10 @@ export default function HackType({ onExit }) {
           setSave(next);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
           setScreen(next.completed ? 'complete' : 'result');
+          if (next.completed && !completionReportedRef.current) {
+            completionReportedRef.current = true;
+            void onComplete?.(getHackTypeCompletion(next.results));
+          }
           return null;
         }
 
@@ -77,7 +83,7 @@ export default function HackType({ onExit }) {
 
     raf.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf.current);
-  }, [screen, runStartedAt]);
+  }, [screen, runStartedAt, onComplete]);
 
   const type = (value) => {
     setRun((current) => {

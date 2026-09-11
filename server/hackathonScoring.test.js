@@ -26,7 +26,12 @@ test('accepts only official results for a scored game', () => {
     completed: true,
     rawScore: 1200,
   });
-  assert.throws(() => validateGameCompletion('gunshot-roulette', {}), /not scored/i);
+  assert.deepEqual(validateGameCompletion('gunshot-roulette', { official: true, completed: true, rawScore: 100 }), {
+    official: true,
+    completed: true,
+    rawScore: 100,
+  });
+  assert.throws(() => validateGameCompletion('detective-crime', { official: true }), /not scored/i);
   assert.throws(() => validateGameCompletion('pacman', { official: false }), /official/i);
 });
 
@@ -71,7 +76,9 @@ test('a removed game no longer consumes an official team slot', () => {
   const usage = summarizeTeamGameUsage({
     attempts: [
       { game_slug: 'crack-the-code', status: 'completed', slot_number: 1 },
-      { game_slug: 'wordle', status: 'completed', slot_number: 2 },
+      { game_slug: 'detective-crime', status: 'completed', slot_number: 2 },
+      { game_slug: 'watergirl-fireboy', status: 'completed', slot_number: 3 },
+      { game_slug: 'wordle', status: 'completed', slot_number: 4 },
     ],
     maxAttempts: 5,
   });

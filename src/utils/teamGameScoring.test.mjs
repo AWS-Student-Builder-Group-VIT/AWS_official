@@ -14,7 +14,7 @@ const memoryStorage = () => {
 };
 
 test('normalizes score games into the server contract', () => {
-  for (const game of ['pacman','mario-kart','asteroid-command','snake','flappy-bird','fruit-ninja']) {
+  for (const game of ['pacman','mario-kart','asteroid-command','snake','flappy-bird','fruit-ninja','gunshot-roulette','hack-type']) {
     assert.deepEqual(normalizeGameCompletion(game, { score: 123 }), { official: true, completed: true, rawScore: 123 });
   }
 });
@@ -22,16 +22,16 @@ test('normalizes score games into the server contract', () => {
 test('normalizes achievement and completion games', () => {
   assert.deepEqual(normalizeGameCompletion('wordle', { solved: true }), { official: true, solved: true });
   assert.equal(normalizeGameCompletion('crack-the-code', { solved: true }), null);
-  assert.deepEqual(normalizeGameCompletion('detective-crime', { solved: true }), { official: true, solved: true });
   assert.deepEqual(normalizeGameCompletion('level-devil', { completedLevels: 4 }), { official: true, completedLevels: 4 });
   assert.deepEqual(normalizeGameCompletion('morse', { correctCount: 3 }), { official: true, correctCount: 3 });
-  assert.deepEqual(normalizeGameCompletion('watergirl-fireboy', { highestLevel: 4, totalDeaths: 1 }), { official: true, highestLevel: 4, totalDeaths: 1 });
+  assert.equal(normalizeGameCompletion('detective-crime', { solved: true }), null);
+  assert.equal(normalizeGameCompletion('watergirl-fireboy', { highestLevel: 4, totalDeaths: 1 }), null);
 });
 
 test('practice results and unscored games cannot produce a submission', () => {
   assert.equal(normalizeGameCompletion('wordle', { official: false, solved: true }), null);
-  assert.equal(normalizeGameCompletion('gunshot-roulette', { score: 100 }), null);
-  assert.equal(normalizeGameCompletion('hack-type', { score: 100 }), null);
+  assert.deepEqual(normalizeGameCompletion('gunshot-roulette', { score: 100 }), { official: true, completed: true, rawScore: 100 });
+  assert.deepEqual(normalizeGameCompletion('hack-type', { score: 100 }), { official: true, completed: true, rawScore: 100 });
   assert.equal(SCORED_TEAM_GAMES.length, 11);
 });
 
