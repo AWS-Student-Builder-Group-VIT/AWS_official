@@ -491,4 +491,51 @@ export function getPresentationDownloadUrl(teamCode) {
   return `${API_URL}/api/mystery-box/teams/${teamCode}/presentation/download`;
 }
 
+/** Fetch global hackathon settings (e.g. freeze state) */
+export async function fetchMysterySettings() {
+  try {
+    const res = await fetch(`${API_URL}/api/mystery-box/settings`);
+    if (!res.ok) return { submissionsFrozen: false };
+    return await res.json();
+  } catch {
+    return { submissionsFrozen: false };
+  }
+}
+
+/** Toggle submissions freeze state (admin) */
+export async function toggleAdminSubmissionsFreeze(adminToken, frozen) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/mystery-box/submissions-freeze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({ frozen }),
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, submissionsFrozen: data.submissionsFrozen } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
+
+/** Update team board score reviews (admin) */
+export async function updateAdminTeamBoardScores(adminToken, teamCode, boardScores) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/mystery-box/teams/${teamCode}/board-scores`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({ boardScores }),
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, boardScores: data.boardScores, totalBoardScore: data.totalBoardScore } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
+
 

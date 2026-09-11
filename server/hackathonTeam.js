@@ -17,6 +17,7 @@ export function formatHackathonTeam(row, members = row.members || [], { includeP
     hasChangedQuestion: Boolean(row.has_changed_question),
     maxGameAttempts: row.max_game_attempts ?? 5,
     presentation: row.presentation || null,
+    boardScores: row.board_scores || [],
     registeredAt: new Date(row.created_at).getTime(),
     updatedAt: new Date(row.updated_at).getTime(),
   };

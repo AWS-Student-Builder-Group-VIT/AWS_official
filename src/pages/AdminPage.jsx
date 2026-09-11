@@ -19,6 +19,9 @@ import {
   reassignAdminTeamTopic,
   deleteAdminHackathonTeam,
   removeAdminHackathonMember,
+  fetchMysterySettings,
+  toggleAdminSubmissionsFreeze,
+  updateAdminTeamBoardScores,
 } from '../utils/auth';
 
 const QUIZ_TYPE_COLOR = {
@@ -193,6 +196,10 @@ function Dashboard({ token, onLogout }) {
   const [gameResetReason, setGameResetReason] = useState('');
 
   const [notification, setNotification] = useState('');
+  const [submissionsFrozen, setSubmissionsFrozen] = useState(false);
+  const [boardScoreDrafts, setBoardScoreDrafts] = useState({});
+  const [expandedBoardScoreTeams, setExpandedBoardScoreTeams] = useState({});
+  const [editingSectionIds, setEditingSectionIds] = useState({});
 
   const notify = (msg) => {
     setNotification(msg);
@@ -248,8 +255,16 @@ function Dashboard({ token, onLogout }) {
   };
 
   const loadHackathonData = async () => {
-    const [teams, mode, catalog] = await Promise.all([fetchAdminHackathonTeams(token), fetchAdminGameMode(token), fetchAdminChallenges(token)]);
+    const [teams, mode, catalog, settings] = await Promise.all([
+      fetchAdminHackathonTeams(token),
+      fetchAdminGameMode(token),
+      fetchAdminChallenges(token),
+      fetchMysterySettings(),
+    ]);
     setHackathonTeams(teams);
+    if (settings) {
+      setSubmissionsFrozen(Boolean(settings.submissionsFrozen));
+    }
     setInspectTeam(current => current ? teams.find(t => t.code === current.code) || null : null);
     if (mode.ok) setGameModeEnabled(mode.enabled);
     if (catalog.ok) {
@@ -462,42 +477,136 @@ function Dashboard({ token, onLogout }) {
     }
   };
 
-  const exportHackathonCsv = () => {
-    if (!hackathonTeams || hackathonTeams.length === 0) {
-      alert('No hackathon teams to export.');
-      return;
+  const handleToggleSubmissionsFreeze = async () => {
+    const nextState = !submissionsFrozen;
+    const res = await toggleAdminSubmissionsFreeze(token, nextState);
+    if (res.ok) {
+      setSubmissionsFrozen(nextState);
+      notify(nextState ? 'Submissions are now FROZEN globally. Participants cannot edit links.' : 'Submissions are now UNFROZEN globally.');
+      pollActivities();
+    } else {
+      notify(res.error || 'Failed to update submissions freeze state');
     }
-    const headers = ['Team Code', 'Team Name', 'Points', 'Track', 'Question Title', 'Topic Changed', 'Chaos Active', 'Members Count', 'Leader Email', 'Leader RegNo', 'All Members (Email & RegNo)', 'Registered Date'];
-    const rows = hackathonTeams.map(t => {
-      const q = typeof t.mysteryQuestion === 'object' ? t.mysteryQuestion : {};
-      const leader = (t.members || []).find(m => m.isLeader);
-      const leaderEmail = leader?.email || '';
-      const leaderReg = leader?.regNo || leader?.reg_no || '';
-      const allMembers = (t.members || []).map(m => `${m.email}${m.regNo || m.reg_no ? ` [${m.regNo || m.reg_no}]` : ''}`).join('; ');
-      return [
-        `"${t.code}"`,
-        `"${(t.teamName || '').replace(/"/g, '""')}"`,
-        t.points || 0,
-        `"${q.track || 'Unassigned'}"`,
-        `"${(q.title || 'Sealed').replace(/"/g, '""')}"`,
-        t.hasChangedQuestion ? 'YES' : 'NO',
-        t.isChaosOpened ? (t.isChaosResolved ? 'RESOLVED' : 'ACTIVE') : 'NO',
-        (t.members || []).length,
-        `"${leaderEmail}"`,
-        `"${leaderReg}"`,
-        `"${allMembers}"`,
-        `"${fmt(t.registeredAt)}"`
-      ];
-    });
+  };
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Mystery_Box_Hackathon_Teams_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const getEffectiveBoardScores = (t) => {
+    if (boardScoreDrafts[t.code] !== undefined) {
+      return boardScoreDrafts[t.code];
+    }
+    return Array.isArray(t.boardScores) ? t.boardScores : [];
+  };
+
+  const calculateTotalBoardScore = (scores) => {
+    if (!Array.isArray(scores)) return 0;
+    return scores.reduce((sum, item) => {
+      const raw = item?.marks !== undefined && item?.marks !== '' ? item.marks : item?.score;
+      const val = parseFloat(raw);
+      return sum + (isNaN(val) ? 0 : val);
+    }, 0);
+  };
+
+  const toggleBoardScoreExpanded = (teamCode) => {
+    setExpandedBoardScoreTeams(prev => ({
+      ...prev,
+      [teamCode]: !prev[teamCode]
+    }));
+  };
+
+  const handleAddReviewSection = (team) => {
+    const currentScores = getEffectiveBoardScores(team);
+    const newId = `sec_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const newSection = {
+      id: newId,
+      title: '',
+      marks: ''
+    };
+    setBoardScoreDrafts(prev => ({
+      ...prev,
+      [team.code]: [...currentScores, newSection]
+    }));
+    setExpandedBoardScoreTeams(prev => ({
+      ...prev,
+      [team.code]: true
+    }));
+    setEditingSectionIds(prev => ({
+      ...prev,
+      [newId]: true
+    }));
+  };
+
+  const handleStartEditSection = (team, section) => {
+    if (boardScoreDrafts[team.code] === undefined) {
+      setBoardScoreDrafts(prev => ({
+        ...prev,
+        [team.code]: Array.isArray(team.boardScores) ? [...team.boardScores] : []
+      }));
+    }
+    setExpandedBoardScoreTeams(prev => ({
+      ...prev,
+      [team.code]: true
+    }));
+    setEditingSectionIds(prev => ({
+      ...prev,
+      [section.id]: true
+    }));
+  };
+
+  const handleUpdateReviewField = (teamCode, index, field, value) => {
+    setBoardScoreDrafts(prev => {
+      const current = prev[teamCode] ? [...prev[teamCode]] : [...(hackathonTeams.find(t => t.code === teamCode)?.boardScores || [])];
+      if (!current[index]) {
+        current[index] = { id: `sec_${Date.now()}_${index}`, title: '', marks: '' };
+      }
+      current[index] = { ...current[index], [field]: value };
+      return { ...prev, [teamCode]: current };
+    });
+  };
+
+  const handleDeleteReviewSection = (teamCode, index) => {
+    setBoardScoreDrafts(prev => {
+      const current = prev[teamCode] ? [...prev[teamCode]] : [...(hackathonTeams.find(t => t.code === teamCode)?.boardScores || [])];
+      const next = current.filter((_, i) => i !== index);
+      return { ...prev, [teamCode]: next };
+    });
+  };
+
+  const handleSaveBoardScore = async (teamCode) => {
+    const draft = boardScoreDrafts[teamCode];
+    const team = hackathonTeams.find(t => t.code === teamCode);
+    const scoresToSave = draft !== undefined ? draft : (team?.boardScores || []);
+
+    const cleaned = scoresToSave
+      .filter(s => (s.title && String(s.title).trim()) || (s.marks !== '' && s.marks !== null && !isNaN(Number(s.marks))) || (s.score !== '' && s.score !== null && !isNaN(Number(s.score))))
+      .map((s, idx) => {
+        const raw = s.marks !== undefined && s.marks !== '' ? s.marks : s.score;
+        const num = raw === '' || raw === null || raw === undefined || isNaN(Number(raw)) ? 0 : Number(raw);
+        return {
+          id: s.id || `sec_${Date.now()}_${idx}`,
+          title: (String(s.title || `Review ${idx + 1}`)).trim(),
+          marks: num,
+          score: num
+        };
+      });
+
+    const res = await updateAdminTeamBoardScores(token, teamCode, cleaned);
+    if (res.ok) {
+      const total = calculateTotalBoardScore(cleaned);
+      notify(`Board scores saved for Squad #${teamCode} (Total: ${total} pts)`);
+      setHackathonTeams(prev => prev.map(t => t.code === teamCode ? { ...t, boardScores: cleaned } : t));
+      setBoardScoreDrafts(prev => {
+        const next = { ...prev };
+        delete next[teamCode];
+        return next;
+      });
+      setEditingSectionIds(prev => {
+        const next = { ...prev };
+        cleaned.forEach(s => { delete next[s.id]; });
+        return next;
+      });
+      pollActivities();
+    } else {
+      notify(res.error || 'Failed to save board scores');
+    }
   };
 
   const downloadSingleTeamLink = (t) => {
@@ -782,17 +891,22 @@ ${(t.members || []).map((m, idx) => `  ${idx + 1}. ${m.name || 'Member'} (${m.em
                 <button
                   type="button"
                   onClick={() => handleTriggerChaos(false)}
-                  
                   className="bg-red-500/20 border border-red-500/50 hover:bg-red-500 hover:text-white text-red-300 font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span>🌪️</span> {chaosEnabled ? 'Disable Chaos Mode' : 'Enable Chaos Mode'}
                 </button>
                 <button
                   type="button"
-                  onClick={exportHackathonCsv}
-                  className="bg-white/5 border border-white/10 hover:border-[#a8e063] hover:text-[#a8e063] text-white font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all cursor-pointer flex items-center gap-2"
+                  onClick={handleToggleSubmissionsFreeze}
+                  className={`${
+                    submissionsFrozen
+                      ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 hover:bg-amber-500 hover:text-black shadow-[0_0_12px_rgba(245,158,11,0.25)]'
+                      : 'bg-white/5 border-white/10 hover:border-amber-400/50 hover:text-amber-300 text-white'
+                  } border font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all cursor-pointer flex items-center gap-2`}
+                  title={submissionsFrozen ? 'Submissions currently locked for all teams. Click to unfreeze.' : 'Submissions are open. Click to freeze drive links for all teams.'}
                 >
-                  <span>📥</span> Export Teams CSV
+                  <span>{submissionsFrozen ? '🔒' : '🔓'}</span>
+                  <span>{submissionsFrozen ? 'Unfreeze Submissions' : 'Freeze Submissions'}</span>
                 </button>
                 <button
                   type="button"
@@ -956,6 +1070,7 @@ ${(t.members || []).map((m, idx) => `  ${idx + 1}. ${m.name || 'Member'} (${m.em
                           <th className="py-3.5 px-4 min-w-[260px]">Roster (Members Dropdown)</th>
                           <th className="py-3.5 px-4">Active Problem Statement</th>
                           <th className="py-3.5 px-4 text-center">Score / Buffs</th>
+                          <th className="py-3.5 px-4 min-w-[280px]">Board Score (Review)</th>
                           <th className="py-3.5 px-4 text-center">Chaos Mode</th>
                           <th className="py-3.5 px-4 text-right">Admin Operations</th>
                         </tr>
@@ -1130,6 +1245,185 @@ ${(t.members || []).map((m, idx) => `  ${idx + 1}. ${m.name || 'Member'} (${m.em
                                     Buffs: {t.ownedItems.join(', ')}
                                   </div>
                                 )}
+                              </td>
+
+                              {/* Board Score Column (Google Colab style review blocks) */}
+                              <td className="py-3.5 px-4 align-top min-w-[280px] max-w-[360px]">
+                                {(() => {
+                                  const effectiveScores = getEffectiveBoardScores(t);
+                                  const totalScore = calculateTotalBoardScore(effectiveScores);
+                                  const isExpanded = Boolean(expandedBoardScoreTeams[t.code]);
+                                  const hasDraft = boardScoreDrafts[t.code] !== undefined;
+
+                                  return (
+                                    <div className="space-y-2">
+                                      {/* Header Bar */}
+                                      <div className="flex items-center justify-between gap-2 bg-white/5 border border-white/10 px-2.5 py-1.5 rounded-lg">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-sm">⭐</span>
+                                          <span className="text-xs font-bold text-amber-400 font-mono">{totalScore} pts</span>
+                                          <span className="text-[10px] text-white/50">({effectiveScores.length} reviews)</span>
+                                          {hasDraft && (
+                                            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" title="Unsaved changes" />
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleAddReviewSection(t)}
+                                            title="Add new review section (Google Colab style)"
+                                            className="px-2 py-0.5 bg-[#FF9900]/20 hover:bg-[#FF9900] text-[#FF9900] hover:text-black border border-[#FF9900]/40 rounded font-bold text-[10px] font-mono transition-all cursor-pointer flex items-center gap-1"
+                                          >
+                                            <span>+</span>
+                                            <span>Section</span>
+                                          </button>
+                                          {effectiveScores.length > 0 && (
+                                            <button
+                                              type="button"
+                                              onClick={() => toggleBoardScoreExpanded(t.code)}
+                                              title={isExpanded ? 'Collapse sections' : 'Expand sections'}
+                                              className="px-1.5 py-0.5 bg-white/5 hover:bg-white/15 border border-white/10 text-white/70 hover:text-white rounded text-[10px] font-mono transition-all cursor-pointer"
+                                            >
+                                              {isExpanded ? '▲' : '▼'}
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Expanded Review Blocks (Colab style) */}
+                                      {isExpanded && (
+                                        <div className="space-y-2 pt-1">
+                                          {effectiveScores.length === 0 ? (
+                                            <div className="text-[11px] text-[#dbc2ad]/60 italic p-2 bg-black/30 border border-dashed border-white/10 rounded text-center">
+                                              No review sections yet. Click &quot;+ Section&quot; above to add one.
+                                            </div>
+                                          ) : (
+                                            effectiveScores.map((sec, idx) => {
+                                              const isEditing = Boolean(editingSectionIds[sec.id] || (sec.title === '' && (sec.marks === '' || sec.marks === undefined)));
+                                              const sectionMarks = sec.marks !== undefined && sec.marks !== '' ? sec.marks : (sec.score !== undefined ? sec.score : 0);
+
+                                              return (
+                                                <div
+                                                  key={sec.id || idx}
+                                                  className="p-2 bg-black/40 border border-white/15 rounded-lg space-y-1.5 shadow-sm relative group hover:border-[#FF9900]/40 transition-colors"
+                                                >
+                                                  {isEditing ? (
+                                                    <div className="flex items-center gap-1.5">
+                                                      <span className="text-[9px] font-mono font-bold text-[#FF9900] px-1 bg-[#FF9900]/10 border border-[#FF9900]/20 rounded shrink-0">
+                                                        #{idx + 1}
+                                                      </span>
+                                                      <input
+                                                        type="text"
+                                                        value={sec.title || ''}
+                                                        onChange={e => handleUpdateReviewField(t.code, idx, 'title', e.target.value)}
+                                                        onKeyDown={e => {
+                                                          if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            handleSaveBoardScore(t.code);
+                                                          }
+                                                        }}
+                                                        placeholder="Section Title (e.g. Review 1, Idea...)"
+                                                        className="flex-1 min-w-0 bg-white/5 border border-white/10 px-2 py-1 text-xs text-white font-mono rounded focus:outline-none focus:border-[#FF9900] placeholder-white/30"
+                                                        autoFocus={Boolean(editingSectionIds[sec.id])}
+                                                      />
+                                                      <div className="flex items-center gap-1 w-20 shrink-0">
+                                                        <input
+                                                          type="number"
+                                                          step="any"
+                                                          value={sec.marks !== undefined ? sec.marks : (sec.score !== undefined ? sec.score : '')}
+                                                          onChange={e => handleUpdateReviewField(t.code, idx, 'marks', e.target.value)}
+                                                          onKeyDown={e => {
+                                                            if (e.key === 'Enter') {
+                                                              e.preventDefault();
+                                                              handleSaveBoardScore(t.code);
+                                                            }
+                                                          }}
+                                                          placeholder="Marks"
+                                                          className="w-full bg-white/5 border border-white/10 px-2 py-1 text-xs text-amber-300 font-mono font-bold rounded focus:outline-none focus:border-[#FF9900] text-right placeholder-white/30"
+                                                        />
+                                                      </div>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleSaveBoardScore(t.code)}
+                                                        title="Save section score"
+                                                        className="px-1.5 py-1 bg-green-500/20 hover:bg-green-500 text-green-300 hover:text-black border border-green-500/40 rounded text-[10px] font-bold font-mono transition-colors cursor-pointer shrink-0"
+                                                      >
+                                                        ✓
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteReviewSection(t.code, idx)}
+                                                        title="Delete section"
+                                                        className="p-1 text-white/40 hover:text-red-400 bg-transparent border-0 cursor-pointer transition-colors shrink-0"
+                                                      >
+                                                        ✕
+                                                      </button>
+                                                    </div>
+                                                  ) : (
+                                                    <div className="flex items-center justify-between gap-1.5">
+                                                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                                        <span className="text-[9px] font-mono font-bold text-[#FF9900] px-1 bg-[#FF9900]/10 border border-[#FF9900]/20 rounded shrink-0">
+                                                          #{idx + 1}
+                                                        </span>
+                                                        <span className="text-xs text-white font-mono font-bold truncate" title={sec.title}>
+                                                          {sec.title || `Review ${idx + 1}`}
+                                                        </span>
+                                                      </div>
+                                                      <div className="flex items-center gap-1.5 shrink-0">
+                                                        <span className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-xs font-bold rounded">
+                                                          {sectionMarks} pts
+                                                        </span>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleStartEditSection(t, sec)}
+                                                          title="Edit Section Title or Marks"
+                                                          className="px-1.5 py-0.5 bg-white/5 hover:bg-[#00a8e0] hover:text-white border border-white/10 text-[#00a8e0] rounded text-[10px] font-mono transition-all cursor-pointer flex items-center gap-0.5"
+                                                        >
+                                                          <span>✏️</span>
+                                                          <span>Edit</span>
+                                                        </button>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                            handleDeleteReviewSection(t.code, idx);
+                                                            handleSaveBoardScore(t.code);
+                                                          }}
+                                                          title="Delete section"
+                                                          className="p-1 text-white/40 hover:text-red-400 bg-transparent border-0 cursor-pointer transition-colors"
+                                                        >
+                                                          ✕
+                                                        </button>
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              );
+                                            })
+                                          )}
+
+                                          {/* Section Action Row */}
+                                          <div className="flex items-center justify-between gap-2 pt-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleAddReviewSection(t)}
+                                              className="text-[10px] text-[#00a8e0] hover:text-[#38bdf8] flex items-center gap-1 bg-transparent border-0 cursor-pointer p-0 font-mono"
+                                            >
+                                              <span>+ Add another section</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleSaveBoardScore(t.code)}
+                                              className="px-2.5 py-1 bg-green-500/20 hover:bg-green-500 text-green-300 hover:text-black border border-green-500/40 rounded font-bold text-[10px] font-mono transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                                            >
+                                              <span>💾</span>
+                                              <span>Save (↵ Enter)</span>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                               </td>
 
                               {/* Chaos Status */}
@@ -1687,6 +1981,40 @@ ${(t.members || []).map((m, idx) => `  ${idx + 1}. ${m.name || 'Member'} (${m.em
               ) : (
                 <div className="text-xs text-[#dbc2ad]/60 italic py-1">
                   This squad has not submitted a project / Google Drive link yet.
+                </div>
+              )}
+            </div>
+
+            {/* Board Score Breakdown */}
+            <div className="mb-6 p-4 rounded-xl border border-white/10 bg-white/[0.02]">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <span>⭐</span> Official Board Score Breakdown
+                </div>
+                <span className="px-2.5 py-0.5 rounded text-xs font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
+                  Total: {calculateTotalBoardScore(getEffectiveBoardScores(inspectTeam))} pts
+                </span>
+              </div>
+
+              {getEffectiveBoardScores(inspectTeam).length > 0 ? (
+                <div className="space-y-2">
+                  {getEffectiveBoardScores(inspectTeam).map((sec, idx) => (
+                    <div key={sec.id || idx} className="flex items-center justify-between p-2.5 bg-white/5 border border-white/10 rounded-lg text-xs font-mono">
+                      <div className="flex items-center gap-2">
+                        <span className="px-1.5 py-0.5 bg-[#FF9900]/20 text-[#FF9900] border border-[#FF9900]/30 rounded text-[10px] font-bold">
+                          #{idx + 1}
+                        </span>
+                        <span className="text-white font-bold">{sec.title || `Review ${idx + 1}`}</span>
+                      </div>
+                      <span className="text-amber-300 font-bold text-sm">
+                        {sec.marks !== undefined && sec.marks !== '' ? sec.marks : (sec.score || 0)} pts
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-[#dbc2ad]/60 italic py-1">
+                  No board review sections recorded yet for this squad. Add sections in the Squads Directory table.
                 </div>
               )}
             </div>
