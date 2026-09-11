@@ -495,10 +495,10 @@ export function getPresentationDownloadUrl(teamCode) {
 export async function fetchMysterySettings() {
   try {
     const res = await fetch(`${API_URL}/api/mystery-box/settings`);
-    if (!res.ok) return { submissionsFrozen: false };
+    if (!res.ok) return { submissionsFrozen: false, primaryBoxesUnlocked: false, primaryBoxesUnlockedAt: null };
     return await res.json();
   } catch {
-    return { submissionsFrozen: false };
+    return { submissionsFrozen: false, primaryBoxesUnlocked: false, primaryBoxesUnlockedAt: null };
   }
 }
 

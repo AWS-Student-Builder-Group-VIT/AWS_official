@@ -35,6 +35,17 @@ test('admin formatting can explicitly inspect a sealed twist', () => {
   assert.deepEqual(formatHackathonTeam(row, [], { includePrivateChaos: true }).chaosEvent, row.chaos_event);
 });
 
+test('team payload exposes the event-wide primary box unlock state', () => {
+  const locked = formatHackathonTeam(row, [], { primaryBoxesUnlockedAt: null });
+  assert.equal(locked.primaryBoxesUnlocked, false);
+  assert.equal(locked.primaryBoxesUnlockedAt, null);
+
+  const unlockedAt = '2026-09-12T08:30:00.000Z';
+  const unlocked = formatHackathonTeam(row, [], { primaryBoxesUnlockedAt: unlockedAt });
+  assert.equal(unlocked.primaryBoxesUnlocked, true);
+  assert.equal(unlocked.primaryBoxesUnlockedAt, unlockedAt);
+});
+
 test('returning-team lookup uses verified Google identity and backfills legacy email membership', async () => {
   assert.equal(typeof hackathonTeam.findReturningHackathonTeamRows, 'function');
 
@@ -129,6 +140,7 @@ test('session payload returns every server-authorized team with the renewed toke
 
   const session = await hackathonTeam.createReturningHackathonSession(db, user, {
     signToken: (claims) => `signed:${claims.sub}`,
+    primaryBoxesUnlockedAt: '2026-09-12T08:30:00.000Z',
   });
 
   assert.equal(session.token, 'signed:google-sub-123');
@@ -137,4 +149,5 @@ test('session payload returns every server-authorized team with the renewed toke
   assert.equal(session.teams[0].code, 'ABC123');
   assert.equal(session.teams[0].chaosEvent, null);
   assert.equal(session.teams[0].members[0].email, 'member@example.com');
+  assert.equal(session.teams[0].primaryBoxesUnlocked, true);
 });

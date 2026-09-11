@@ -28,6 +28,12 @@ async function chaosState(client, lock = '') {
   return result.rows[0]?.value === true;
 }
 
+export async function getPrimaryBoxesUnlockState(client, lock = '') {
+  const result = await client.query(`SELECT value FROM hackathon_event_settings WHERE key='primary_boxes_unlocked_at' ${lock}`);
+  const unlockedAt = typeof result.rows[0]?.value === 'string' ? result.rows[0].value : null;
+  return { primaryBoxesUnlocked: Boolean(unlockedAt), primaryBoxesUnlockedAt: unlockedAt };
+}
+
 export async function initializeEventRewards(pool) {
   await pool.query(`
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS spins_used INTEGER NOT NULL DEFAULT 0 CHECK(spins_used BETWEEN 0 AND 5);
@@ -49,6 +55,7 @@ export async function initializeEventRewards(pool) {
       FROM hackathon_event_settings WHERE key='chaos_mode_revealed_at'
       ON CONFLICT(key) DO NOTHING;
     INSERT INTO hackathon_event_settings(key,value) VALUES('chaos_version','1'::jsonb) ON CONFLICT(key) DO NOTHING;
+    INSERT INTO hackathon_event_settings(key,value) VALUES('primary_boxes_unlocked_at','null'::jsonb) ON CONFLICT(key) DO NOTHING;
     UPDATE hackathon_teams SET chaos_version=1 WHERE is_chaos_opened=TRUE AND chaos_version=0;
   `);
 }
@@ -97,6 +104,28 @@ export async function setChaosMode(pool, { enabled, reason, actor }) {
   });
 }
 
+export async function unlockPrimaryBoxes(pool, { actor }) {
+  return transact(pool, async client => {
+    const current = await getPrimaryBoxesUnlockState(client, 'FOR UPDATE');
+    if (current.primaryBoxesUnlocked) return { unlocked: true, unlockedAt: current.primaryBoxesUnlockedAt, unchanged: true };
+    const unlockedAt = new Date().toISOString();
+    await client.query(
+      "UPDATE hackathon_event_settings SET value=$1::jsonb,updated_at=NOW() WHERE key='primary_boxes_unlocked_at'",
+      [JSON.stringify(unlockedAt)],
+    );
+    await audit(
+      client,
+      {},
+      actor,
+      'PRIMARY_BOXES_UNLOCKED',
+      'Organizer unlocked primary Mystery Boxes',
+      { unlocked: false, unlockedAt: null },
+      { unlocked: true, unlockedAt },
+    );
+    return { unlocked: true, unlockedAt, unchanged: false };
+  });
+}
+
 export function registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddleware }) {
   const route = fn => async (req,res) => {
     try { res.json(await fn(req)); }
@@ -110,6 +139,7 @@ export function registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddl
   })));
   app.post('/api/admin/mystery-box/chaos-mode',adminMiddleware,route(req => setChaosMode(pool,{...req.body,actor:`admin:${req.admin.role}`})));
   app.post('/api/admin/mystery-box/chaos/reveal',adminMiddleware,route(req => setChaosMode(pool,{...req.body,enabled:true,actor:`admin:${req.admin.role}`})));
+  app.post('/api/admin/mystery-box/primary/unlock',adminMiddleware,route(req => unlockPrimaryBoxes(pool,{actor:`admin:${req.admin.role}`})));
   app.post('/api/admin/mystery-box/games-mode',adminMiddleware,route(req=>transact(pool,async client=>{
     validateAttemptResetReason(req.body.reason);
     if(typeof req.body.enabled !== 'boolean') reject('Enabled must be a boolean');
@@ -147,7 +177,12 @@ export function registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddl
     const team=found.rows[0]; const before=structuredClone(team); const input=req.body;
     if(input.expectedUpdatedAt !== undefined && Number(input.expectedUpdatedAt) !== new Date(team.updated_at).getTime()) reject('This team changed while you were editing. Close and reopen the editor to review the latest values.',409);
     if (input.teamName !== undefined) { if(typeof input.teamName !== 'string' || !input.teamName.trim() || input.teamName.length>128) reject('Invalid team name'); team.team_name=input.teamName.trim(); }
-    for (const [key,column] of [['isOpened','is_opened'],['isChaosResolved','is_chaos_resolved'],['hasChangedQuestion','has_changed_question']]) {
+    if (input.isOpened !== undefined) {
+      if (typeof input.isOpened !== 'boolean') reject('Invalid isOpened');
+      if (input.isOpened && !team.is_opened) reject('A verified team member must open the Mystery Box', 409);
+      team.is_opened=input.isOpened;
+    }
+    for (const [key,column] of [['isChaosResolved','is_chaos_resolved'],['hasChangedQuestion','has_changed_question']]) {
       if (input[key] !== undefined) { if(typeof input[key] !== 'boolean') reject(`Invalid ${key}`); team[column]=input[key]; }
     }
     if (input.freeChangeCards !== undefined) { if(!Number.isInteger(input.freeChangeCards)||input.freeChangeCards<0||input.freeChangeCards>100) reject('Cards must be between 0 and 100'); team.free_change_cards=input.freeChangeCards; }

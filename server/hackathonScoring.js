@@ -932,6 +932,10 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
       const response = await transact(pool, async (client) => {
         const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { lock: true });
         if (team.is_opened) return { balance: Number(team.points || 0), alreadyOpened: true };
+        const unlockSetting = await client.query("SELECT value FROM hackathon_event_settings WHERE key='primary_boxes_unlocked_at' FOR SHARE");
+        if (typeof unlockSetting.rows[0]?.value !== 'string') {
+          throw Object.assign(new Error('Waiting for organizers to unlock Mystery Boxes'), { status: 409 });
+        }
         const award = team.primary_awarded ? 0 : Math.max(0, Math.trunc(Number(team.mystery_question?.points || 0)));
         const ledger = await appendLedger(client, { team, sourceType: 'mystery', sourceRef: 'primary-reveal', delta: award, reason: 'Primary mystery box revealed', actor: req.hackathonUser });
         await client.query('UPDATE hackathon_teams SET is_opened=TRUE, primary_awarded=TRUE, updated_at=NOW() WHERE id=$1', [team.id]);

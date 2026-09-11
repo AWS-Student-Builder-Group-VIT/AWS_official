@@ -22,6 +22,7 @@ import {
   TEAM_STORAGE_KEY,
   clearHackathonBrowserSession,
   consumeTeamRefreshResponse,
+  getPrimaryRevealAccess,
   persistVerifiedHackathonTeam,
   getStoredTeam,
 } from './teamSessionSync';
@@ -190,7 +191,9 @@ export default function MysteryBoxDashboard() {
             window.sessionStorage.setItem(MEMBER_EMAIL_KEY, email);
             if (active) setMyEmail(email);
           }
-        } catch {}
+        } catch {
+          // The authenticated API request below remains the source of truth.
+        }
       }
 
       if (team?.code) {
@@ -226,7 +229,7 @@ export default function MysteryBoxDashboard() {
 
     verifySession();
     return () => { active = false; };
-  }, [team?.code]);
+  }, [team?.code, myEmail, navigate]);
 
   const isMemberOfTeam = Boolean(
     team &&
@@ -258,6 +261,7 @@ export default function MysteryBoxDashboard() {
 
   const leader = team.members?.find((member) => member.isLeader) || null;
   const isCurrentLeader = Boolean(leader && (leader.email || '').trim().toLowerCase() === myEmail.trim().toLowerCase());
+  const primaryRevealAccess = getPrimaryRevealAccess(team);
 
   // Primary Box Problem Details
   const parsedQuestion = (() => {
@@ -327,7 +331,7 @@ export default function MysteryBoxDashboard() {
   };
 
   const handleUnveilMysteryTopic = async () => {
-    if (!team || !isCurrentLeader) return;
+    if (!team || !primaryRevealAccess.canOpen) return;
     try {
       setIsOpeningLocal(true);
       const result = await runTeamAction(`/api/mystery-box/teams/${team.code}/reveal`);
@@ -434,13 +438,6 @@ export default function MysteryBoxDashboard() {
     } finally {
       setTopicSwapPending(false);
     }
-  };
-
-  const formatFileSize = (bytes) => {
-    if (!bytes) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const handleLinkSubmit = async (e) => {
@@ -666,21 +663,25 @@ export default function MysteryBoxDashboard() {
                         </motion.div>
 
                         <h4 className="mt-4 text-xl font-headline-md text-on-surface uppercase tracking-widest">Mystery Box is Sealed</h4>
-                        <p className="text-xs text-on-surface-variant max-w-[380px] mt-2 mb-6">Your official hackathon challenge topic is locked inside this container. Prepare your setup before unlocking.</p>
+                        <p className="text-xs text-on-surface-variant max-w-[380px] mt-2 mb-6">
+                          {primaryRevealAccess.canOpen
+                            ? 'Mystery Boxes are unlocked. Any verified team member can open this shared challenge.'
+                            : 'Your official challenge remains sealed until organizers unlock Mystery Boxes at kickoff.'}
+                        </p>
 
-                        {isCurrentLeader ? (
+                        {primaryRevealAccess.canOpen ? (
                           <button
                             type="button"
                             onClick={handleUnveilMysteryTopic}
                             className="bg-primary-container text-background px-7 py-3.5 font-bold font-headline-md uppercase tracking-wider border-0 rounded-xl cursor-pointer hover:bg-primary transition-colors shadow-[0_0_20px_rgba(255,153,0,0.4)] hover:scale-105 transform duration-150 text-sm"
                           >
-                            Unveil Mystery Topic
+                            Open Mystery Box
                           </button>
                         ) : (
                           <div className="flex items-center gap-2.5 bg-white/[0.02] border border-white/5 px-4 py-3 rounded-xl">
                             <span className="w-2.5 h-2.5 rounded-full bg-primary-container animate-ping" />
                             <p className="text-xs text-on-surface-variant m-0">
-                              Waiting for Team Leader ({leader?.email || 'Leader'}) to open the box...
+                              Waiting for organizers to unlock Mystery Boxes...
                             </p>
                           </div>
                         )}

@@ -23,7 +23,8 @@ export default function TeamAdminEditor({ team, token, challenges, onClose, onSa
       <label>Team name<input className={inputClass} value={form.teamName} onChange={e=>update('teamName',e.target.value)}/></label>
       {Object.entries({points:'Point balance',freeChangeCards:'Free cards',spinsUsed:'Spins used (0–5)',maxGameAttempts:'Official game limit (0–12)'}).map(([key,label])=><label key={key}>{label}<input className={inputClass} type="number" min="0" value={form[key]} onChange={e=>update(key,Number(e.target.value))}/></label>)}
       <label>Assigned problem<select className={inputClass} value={form.challengeId} onChange={e=>update('challengeId',e.target.value)}>{challenges.map(c=><option key={c.id} value={c.id}>{c.track} — {c.title}</option>)}</select></label>
-      {Object.entries({isOpened:'Primary box revealed',isChaosResolved:'Chaos resolved',hasChangedQuestion:'Paid topic swap used'}).map(([key,label])=><label key={key}><input type="checkbox" checked={Boolean(form[key])} onChange={e=>update(key,e.target.checked)}/> {label}</label>)}
+      <div>Primary box: <strong>{form.isOpened ? 'Revealed by team' : 'Sealed'}</strong></div>
+      {Object.entries({isChaosResolved:'Chaos resolved',hasChangedQuestion:'Paid topic swap used'}).map(([key,label])=><label key={key}><input type="checkbox" checked={Boolean(form[key])} onChange={e=>update(key,e.target.checked)}/> {label}</label>)}
     </div>
     <label>Owned advantages (one per line)<textarea className={inputClass} value={form.ownedItems} onChange={e=>update('ownedItems',e.target.value)}/></label>
     <h3 className="text-orange-400 my-3">Members and leader</h3>

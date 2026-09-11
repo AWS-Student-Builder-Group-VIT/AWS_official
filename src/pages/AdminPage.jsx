@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useId, useRef, useState, useEffect } from 'react';
 import TeamAdminEditor from './TeamAdminEditor';
 import { eventRequest } from '../utils/eventRewards';
 import {
@@ -41,6 +41,7 @@ const ACTIVITY_TYPE_CONFIG = {
   MEMBER_JOINED:   { icon: '👤', label: 'Member Joined',  bg: 'rgba(129,140,248,0.15)',border: 'rgba(129,140,248,0.4)',text: '#818cf8' },
   POINTS_ADJUSTED: { icon: '⚡', label: 'Points Adjusted',bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', text: '#fbbf24' },
   PRESENTATION_UPLOADED: { icon: '🔗', label: 'Link Submitted', bg: 'rgba(52,211,153,0.15)', border: 'rgba(52,211,153,0.4)', text: '#34d399' },
+  PRIMARY_BOXES_UNLOCKED: { icon: '🎁', label: 'Boxes Unlocked', bg: 'rgba(168,224,99,0.15)', border: 'rgba(168,224,99,0.4)', text: '#a8e063' },
 };
 
 function fmt(dateStr) {
@@ -187,6 +188,8 @@ function Dashboard({ token, onLogout }) {
   const [reassignModalTeam, setReassignModalTeam] = useState(null);
   const [challenges, setChallenges] = useState([]);
   const [chaosEnabled, setChaosEnabled] = useState(false);
+  const [primaryBoxesUnlocked, setPrimaryBoxesUnlocked] = useState(false);
+  const [primaryBoxesUnlockedAt, setPrimaryBoxesUnlockedAt] = useState(null);
   const [editingTeamCode, setEditingTeamCode] = useState(null);
   const [selectedReassignQuestion, setSelectedReassignQuestion] = useState('');
   const [resetSwapCheckbox, setResetSwapCheckbox] = useState(false);
@@ -200,6 +203,8 @@ function Dashboard({ token, onLogout }) {
   const [boardScoreDrafts, setBoardScoreDrafts] = useState({});
   const [expandedBoardScoreTeams, setExpandedBoardScoreTeams] = useState({});
   const [editingSectionIds, setEditingSectionIds] = useState({});
+  const reviewSectionIdPrefix = useId().replaceAll(':', '');
+  const reviewSectionSequence = useRef(0);
 
   const notify = (msg) => {
     setNotification(msg);
@@ -264,6 +269,8 @@ function Dashboard({ token, onLogout }) {
     setHackathonTeams(teams);
     if (settings) {
       setSubmissionsFrozen(Boolean(settings.submissionsFrozen));
+      setPrimaryBoxesUnlocked(Boolean(settings.primaryBoxesUnlocked));
+      setPrimaryBoxesUnlockedAt(settings.primaryBoxesUnlockedAt || null);
     }
     setInspectTeam(current => current ? teams.find(t => t.code === current.code) || null : null);
     if (mode.ok) setGameModeEnabled(mode.enabled);
@@ -333,6 +340,21 @@ function Dashboard({ token, onLogout }) {
   };
 
   // Hackathon Handlers
+  const handleUnlockPrimaryBoxes = async () => {
+    if (primaryBoxesUnlocked) return;
+    if (!window.confirm('Unlock Mystery Boxes for all registered and future teams? This kickoff action cannot be reversed.')) return;
+    try {
+      const result = await eventRequest('admin/mystery-box/primary/unlock', { adminToken: token, method: 'POST' });
+      setPrimaryBoxesUnlocked(result.unlocked === true);
+      setPrimaryBoxesUnlockedAt(result.unlockedAt || null);
+      notify(result.unchanged ? 'Mystery Boxes were already unlocked.' : 'Mystery Boxes unlocked. Teams can now open their challenges.');
+      loadHackathonData();
+      pollActivities();
+    } catch (error) {
+      notify(error.message || 'Failed to unlock Mystery Boxes');
+    }
+  };
+
   const handlePointsSubmit = async (delta) => {
     if (!pointsModalTeam) return;
     const val = delta !== undefined ? delta : parseInt(pointDeltaInput);
@@ -514,7 +536,8 @@ function Dashboard({ token, onLogout }) {
 
   const handleAddReviewSection = (team) => {
     const currentScores = getEffectiveBoardScores(team);
-    const newId = `sec_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    reviewSectionSequence.current += 1;
+    const newId = `sec_${reviewSectionIdPrefix}_${reviewSectionSequence.current}`;
     const newSection = {
       id: newId,
       title: '',
@@ -881,6 +904,15 @@ ${(t.members || []).map((m, idx) => `  ${idx + 1}. ${m.name || 'Member'} (${m.em
               </div>
 
               <div className="flex items-center gap-3 flex-wrap w-full md:w-auto">
+                <button
+                  type="button"
+                  onClick={handleUnlockPrimaryBoxes}
+                  disabled={primaryBoxesUnlocked}
+                  className={`${primaryBoxesUnlocked ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-[#FF9900]/20 border-[#FF9900]/60 text-[#FF9900] hover:bg-[#FF9900] hover:text-black'} border font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all flex items-center gap-2 disabled:cursor-default`}
+                  title={primaryBoxesUnlockedAt ? `Unlocked ${fmt(primaryBoxesUnlockedAt)}` : 'Allow every verified team member to open their shared Mystery Box'}
+                >
+                  <span>🎁</span> {primaryBoxesUnlocked ? 'Mystery Boxes Unlocked' : 'Unlock Mystery Boxes'}
+                </button>
                 <button
                   type="button"
                   onClick={handleGameModeToggle}
