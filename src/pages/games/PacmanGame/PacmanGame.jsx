@@ -265,7 +265,8 @@ const D4 = [DIRS.UP, DIRS.LEFT, DIRS.DOWN, DIRS.RIGHT];
 
 function canMoveTo(grid, c, r, isEaten) {
   if (r < 0 || r >= ROWS) return false;
-  if (c < 0 || c >= COLS) return true; // Tunnel wrap
+  // Wrapping through the tunnel is only valid on row 14
+  if (c < 0 || c >= COLS) return r === 14;
   const t = grid[r]?.[c];
   if (t === '#') return false;
   if (t === '-' && !isEaten) return false;
@@ -461,8 +462,12 @@ class Pacman {
       if (this.mouth < 0.02) { this.mouth = 0.02; this.mouthDir = 1; }
     }
 
-    if (this.x < -TILE / 2) this.x = COLS * TILE + TILE / 2;
-    else if (this.x > COLS * TILE + TILE / 2) this.x = -TILE / 2;
+    // Tunnel wrap (row 14 only): modular arithmetic keeps entity at symmetric position on other side
+    const pacTileY = Math.floor(this.y / TILE);
+    if (pacTileY === 14) {
+      if (this.x < 0) this.x += COLS * TILE;
+      else if (this.x >= COLS * TILE) this.x -= COLS * TILE;
+    }
 
     // Eat pellets
     const eatTileX = Math.round((this.x - TILE / 2) / TILE);
@@ -698,8 +703,12 @@ class Ghost {
       this.y = newY;
     }
 
-    if (this.x < -TILE / 2) this.x = COLS * TILE + TILE / 2;
-    else if (this.x > COLS * TILE + TILE / 2) this.x = -TILE / 2;
+    // Tunnel wrap (row 14 only): modular arithmetic keeps entity at symmetric position on other side
+    const ghostTileY = Math.floor(this.y / TILE);
+    if (ghostTileY === 14) {
+      if (this.x < 0) this.x += COLS * TILE;
+      else if (this.x >= COLS * TILE) this.x -= COLS * TILE;
+    }
   }
 
   draw(ctx, frightenedTimer) {
