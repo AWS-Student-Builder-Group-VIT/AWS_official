@@ -638,7 +638,7 @@ export default function MysteryBoxDashboard() {
                     
                     <div className="flex justify-between items-center mb-4">
                       <p className="text-[10px] uppercase tracking-[0.2em] text-primary-container font-label-sm m-0">Mission Activation</p>
-                      {team.isOpened && (
+                      {primaryRevealAccess.state === 'revealed' && (
                         <span className="px-2.5 py-0.5 text-[9px] bg-green-500/10 border border-green-500/30 text-green-400 font-bold rounded uppercase tracking-wider font-label-sm">
                           Active
                         </span>
@@ -646,7 +646,7 @@ export default function MysteryBoxDashboard() {
                     </div>
 
                     {/* Closed Box State */}
-                    {!team.isOpened && !isOpeningLocal && (
+                    {primaryRevealAccess.state !== 'revealed' && !isOpeningLocal && (
                     <div className="flex flex-col items-center justify-center py-8 text-center">
                         <motion.div
                           animate={{
@@ -692,7 +692,7 @@ export default function MysteryBoxDashboard() {
                     {isOpeningLocal && <p role="status" className="text-center py-8">Opening your challenge…</p>}
 
                     {/* Revealed State */}
-                    {team.isOpened && !isOpeningLocal && (
+                    {primaryRevealAccess.state === 'revealed' && !isOpeningLocal && (
                       <GiftReveal key={team.code} storageKey={`aws-primary-reveal:${team.code}`}>
                       <motion.div
                         initial={{ opacity: 0, y: 15 }}
@@ -1007,7 +1007,7 @@ export default function MysteryBoxDashboard() {
                   
                   <TeamActivity key={team.code} team={team} />
 
-                  <button className="bg-primary-container text-black rounded-xl p-4 disabled:opacity-40" disabled={!team.isOpened || team.isChaosOpened || !team.freeChangeCards} onClick={() => handlePurchase({id:'change-topic'},true)}>Use Free Problem Change Card ({team.freeChangeCards || 0})</button>
+                  <button className="bg-primary-container text-black rounded-xl p-4 disabled:opacity-40" disabled={!team.isOpened || !team.primaryBoxesUnlocked || team.isChaosOpened || !team.freeChangeCards} onClick={() => handlePurchase({id:'change-topic'},true)}>Use Free Problem Change Card ({team.freeChangeCards || 0})</button>
                   {/* Members Widget */}
                   <div className="bg-white/[0.02] border border-white/5 p-6 rounded-[24px]">
                     <p className="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-label-sm mb-4">Live Teammates</p>
@@ -1278,7 +1278,7 @@ export default function MysteryBoxDashboard() {
                 {trackTopics.map((topic) => {
               const currentId = parsedQuestion?.id;
               const isCurrent = topic.id === currentId;
-              const canSelect = team.isOpened && !isCurrent && (useFreeCard ? team.freeChangeCards > 0 : points >= 100 && !team.hasChangedQuestion) && !chaosRevealed && !team.isChaosOpened;
+              const canSelect = team.isOpened && team.primaryBoxesUnlocked && !isCurrent && (useFreeCard ? team.freeChangeCards > 0 : points >= 100 && !team.hasChangedQuestion) && !chaosRevealed && !team.isChaosOpened;
               const selected = selectedTopicId === topic.id;
               return (
                 <button
@@ -1297,7 +1297,7 @@ export default function MysteryBoxDashboard() {
                   <p className="text-xs text-on-surface-variant leading-5 mt-2 mb-0">{topic.desc}</p>
                   {!canSelect && (
                     <p className="text-[10px] uppercase tracking-widest text-red-300 mt-2 mb-0">
-                      {isCurrent ? 'Current challenge' : !team.isOpened ? 'Reveal your challenge first' : chaosRevealed || team.isChaosOpened ? 'Locked after Chaos Mode' : team.hasChangedQuestion ? 'Swap already used' : 'Need 100 points'}
+                      {isCurrent ? 'Current challenge' : !team.primaryBoxesUnlocked ? 'Locked by organizers' : !team.isOpened ? 'Reveal your challenge first' : chaosRevealed || team.isChaosOpened ? 'Locked after Chaos Mode' : team.hasChangedQuestion ? 'Swap already used' : 'Need 100 points'}
                     </p>
                   )}
                 </button>

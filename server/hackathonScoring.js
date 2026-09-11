@@ -968,6 +968,10 @@ export function registerHackathonScoringRoutes(app, { pool, hackathonAuth, admin
       const targetTopic = getChallengeById(req.body?.topicId);
       if (!targetTopic) return res.status(400).json({ error: 'Unknown topic selected' });
       const response = await transact(pool, async (client) => {
+        const primarySetting = await client.query("SELECT value FROM hackathon_event_settings WHERE key='primary_boxes_unlocked_at' FOR SHARE");
+        if (typeof primarySetting.rows[0]?.value !== 'string') {
+          throw Object.assign(new Error('Challenge changes are locked while Mystery Boxes are locked'), { status: 409 });
+        }
         await client.query("SELECT value FROM hackathon_event_settings WHERE key='chaos_enabled' FOR SHARE");
         const team = await findAuthorizedTeam(client, req.params.code, req.hackathonUser, { lock: true });
         const quote = getTopicSwapQuote({

@@ -5,6 +5,7 @@ export const HACKATHON_TOKEN_KEY = 'mystery-box-hackathon-token';
 export const CHAOS_STORAGE_KEY = 'mystery-box-chaos-simulated';
 
 export function getPrimaryRevealAccess({ isOpened = false, primaryBoxesUnlocked = false } = {}) {
+  if (!primaryBoxesUnlocked) return { state: 'waiting-for-admin', canOpen: false };
   if (isOpened) return { state: 'revealed', canOpen: false };
   if (primaryBoxesUnlocked) return { state: 'ready', canOpen: true };
   return { state: 'waiting-for-admin', canOpen: false };
