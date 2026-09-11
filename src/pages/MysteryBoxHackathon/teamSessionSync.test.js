@@ -143,3 +143,19 @@ test('sign out clears browser credentials without changing server membership', (
   assert.equal(storage.localStorage.getItem(TEAM_STORAGE_KEY), null);
   assert.equal(storage.localStorage.getItem(OWNED_ITEMS_KEY), null);
 });
+
+test('primary reveal access distinguishes organizer wait, member-ready, and revealed states', () => {
+  assert.equal(typeof teamSessionSync.getPrimaryRevealAccess, 'function');
+  assert.deepEqual(
+    teamSessionSync.getPrimaryRevealAccess({ isOpened: false, primaryBoxesUnlocked: false }),
+    { state: 'waiting-for-admin', canOpen: false },
+  );
+  assert.deepEqual(
+    teamSessionSync.getPrimaryRevealAccess({ isOpened: false, primaryBoxesUnlocked: true }),
+    { state: 'ready', canOpen: true },
+  );
+  assert.deepEqual(
+    teamSessionSync.getPrimaryRevealAccess({ isOpened: true, primaryBoxesUnlocked: true }),
+    { state: 'revealed', canOpen: false },
+  );
+});

@@ -26,7 +26,7 @@ import {
   getTeamRegistrationConflict,
   isSingleTeamMembershipConflict,
 } from './hackathonTeam.js';
-import { initializeEventRewards, registerEventRewardRoutes } from './eventRewards.js';
+import { getPrimaryBoxesUnlockState, initializeEventRewards, registerEventRewardRoutes } from './eventRewards.js';
 import { isAllowedOrigin } from './corsOrigins.js';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -212,10 +212,10 @@ async function runDatabaseMigrations() {
 async function initDb() {
   const result = await initializeVersionedSchema({
     pool,
-    version: 'v8-board-scores-and-freeze',
+    version: 'v9-primary-box-unlock-ready',
     migrate: runDatabaseMigrations,
   });
-  console.log(result.migrated ? 'Database tables ready (migrated to v8)' : 'Database schema already ready');
+  console.log(result.migrated ? 'Database tables ready (migrated to v9)' : 'Database schema already ready');
 }
 export const dbReady = initDb();
 
@@ -263,8 +263,10 @@ app.post('/api/mystery-box/session', async (req, res) => {
   }
   try {
     const user = { email: payload.email.toLowerCase(), sub: payload.sub, name: payload.name || 'Participant', picture: payload.picture || '' };
+    const { primaryBoxesUnlockedAt } = await getPrimaryBoxesUnlockState(pool);
     const session = await createReturningHackathonSession(pool, user, {
       signToken: (claims) => jwt.sign(claims, HACKATHON_JWT_SECRET, { expiresIn: '2h' }),
+      primaryBoxesUnlockedAt,
     });
     res.json(session);
   } catch (error) {
@@ -306,7 +308,8 @@ app.post('/api/mystery-box/teams/create', hackathonAuth, async (req, res) => {
       return { row: created, members: await listHackathonMembers(client, created.id) };
     });
     void logHackathonActivity(upperCode, teamName, 'TEAM_CREATED', `Squad "${teamName}" registered with code #${upperCode}`, { membersCount: members.length });
-    res.status(201).json({ success: true, team: formatHackathonTeam(row, members) });
+    const { primaryBoxesUnlockedAt } = await getPrimaryBoxesUnlockState(pool);
+    res.status(201).json({ success: true, team: formatHackathonTeam(row, members, { primaryBoxesUnlockedAt }) });
   } catch (error) {
     if (await sendSingleTeamConflict(res, error, req.hackathonUser, 'create')) return;
     console.error('Create team error:', error);
@@ -328,9 +331,10 @@ app.post('/api/mystery-box/teams/join', hackathonAuth, async (req, res) => {
 
     const existingTeam = memberships.find((team) => team.code === searchCode);
     if (existingTeam) {
+      const { primaryBoxesUnlockedAt } = await getPrimaryBoxesUnlockState(pool);
       return res.json({
         success: true,
-        team: formatHackathonTeam(existingTeam, await listHackathonMembers(pool, existingTeam.id)),
+        team: formatHackathonTeam(existingTeam, await listHackathonMembers(pool, existingTeam.id), { primaryBoxesUnlockedAt }),
         resumed: true,
       });
     }
@@ -379,7 +383,8 @@ app.post('/api/mystery-box/teams/join', hackathonAuth, async (req, res) => {
       return { updatedRow: updated, normalizedMembers: await listHackathonMembers(client, updated.id) };
     });
     void logHackathonActivity(searchCode, updatedRow.team_name, 'MEMBER_JOINED', `${joinMember.name || joinMember.email} joined squad "${updatedRow.team_name}"`, { email: joinMember.email });
-    res.json({ success: true, team: formatHackathonTeam(updatedRow, normalizedMembers) });
+    const { primaryBoxesUnlockedAt } = await getPrimaryBoxesUnlockState(pool);
+    res.json({ success: true, team: formatHackathonTeam(updatedRow, normalizedMembers, { primaryBoxesUnlockedAt }) });
   } catch (error) {
     if (await sendSingleTeamConflict(res, error, req.hackathonUser, 'join')) return;
     console.error('Join team error:', error);
@@ -390,7 +395,12 @@ app.post('/api/mystery-box/teams/join', hackathonAuth, async (req, res) => {
 app.get('/api/mystery-box/teams/:code', hackathonAuth, async (req, res) => {
   try {
     const { code } = req.params;
-    const result = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [code.toUpperCase().trim()]);
+    const result = await pool.query(`
+      SELECT t.*,
+             (SELECT value FROM hackathon_event_settings WHERE key='primary_boxes_unlocked_at') AS primary_boxes_unlocked_at
+      FROM hackathon_teams t
+      WHERE t.code = $1
+    `, [code.toUpperCase().trim()]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Team not found' });
     }
@@ -539,12 +549,16 @@ app.post('/api/mystery-box/activity/log', async (req, res) => {
 // ── Mystery Box Global Settings & Freeze Controls ───────────
 app.get('/api/mystery-box/settings', async (req, res) => {
   try {
-    const result = await pool.query("SELECT key, value FROM global_settings WHERE key IN ('submissions_frozen', 'quiz_status')");
+    const [result, primaryUnlock] = await Promise.all([
+      pool.query("SELECT key, value FROM global_settings WHERE key IN ('submissions_frozen', 'quiz_status')"),
+      getPrimaryBoxesUnlockState(pool),
+    ]);
     const settings = {};
     result.rows.forEach(r => { settings[r.key] = r.value; });
     res.json({
       submissionsFrozen: settings.submissions_frozen === 'true',
       quizStatus: settings.quiz_status || 'active',
+      ...primaryUnlock,
     });
   } catch (error) {
     console.error('Fetch mystery box settings error:', error);
@@ -954,7 +968,7 @@ app.post('/api/admin/quiz-control', adminMiddleware, async (req, res) => {
 // ── Mystery Box Hackathon — Admin Operations ──────────────────
 app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
   try {
-    const result = await pool.query(`
+    const [result, primaryUnlock] = await Promise.all([pool.query(`
       SELECT id, code, team_name, mystery_question, is_opened, points,
              members, chaos_event, is_chaos_opened, is_chaos_resolved,
              owned_items, has_changed_question, max_game_attempts, created_at, updated_at,
@@ -990,7 +1004,7 @@ app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
              ), '[]'::jsonb) AS point_ledger
       FROM hackathon_teams
       ORDER BY points DESC, created_at DESC
-    `);
+    `), getPrimaryBoxesUnlockState(pool)]);
     const formatted = result.rows.map(row => ({
       id: row.id,
       spinsUsed: row.spins_used,
@@ -1002,6 +1016,7 @@ app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
       teamName: row.team_name,
       mysteryQuestion: row.mystery_question,
       isOpened: row.is_opened,
+      ...primaryUnlock,
       points: row.points || 0,
       members: row.members || [],
       chaosEvent: row.chaos_event,

@@ -1,9 +1,13 @@
-export function formatHackathonTeam(row, members = row.members || [], { includePrivateChaos = false } = {}) {
+export function formatHackathonTeam(row, members = row.members || [], options = {}) {
+  const includePrivateChaos = options.includePrivateChaos === true;
+  const primaryBoxesUnlockedAt = options.primaryBoxesUnlockedAt ?? row.primary_boxes_unlocked_at ?? null;
   return {
     code: row.code,
     teamName: row.team_name,
     mysteryQuestion: row.mystery_question,
     isOpened: Boolean(row.is_opened),
+    primaryBoxesUnlocked: Boolean(primaryBoxesUnlockedAt),
+    primaryBoxesUnlockedAt,
     points: Number(row.points || 0),
     spinsUsed: Number(row.spins_used || 0),
     remainingSpins: 5-Number(row.spins_used || 0),
@@ -80,7 +84,7 @@ export function getTeamRegistrationConflict(memberships, { action, teamCode } = 
   };
 }
 
-export async function createReturningHackathonSession(db, user, { signToken }) {
+export async function createReturningHackathonSession(db, user, { signToken, primaryBoxesUnlockedAt = null }) {
   const rows = await findReturningHackathonTeamRows(db, user);
   const teams = await Promise.all(rows.map(async (row) => {
     const members = await db.query(
@@ -90,7 +94,7 @@ export async function createReturningHackathonSession(db, user, { signToken }) {
        ORDER BY is_leader DESC, joined_at ASC`,
       [row.id],
     );
-    return formatHackathonTeam(row, members.rows);
+    return formatHackathonTeam(row, members.rows, { primaryBoxesUnlockedAt });
   }));
 
   return {

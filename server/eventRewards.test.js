@@ -27,7 +27,7 @@ test('PostgreSQL reward, chaos and team administration transactions',async t=>{
   const db=new PGlite();
   await db.exec(`
     CREATE TABLE hackathon_teams(id SERIAL PRIMARY KEY,code TEXT UNIQUE,team_name TEXT,mystery_question JSONB,chaos_event JSONB,
-      points INTEGER DEFAULT 100,is_opened BOOLEAN DEFAULT TRUE,is_chaos_opened BOOLEAN DEFAULT FALSE,is_chaos_resolved BOOLEAN DEFAULT FALSE,
+      points INTEGER DEFAULT 100,is_opened BOOLEAN DEFAULT FALSE,is_chaos_opened BOOLEAN DEFAULT FALSE,is_chaos_resolved BOOLEAN DEFAULT FALSE,
       has_changed_question BOOLEAN DEFAULT FALSE,owned_items JSONB DEFAULT '[]',members JSONB DEFAULT '[]',max_game_attempts INTEGER DEFAULT 5,
       created_at TIMESTAMPTZ DEFAULT NOW(),updated_at TIMESTAMPTZ DEFAULT NOW());
     CREATE TABLE hackathon_event_settings(key TEXT PRIMARY KEY,value JSONB,updated_at TIMESTAMPTZ DEFAULT NOW());
@@ -45,10 +45,11 @@ test('PostgreSQL reward, chaos and team administration transactions',async t=>{
   await initializeEventRewards(pool);
   const challengeIds=listPublicChallenges().slice(0,3).map(c=>c.id);
   const snapshot=createTeamChallengeSnapshot(getChallengeById(challengeIds[0]));
-  for (const code of ['TEAM01','TEAM02']) {
+  for (const code of ['TEAM01','TEAM02','REVEAL']) {
     const team=await query('INSERT INTO hackathon_teams(code,team_name,mystery_question,chaos_event) VALUES($1,$1,$2,$3) RETURNING id',[code,JSON.stringify(snapshot.challenge),JSON.stringify(snapshot.chaosEvent)]);
     await query('INSERT INTO hackathon_team_members(team_id,email,google_sub,is_leader) VALUES($1,$2,$3,TRUE)',[team.rows[0].id,`${code}@test.local`,code]);
   }
+  await query("UPDATE hackathon_teams SET is_opened=TRUE,primary_awarded=TRUE WHERE code='TEAM01'");
   for (const code of ['LEAVE1','LEAVE2']) {
     const leaveTeam=await query('INSERT INTO hackathon_teams(code,team_name,mystery_question,chaos_event) VALUES($1,$1,$2,$3) RETURNING id',[code,JSON.stringify(snapshot.challenge),JSON.stringify(snapshot.chaosEvent)]);
     await query('INSERT INTO hackathon_team_members(team_id,email,google_sub,is_leader,joined_at) VALUES($1,$2,$3,TRUE,$4)',[leaveTeam.rows[0].id,`${code}@test.local`,code,'2026-01-01T00:00:00Z']);
@@ -57,11 +58,21 @@ test('PostgreSQL reward, chaos and team administration transactions',async t=>{
   const user={sub:'TEAM01',email:'TEAM01@test.local'};
   const member={sub:'TEAM01-member',email:'member@test.local'};
   await query('INSERT INTO hackathon_team_members(team_id,email,google_sub,is_leader) VALUES((SELECT id FROM hackathon_teams WHERE code=$1),$2,$3,FALSE)',['TEAM01',member.email,member.sub]);
+  const revealMember={sub:'REVEAL-member',email:'reveal-member@test.local'};
+  await query('INSERT INTO hackathon_team_members(team_id,email,google_sub,is_leader) VALUES((SELECT id FROM hackathon_teams WHERE code=$1),$2,$3,FALSE)',['REVEAL',revealMember.email,revealMember.sub]);
   const routes=new Map();
-  const app=Object.fromEntries(['get','post','patch','delete'].map(method=>[method,(path,...handlers)=>{if(!routes.has(`${method}:${path}`))routes.set(`${method}:${path}`,handlers.at(-1));}]));
-  const middleware=(_req,_res,next)=>next();
-  registerEventRewardRoutes(app,{pool,hackathonAuth:middleware,adminMiddleware:middleware});
-  registerHackathonScoringRoutes(app,{pool,hackathonAuth:middleware,adminMiddleware:middleware});
+  const routeHandlers=new Map();
+  const app=Object.fromEntries(['get','post','patch','delete'].map(method=>[method,(path,...handlers)=>{
+    const key=`${method}:${path}`;
+    if(!routes.has(key)) {
+      routes.set(key,handlers.at(-1));
+      routeHandlers.set(key,handlers);
+    }
+  }]));
+  const hackathonMiddleware=(_req,_res,next)=>next();
+  const adminMiddleware=(_req,_res,next)=>next();
+  registerEventRewardRoutes(app,{pool,hackathonAuth:hackathonMiddleware,adminMiddleware});
+  registerHackathonScoringRoutes(app,{pool,hackathonAuth:hackathonMiddleware,adminMiddleware});
   async function request(method,path,body={},params={code:'TEAM01'},identity=user){
     let data;let status=200;
     await routes.get(`${method}:${path}`)({body,params,hackathonUser:identity,admin:{role:'admin'}},{json(value){data=value;return this;},status(value){status=value;return this;}});
@@ -73,6 +84,52 @@ test('PostgreSQL reward, chaos and team administration transactions',async t=>{
     assert.equal(routes.has('post:/api/admin/mystery-box/teams/:code/invitations'),false);
     assert.equal(routes.has('get:/api/mystery-box/invitations'),false);
     assert.equal(routes.has('post:/api/mystery-box/invitations/:id/accept'),false);
+  });
+  await t.test('primary boxes stay sealed until the organizer unlocks them',async()=>{
+    const setting=await query("SELECT value FROM hackathon_event_settings WHERE key='primary_boxes_unlocked_at'");
+    assert.equal(setting.rows.length,1);
+    assert.equal(setting.rows[0].value,null);
+    const blocked=await request('post','/api/mystery-box/teams/:code/reveal',{}, {code:'REVEAL'}, revealMember);
+    assert.equal(blocked.status,409);
+    assert.match(blocked.data.error,/organizers.*unlock/i);
+  });
+  await t.test('admin unlock is protected, audited and idempotent',async()=>{
+    const routeKey='post:/api/admin/mystery-box/primary/unlock';
+    assert.equal(routeHandlers.get(routeKey)?.[0],adminMiddleware);
+    const first=await request('post','/api/admin/mystery-box/primary/unlock');
+    assert.equal(first.status,200);
+    assert.equal(first.data.unlocked,true);
+    assert.equal(first.data.unchanged,false);
+    assert.ok(first.data.unlockedAt);
+    const second=await request('post','/api/admin/mystery-box/primary/unlock');
+    assert.equal(second.status,200);
+    assert.equal(second.data.unlockedAt,first.data.unlockedAt);
+    assert.equal(second.data.unchanged,true);
+    const manualReveal=await request('patch','/api/admin/mystery-box/teams/:code',{reason:'Manual reveal attempt',isOpened:true},{code:'REVEAL'});
+    assert.equal(manualReveal.status,409);
+    assert.match(manualReveal.data.error,/team member.*open/i);
+    const logs=await query("SELECT * FROM hackathon_activity_logs WHERE event_type='PRIMARY_BOXES_UNLOCKED'");
+    assert.equal(logs.rows.length,1);
+  });
+  await t.test('any verified member can reveal once after unlock and cross-team access remains denied',async()=>{
+    const attempts=await Promise.all([
+      request('post','/api/mystery-box/teams/:code/reveal',{}, {code:'REVEAL'}, {sub:'REVEAL',email:'REVEAL@test.local'}),
+      request('post','/api/mystery-box/teams/:code/reveal',{}, {code:'REVEAL'}, revealMember),
+    ]);
+    assert.deepEqual(attempts.map(result=>result.status),[200,200]);
+    assert.equal(attempts.reduce((sum,result)=>sum+(result.data.awardedPoints||0),0),100);
+    assert.equal((await team('REVEAL')).is_opened,true);
+    assert.equal((await query("SELECT COUNT(*)::integer AS count FROM team_point_ledger l JOIN hackathon_teams t ON t.id=l.team_id WHERE t.code='REVEAL' AND l.source_type='mystery' AND l.source_ref='primary-reveal'")).rows[0].count,1);
+    const denied=await request('post','/api/mystery-box/teams/:code/reveal',{}, {code:'TEAM02'}, member);
+    assert.equal(denied.status,403);
+  });
+  await t.test('a team registered after unlock remains sealed until a member opens it',async()=>{
+    const late=await query('INSERT INTO hackathon_teams(code,team_name,mystery_question,chaos_event) VALUES($1,$1,$2,$3) RETURNING *',['LATE01',JSON.stringify(snapshot.challenge),JSON.stringify(snapshot.chaosEvent)]);
+    await query('INSERT INTO hackathon_team_members(team_id,email,google_sub,is_leader) VALUES($1,$2,$3,TRUE)',[late.rows[0].id,'late@test.local','LATE01']);
+    assert.equal(late.rows[0].is_opened,false);
+    const opened=await request('post','/api/mystery-box/teams/:code/reveal',{}, {code:'LATE01'}, {sub:'LATE01',email:'late@test.local'});
+    assert.equal(opened.status,200);
+    assert.equal(opened.data.awardedPoints,100);
   });
   await t.test('any verified member can leave without leader approval',async()=>{
     const left=await request('post','/api/mystery-box/teams/:code/leave',{}, {code:'LEAVE1'}, {sub:'LEAVE1-member',email:'leave-member@test.local'});

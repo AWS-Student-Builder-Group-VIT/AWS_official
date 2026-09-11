@@ -4,6 +4,12 @@ export const MEMBER_EMAIL_KEY = 'mystery-box-hackathon-my-email';
 export const HACKATHON_TOKEN_KEY = 'mystery-box-hackathon-token';
 export const CHAOS_STORAGE_KEY = 'mystery-box-chaos-simulated';
 
+export function getPrimaryRevealAccess({ isOpened = false, primaryBoxesUnlocked = false } = {}) {
+  if (isOpened) return { state: 'revealed', canOpen: false };
+  if (primaryBoxesUnlocked) return { state: 'ready', canOpen: true };
+  return { state: 'waiting-for-admin', canOpen: false };
+}
+
 function clearTeamCache({ localStorage, sessionStorage }, { clearToken = false } = {}) {
   if (localStorage) {
     localStorage.removeItem(TEAM_STORAGE_KEY);
