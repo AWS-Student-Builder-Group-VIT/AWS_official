@@ -13,7 +13,7 @@ import TeamActivity from './components/TeamActivity';
 import { eventRequest, pendingRequest } from '../../utils/eventRewards';
 import { games } from '../gamesRegistry';
 import { SCORED_TEAM_GAMES } from '../../utils/teamGameScoring';
-import { fetchMysteryTopics, fetchTeamGameScores, swapTeamTopic, uploadTeamPresentation } from '../../utils/auth';
+import { fetchMysteryTopics, fetchTeamGameScores, swapTeamTopic, uploadTeamPresentation, fetchMysterySettings } from '../../utils/auth';
 import { readApiResponse } from '../../utils/apiResponse';
 import {
   HACKATHON_TOKEN_KEY,
@@ -68,6 +68,7 @@ export default function MysteryBoxDashboard() {
 
   // Success message notification state
   const [notification, setNotification] = useState('');
+  const [submissionsFrozen, setSubmissionsFrozen] = useState(false);
   const [linkSubmitting, setLinkSubmitting] = useState(false);
   const [linkReplacing, setLinkReplacing] = useState(false);
   const [linkInput, setLinkInput] = useState('');
@@ -99,6 +100,21 @@ export default function MysteryBoxDashboard() {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
+  }, []);
+
+  // Poll global settings (e.g. submissions frozen)
+  useEffect(() => {
+    const checkSettings = async () => {
+      try {
+        const s = await fetchMysterySettings();
+        setSubmissionsFrozen(Boolean(s?.submissionsFrozen));
+      } catch {
+        // quiet catch
+      }
+    };
+    checkSettings();
+    const interval = setInterval(checkSettings, 6000);
+    return () => clearInterval(interval);
   }, []);
 
   // Live polling from the server. The server balance is authoritative, including debits.
@@ -429,6 +445,11 @@ export default function MysteryBoxDashboard() {
 
   const handleLinkSubmit = async (e) => {
     e?.preventDefault();
+    if (submissionsFrozen) {
+      setLinkError('Submissions are currently frozen by the organizing committee. Edits are disabled.');
+      return;
+    }
+
     const cleanLink = linkInput.trim();
     if (!cleanLink) {
       setLinkError('Please enter a submission link (e.g. Google Drive link).');
@@ -803,11 +824,17 @@ export default function MysteryBoxDashboard() {
                           <h4 className="text-base font-headline-md text-on-surface uppercase tracking-wider m-0">Project / GDrive Link</h4>
                         </div>
                       </div>
-                      <span className={`px-2.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider font-label-sm ${
-                        team.presentation?.link ? 'bg-green-500/10 border border-green-500/30 text-green-400' : 'bg-amber-500/10 border border-amber-500/30 text-amber-300'
-                      }`}>
-                        {team.presentation?.link ? '✓ Link Submitted' : 'Pending'}
-                      </span>
+                      {submissionsFrozen ? (
+                        <span className="px-2.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider font-label-sm bg-red-500/20 border border-red-500/40 text-red-400 flex items-center gap-1">
+                          <span>🔒</span> Submissions Locked
+                        </span>
+                      ) : (
+                        <span className={`px-2.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider font-label-sm ${
+                          team.presentation?.link ? 'bg-green-500/10 border border-green-500/30 text-green-400' : 'bg-amber-500/10 border border-amber-500/30 text-amber-300'
+                        }`}>
+                          {team.presentation?.link ? '✓ Link Submitted' : 'Pending'}
+                        </span>
+                      )}
                     </div>
 
                     {/* Active Link Display Card (if already submitted and not in edit mode) */}
@@ -854,22 +881,37 @@ export default function MysteryBoxDashboard() {
                             >
                               <span>🔗</span> Open Link
                             </a>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setLinkReplacing(true);
-                                setLinkInput(team.presentation.link || '');
-                                setLinkError('');
-                              }}
-                              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl text-xs font-headline-md font-bold uppercase transition-all cursor-pointer"
-                            >
-                              <span>✏️</span> Edit Link
-                            </button>
+                            {submissionsFrozen ? (
+                              <span className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white/5 border border-white/10 text-white/50 rounded-xl text-xs font-headline-md font-bold uppercase cursor-default">
+                                <span>🔒</span> Locked (Final)
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLinkReplacing(true);
+                                  setLinkInput(team.presentation.link || '');
+                                  setLinkError('');
+                                }}
+                                className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl text-xs font-headline-md font-bold uppercase transition-all cursor-pointer"
+                              >
+                                <span>✏️</span> Edit Link
+                              </button>
+                            )}
                           </div>
                         </div>
                         <p className="text-[10px] text-on-surface-variant/60 mt-3 mb-0">
-                          💡 Any teammate can edit/replace this link anytime. Only the single latest submitted link is kept.
+                          {submissionsFrozen
+                            ? '🔒 Submissions have been locked by the organizing committee. Your latest updated link is considered final.'
+                            : '💡 Any teammate can edit/replace this link anytime. Only the single latest submitted link is kept.'}
                         </p>
+                      </div>
+                    ) : submissionsFrozen ? (
+                      /* Submissions Frozen and no link submitted yet */
+                      <div className="bg-red-950/20 border border-red-500/30 rounded-2xl p-5 text-center">
+                        <span className="text-3xl block mb-2">🔒</span>
+                        <p className="text-sm font-bold text-red-300 m-0">Deliverable Submissions are Closed</p>
+                        <p className="text-xs text-on-surface-variant mt-1 mb-0">The organizing committee has frozen submissions. No further edits or new links can be submitted.</p>
                       </div>
                     ) : (
                       /* Link Input / Edit Form */

@@ -180,6 +180,7 @@ async function runDatabaseMigrations() {
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS has_changed_question BOOLEAN DEFAULT FALSE;
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS max_game_attempts INTEGER NOT NULL DEFAULT 5;
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS presentation JSONB;
+    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS board_scores JSONB DEFAULT '[]'::jsonb;
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
@@ -211,10 +212,10 @@ async function runDatabaseMigrations() {
 async function initDb() {
   const result = await initializeVersionedSchema({
     pool,
-    version: 'v7-team-presentation-upload-ready',
+    version: 'v8-board-scores-and-freeze',
     migrate: runDatabaseMigrations,
   });
-  console.log(result.migrated ? 'Database tables ready' : 'Database schema already ready');
+  console.log(result.migrated ? 'Database tables ready (migrated to v8)' : 'Database schema already ready');
 }
 export const dbReady = initDb();
 
@@ -422,6 +423,12 @@ app.post('/api/mystery-box/teams/:code/presentation', async (req, res) => {
     if (!code) return res.status(400).json({ error: 'Team code is required' });
     if (!fileData && !link) return res.status(400).json({ error: 'Please provide either a presentation file or a presentation link' });
 
+    // Check if submissions are frozen by admin
+    const freezeCheck = await pool.query("SELECT value FROM global_settings WHERE key = 'submissions_frozen'");
+    if (freezeCheck.rows.length > 0 && freezeCheck.rows[0].value === 'true') {
+      return res.status(403).json({ error: 'Submissions are currently frozen by the organizing committee. Edits are disabled.' });
+    }
+
     const teamCheck = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [code]);
     if (teamCheck.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
 
@@ -526,6 +533,109 @@ app.post('/api/mystery-box/activity/log', async (req, res) => {
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Failed to record activity log' });
+  }
+});
+
+// ── Mystery Box Global Settings & Freeze Controls ───────────
+app.get('/api/mystery-box/settings', async (req, res) => {
+  try {
+    const result = await pool.query("SELECT key, value FROM global_settings WHERE key IN ('submissions_frozen', 'quiz_status')");
+    const settings = {};
+    result.rows.forEach(r => { settings[r.key] = r.value; });
+    res.json({
+      submissionsFrozen: settings.submissions_frozen === 'true',
+      quizStatus: settings.quiz_status || 'active',
+    });
+  } catch (error) {
+    console.error('Fetch mystery box settings error:', error);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+app.post('/api/admin/mystery-box/submissions-freeze', adminMiddleware, async (req, res) => {
+  try {
+    const { frozen } = req.body;
+    const isFrozen = Boolean(frozen);
+    await pool.query(`
+      INSERT INTO global_settings (key, value) VALUES ('submissions_frozen', $1)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+    `, [String(isFrozen)]);
+
+    await logHackathonActivity(
+      'GLOBAL',
+      'ADMIN_CONTROL',
+      'SUBMISSIONS_FREEZE_TOGGLED',
+      isFrozen ? 'Project submission links have been frozen by admin' : 'Project submission links have been unfrozen by admin',
+      { frozen: isFrozen, actor: req.admin?.role || 'admin' }
+    );
+
+    res.json({ ok: true, success: true, submissionsFrozen: isFrozen });
+  } catch (error) {
+    console.error('Toggle submissions freeze error:', error);
+    res.status(500).json({ error: 'Failed to update submissions freeze state' });
+  }
+});
+
+// ── Admin Board Score Review Controls ─────────────────────────
+app.put('/api/admin/mystery-box/teams/:code/board-scores', adminMiddleware, async (req, res) => {
+  try {
+    const rawCode = String(req.params.code || '').trim();
+    const code = normalizeTeamCode(rawCode);
+    if (!code) return res.status(400).json({ error: 'Team code is required' });
+
+    const { boardScores } = req.body;
+    if (!Array.isArray(boardScores)) {
+      return res.status(400).json({ error: 'boardScores must be an array' });
+    }
+
+    // Sanitize and ensure format
+    const sanitized = boardScores.map((item, index) => {
+      const title = String(item?.title ?? '').trim() || `Review ${index + 1}`;
+      const rawVal = item?.marks !== undefined && item?.marks !== '' 
+        ? item.marks 
+        : (item?.score !== undefined && item?.score !== '' ? item.score : 0);
+      const numericVal = typeof rawVal === 'number' ? rawVal : (parseFloat(rawVal) || 0);
+      return {
+        id: item?.id || `rev_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 6)}`,
+        title,
+        marks: numericVal,
+        score: numericVal,
+        updatedAt: new Date().toISOString(),
+        updatedBy: req.admin?.role || 'admin',
+      };
+    });
+
+    const totalBoardScore = sanitized.reduce((sum, item) => sum + (Number(item.marks) || 0), 0);
+
+    const updateRes = await pool.query(
+      'UPDATE hackathon_teams SET board_scores = $1, updated_at = NOW() WHERE code = $2 RETURNING team_name, board_scores',
+      [JSON.stringify(sanitized), code]
+    );
+
+    if (updateRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    const team = updateRes.rows[0];
+
+    await logHackathonActivity(
+      code,
+      team.team_name,
+      'POINTS_ADJUSTED',
+      `Updated board score (${totalBoardScore} pts across ${sanitized.length} review sections)`,
+      { totalBoardScore, reviewsCount: sanitized.length, updatedBy: req.admin?.role || 'admin' }
+    );
+
+    res.json({
+      ok: true,
+      success: true,
+      code,
+      boardScores: sanitized,
+      totalBoardScore,
+    });
+  } catch (error) {
+    console.error('Update board scores error:', error);
+    res.status(500).json({ error: 'Failed to update board scores' });
   }
 });
 
@@ -848,7 +958,7 @@ app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
       SELECT id, code, team_name, mystery_question, is_opened, points,
              members, chaos_event, is_chaos_opened, is_chaos_resolved,
              owned_items, has_changed_question, max_game_attempts, created_at, updated_at,
-             spins_used, free_change_cards, chaos_version, presentation,
+             spins_used, free_change_cards, chaos_version, presentation, board_scores,
              COALESCE((SELECT jsonb_agg(s ORDER BY s.created_at DESC) FROM team_wheel_spins s WHERE s.team_id=hackathon_teams.id),'[]'::jsonb) AS spin_history,
              COALESCE((
                SELECT jsonb_agg(jsonb_build_object(
@@ -901,6 +1011,7 @@ app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
       hasChangedQuestion: row.has_changed_question || false,
       maxGameAttempts: row.max_game_attempts ?? 5,
       presentation: row.presentation || null,
+      boardScores: row.board_scores || [],
       gameAttempts: row.game_attempts || [],
       pointLedger: row.point_ledger || [],
       registeredAt: new Date(row.created_at).getTime(),
