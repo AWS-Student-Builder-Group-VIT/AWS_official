@@ -1,4 +1,4 @@
-export const SCORING_VERSION = 1;
+export const SCORING_VERSION = 2;
 
 export const SCORED_GAME_SLUGS = Object.freeze([
   'pacman',
@@ -6,12 +6,12 @@ export const SCORED_GAME_SLUGS = Object.freeze([
   'asteroid-command',
   'snake',
   'flappy-bird',
-  'watergirl-fireboy',
   'fruit-ninja',
   'wordle',
-  'detective-crime',
   'level-devil',
   'morse',
+  'gunshot-roulette',
+  'hack-type',
 ]);
 
 const tier = (score, boundaries) => {
@@ -31,6 +31,8 @@ const SCORE_TIERS = Object.freeze({
   snake: [[0,5],[30,10],[45,15],[60,20],[70,25],[80,30],[100,50]],
   'flappy-bird': [[0,2],[10,4],[20,6],[30,10],[40,15],[50,20],[70,30],[90,40],[150,100]],
   'fruit-ninja': [[0,5],[50,10],[100,15],[150,20],[200,30],[250,45],[300,60]],
+  'gunshot-roulette': [[0,0],[50,10],[75,20],[100,30],[150,40],[200,50]],
+  'hack-type': [[0,5],[15,10],[25,15],[35,20],[45,30],[60,40],[80,50]],
 });
 
 const clampInteger = (value, minimum, maximum) => {
@@ -52,16 +54,8 @@ export function calculateGamePoints(gameSlug, result = {}) {
   }
 
   if (gameSlug === 'wordle') return result.solved === true ? 20 : 0;
-  if (gameSlug === 'detective-crime') return result.solved === true ? 10 : 0;
   if (gameSlug === 'level-devil') return clampInteger(result.completedLevels, 0, 5) * 8;
   if (gameSlug === 'morse') return clampInteger(result.correctCount, 0, 5) * 5;
-
-  if (gameSlug === 'watergirl-fireboy') {
-    const highestLevel = clampInteger(result.highestLevel, 0, 5);
-    const levelPoints = [0, 15, 20, 30, 45, 50][highestLevel];
-    const noDeathsBonus = highestLevel > 0 && Number(result.totalDeaths) === 0 ? 15 : 0;
-    return levelPoints + noDeathsBonus;
-  }
 
   return 0;
 }

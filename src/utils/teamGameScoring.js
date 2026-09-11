@@ -1,27 +1,32 @@
 export const SCORED_TEAM_GAMES = Object.freeze([
-  'pacman', 'mario-kart', 'asteroid-command', 'snake', 'flappy-bird', 'watergirl-fireboy',
-  'fruit-ninja', 'wordle', 'detective-crime', 'level-devil', 'morse',
+  'pacman', 'mario-kart', 'asteroid-command', 'snake', 'flappy-bird',
+  'fruit-ninja', 'wordle', 'level-devil', 'morse', 'gunshot-roulette', 'hack-type',
 ]);
 
 const TEAM_STORAGE_KEY = 'mystery-box-hackathon-team';
 const TOKEN_STORAGE_KEY = 'mystery-box-hackathon-token';
 const OUTBOX_STORAGE_KEY = 'aws-team-score-outbox:v1';
 const BINDING_STORAGE_PREFIX = 'aws-team-game-binding:v1:';
-const SCORE_GAMES = new Set(['pacman','mario-kart','asteroid-command','snake','flappy-bird','fruit-ninja']);
+const SCORE_GAMES = new Set(['pacman','mario-kart','asteroid-command','snake','flappy-bird','fruit-ninja','gunshot-roulette','hack-type']);
 const PERSISTED_GAME_KEYS = Object.freeze({
   wordle: 'aws-builder-wordle:v1',
   morse: 'aws-morse:v1',
   'level-devil': 'aws-level-devil:v1',
+  'hack-type': 'aws-hack-type:v1',
 });
 
 export function normalizeGameCompletion(gameSlug, payload = {}) {
   if (!SCORED_TEAM_GAMES.includes(gameSlug) || payload?.official === false) return null;
   if (SCORE_GAMES.has(gameSlug)) return { official: true, completed: true, rawScore: Number(payload.score) || 0 };
-  if (['wordle','detective-crime'].includes(gameSlug)) return { official: true, solved: payload.solved === true };
+  if (gameSlug === 'wordle') return { official: true, solved: payload.solved === true };
   if (gameSlug === 'level-devil') return { official: true, completedLevels: Number(payload.completedLevels) || 0 };
   if (gameSlug === 'morse') return { official: true, correctCount: Number(payload.correctCount) || 0 };
-  if (gameSlug === 'watergirl-fireboy') return { official: true, highestLevel: Number(payload.highestLevel) || 0, totalDeaths: Number(payload.totalDeaths) || 0 };
   return null;
+}
+
+export function getGunshotCompletion({ dealerEliminated = false, bankroll = 0 } = {}) {
+  const score = Number(bankroll);
+  return { score: dealerEliminated && Number.isFinite(score) ? Math.max(0, score) : 0 };
 }
 
 export function buildOfficialGameReceipt(gameSlug, response = {}) {

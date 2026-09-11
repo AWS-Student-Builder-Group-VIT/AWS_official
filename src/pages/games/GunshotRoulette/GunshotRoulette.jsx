@@ -1,14 +1,22 @@
 import { useEffect, useRef } from 'react';
+import { getGunshotCompletion } from '../../../utils/teamGameScoring';
 import './gunshotRoulette.css';
 
 // The original DOM game is mounted and cleaned up by this hook, just like the
 // canvas engines used by the other game route components.
-function useGunshotRoulette(rootRef) {
+function useGunshotRoulette(rootRef, onComplete) {
   useEffect(() => {
     const rootElement = rootRef.current;
     let disposed = false;
     let script;
     let style;
+    let completed = false;
+    const completionHandler = (dealerEliminated, bankroll) => {
+      if (completed || !onComplete) return;
+      completed = true;
+      void onComplete(getGunshotCompletion({ dealerEliminated, bankroll }));
+    };
+    window.__AWSGunshotReactOnComplete = completionHandler;
     fetch('/games/gunshot-roulette/game7.html')
       .then((response) => {
         if (!response.ok) throw new Error(`Unable to load Gunshot Roulette (${response.status})`);
@@ -40,7 +48,7 @@ function useGunshotRoulette(rootRef) {
 
         // Keep the original game implementation intact while isolating its names
         // so a React Strict Mode remount cannot redeclare global const/let values.
-        script.textContent = `(() => {\n${gameSource}\nconst startButton = document.querySelector('.aws-roulette-original #overlay .primary');\nif (startButton) startButton.onclick = closeModal;\n})();`;
+        script.textContent = `(() => {\n${gameSource}\nconst startButton = document.querySelector('.aws-roulette-original #overlay .primary');\nif (startButton) startButton.onclick = closeModal;\nconst originalDealerDeath = handleDealerDeath;\nhandleDealerDeath = function () { originalDealerDeath(); window.__AWSGunshotReactOnComplete?.(true, state.points); };\nconst originalPlayerDeath = handlePlayerDeath;\nhandlePlayerDeath = function () { window.__AWSGunshotReactOnComplete?.(false, 0); originalPlayerDeath(); };\n})();`;
         rootElement.appendChild(script);
       })
       .catch((error) => {
@@ -53,13 +61,14 @@ function useGunshotRoulette(rootRef) {
       disposed = true;
       script?.remove();
       style?.remove();
+      if (window.__AWSGunshotReactOnComplete === completionHandler) delete window.__AWSGunshotReactOnComplete;
       if (rootElement) rootElement.innerHTML = '';
     };
-  }, [rootRef]);
+  }, [rootRef, onComplete]);
 }
 
-export default function GunshotRoulette() {
+export default function GunshotRoulette({ onComplete }) {
   const rootRef = useRef(null);
-  useGunshotRoulette(rootRef);
+  useGunshotRoulette(rootRef, onComplete);
   return <main ref={rootRef} className="aws-roulette-original" aria-label="Gunshot Roulette" />;
 }
