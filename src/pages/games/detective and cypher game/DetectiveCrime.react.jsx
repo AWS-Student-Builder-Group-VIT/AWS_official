@@ -406,6 +406,12 @@ const CASES = [
   }
 ];
 
+// Assign points based on an inferred difficulty (alternating for demonstration, since difficulty wasn't explicitly defined before)
+CASES.forEach((c, idx) => {
+  c.difficulty = idx % 3 === 0 ? 'Hard' : 'Normal';
+  c.points = c.difficulty === 'Hard' ? 2 : 1;
+});
+
 // ==========================================================
 // 2. EMBEDDED STYLES (Self-Contained)
 // ==========================================================
@@ -548,6 +554,87 @@ const STYLES = `
     letter-spacing: 0.05em;
     color: var(--green);
     font-weight: 700;
+  }
+
+  .dc-case-tile.answered {
+    border-color: #382c20 !important;
+    opacity: 0.55;
+    cursor: not-allowed !important;
+  }
+
+  .dc-case-tile.answered:hover {
+    transform: none !important;
+    border-color: #382c20 !important;
+  }
+
+  .dc-case-tile.failed::after {
+    content: "✗ CLOSED";
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-family: 'Courier Prime', monospace;
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    color: var(--rust);
+    font-weight: 700;
+  }
+
+  .dc-scoreboard {
+    position: sticky;
+    top: 12px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(28, 23, 18, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--brass);
+    border-radius: 4px;
+    padding: 10px 18px;
+    margin-bottom: 22px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  }
+
+  .dc-score-main {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .dc-score-label {
+    font-family: 'Courier Prime', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .dc-score-value {
+    font-family: 'Special Elite', cursive;
+    font-size: 26px;
+    color: var(--brass);
+    font-weight: 700;
+    text-shadow: 0 0 10px rgba(201, 162, 74, 0.3);
+  }
+
+  .dc-score-pill {
+    font-family: 'Courier Prime', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    padding: 5px 11px;
+    border-radius: 2px;
+    background: var(--board-2);
+    border: 1px solid #3a2f22;
+    color: var(--ink);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .dc-streak-warning {
+    color: #fca5a5 !important;
+    border-color: rgba(239, 68, 68, 0.5) !important;
+    background: rgba(239, 68, 68, 0.12) !important;
   }
 
   .dc-back-btn {
@@ -864,19 +951,26 @@ const STYLES = `
 export default function DetectiveCrimeGame({ onExit }) {
   const [selectedCaseIdx, setSelectedCaseIdx] = useState(null);
   const [solvedCases, setSolvedCases] = useState(() => new Set());
+  const [attemptedCases, setAttemptedCases] = useState(() => new Set());
   const [revealedClues, setRevealedClues] = useState({});
-  const [suspectChoice, setSuspectChoice] = useState('0');
-  const [clueChoice, setClueChoice] = useState('0');
+  const [suspectChoice, setSuspectChoice] = useState('');
+  const [clueChoice, setClueChoice] = useState('');
   const [resultStatus, setResultStatus] = useState(null);
+  const [score, setScore] = useState(0);
+  const [consecutiveWrongs, setConsecutiveWrongs] = useState(0);
 
   const resultRef = useRef(null);
   const currentCase = selectedCaseIdx !== null ? CASES[selectedCaseIdx] : null;
 
   const handleOpenCase = (index) => {
+    if (attemptedCases.has(index)) {
+      alert("This case has already been attempted and is closed.");
+      return;
+    }
     setSelectedCaseIdx(index);
     setRevealedClues({});
-    setSuspectChoice('0');
-    setClueChoice('0');
+    setSuspectChoice('');
+    setClueChoice('');
     setResultStatus(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -897,6 +991,18 @@ export default function DetectiveCrimeGame({ onExit }) {
   const handleCloseCase = (e) => {
     e.preventDefault();
     if (!currentCase) return;
+    
+    if (suspectChoice === '' || clueChoice === '') {
+      alert("Please select both a suspect and a clue.");
+      return;
+    }
+    
+    if (attemptedCases.has(selectedCaseIdx)) {
+      alert("You only get one chance per case! This case is closed.");
+      return;
+    }
+    
+    setAttemptedCases(prev => new Set(prev).add(selectedCaseIdx));
 
     const chosenSuspect = parseInt(suspectChoice, 10);
     const chosenClue = parseInt(clueChoice, 10);
@@ -904,22 +1010,34 @@ export default function DetectiveCrimeGame({ onExit }) {
     const isCorrect = chosenSuspect === currentCase.culprit && chosenClue === currentCase.keyClue;
     const isRightSuspect = chosenSuspect === currentCase.culprit;
     const guiltyName = currentCase.suspects[currentCase.culprit].name;
+    const pointsToAward = currentCase.points;
 
     if (isCorrect) {
       setSolvedCases(prev => new Set(prev).add(selectedCaseIdx));
+      setScore(prev => prev + pointsToAward);
+      setConsecutiveWrongs(0);
       setResultStatus({
         type: 'correct',
         title: 'Case Closed',
-        message: `Correct. ${guiltyName} did it. ${currentCase.solution}`
+        message: `Correct. ${guiltyName} did it. ${currentCase.solution}\n\nYou earned ${pointsToAward} point(s)!`
       });
     } else {
+      let newWrongs = consecutiveWrongs + 1;
+      let penaltyText = "";
+      if (newWrongs >= 3) {
+        setScore(prev => prev - 1);
+        newWrongs = 0; // Reset streak after penalty
+        penaltyText = " Penalty applied: -1 point for 3 consecutive wrong answers.";
+      }
+      setConsecutiveWrongs(newWrongs);
+      
       const hint = isRightSuspect
         ? "You've got the right suspect — but not the evidence that proves it."
         : "Not quite the right suspect.";
       setResultStatus({
         type: 'wrong',
         title: 'Not Quite',
-        message: `${hint} The real culprit was ${guiltyName}. ${currentCase.solution}`
+        message: `${hint} The real culprit was ${guiltyName}. ${currentCase.solution}${penaltyText}`
       });
     }
 
@@ -930,15 +1048,49 @@ export default function DetectiveCrimeGame({ onExit }) {
     }, 100);
   };
 
+  const hasNextUnattemptedCase = CASES.some((_, i) => !attemptedCases.has(i) && i !== selectedCaseIdx);
+
   const handleNextCase = () => {
-    const nextIdx = (selectedCaseIdx + 1) % CASES.length;
-    handleOpenCase(nextIdx);
+    let nextIdx = -1;
+    for (let i = 1; i <= CASES.length; i++) {
+      const candidate = (selectedCaseIdx + i) % CASES.length;
+      if (!attemptedCases.has(candidate)) {
+        nextIdx = candidate;
+        break;
+      }
+    }
+    if (nextIdx !== -1) {
+      handleOpenCase(nextIdx);
+    } else {
+      handleBackToList();
+    }
   };
 
   return (
     <div className="dc-root">
       <style>{STYLES}</style>
       <div className="dc-wrap">
+        {/* Sticky Scoreboard Header - Always visible on screen */}
+        <div className="dc-scoreboard">
+          <div className="dc-score-main">
+            <span className="dc-score-label">Total Score</span>
+            <span className="dc-score-value">{score} <span style={{ fontSize: '13px', color: 'var(--brass)' }}>PTS</span></span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="dc-score-pill">
+              Solved: <b style={{ color: 'var(--brass)' }}>{solvedCases.size}</b> / {CASES.length}
+            </span>
+            <span className="dc-score-pill">
+              Attempted: <b>{attemptedCases.size}</b> / {CASES.length}
+            </span>
+            {consecutiveWrongs > 0 && (
+              <span className={`dc-score-pill ${consecutiveWrongs >= 2 ? 'dc-streak-warning' : ''}`}>
+                ⚠ Wrong Streak: {consecutiveWrongs}/3 {consecutiveWrongs === 2 ? '(-1 pt penalty next!)' : ''}
+              </span>
+            )}
+          </div>
+        </div>
+
         {/* Header */}
         <header className="dc-header">
           <div className="dc-eyebrow">Confidential &middot; Investigator's Copy</div>
@@ -947,7 +1099,7 @@ export default function DetectiveCrimeGame({ onExit }) {
             25 case files. Pick one, read the brief, examine the evidence, name the culprit.
           </div>
           <div className="dc-tally">
-            {solvedCases.size} / {CASES.length} Solved
+            {solvedCases.size} / {CASES.length} Solved &nbsp;|&nbsp; Current Score: {score} PTS
           </div>
         </header>
 
@@ -956,6 +1108,27 @@ export default function DetectiveCrimeGame({ onExit }) {
         {/* LIST VIEW */}
         {selectedCaseIdx === null ? (
           <div>
+            {attemptedCases.size === CASES.length && (
+              <div style={{
+                background: 'var(--board-2)',
+                border: '2px solid var(--brass)',
+                padding: '24px',
+                textAlign: 'center',
+                marginBottom: '24px',
+                borderRadius: '3px'
+              }}>
+                <h2 style={{ fontFamily: "'Special Elite', cursive", color: 'var(--brass)', margin: '0 0 10px' }}>
+                  Investigation Concluded
+                </h2>
+                <p style={{ fontFamily: "'Courier Prime', monospace", color: 'var(--paper)', fontSize: '15px', margin: '0 0 8px' }}>
+                  All 25 cases have been attempted.
+                </p>
+                <div style={{ fontSize: '24px', fontFamily: "'Special Elite', cursive", color: 'var(--brass)' }}>
+                  Final Score: {score} Points ({solvedCases.size} Cases Solved)
+                </div>
+              </div>
+            )}
+
             {onExit && (
               <div style={{ marginBottom: '16px' }}>
                 <button type="button" className="dc-back-btn" onClick={onExit}>
@@ -964,17 +1137,37 @@ export default function DetectiveCrimeGame({ onExit }) {
               </div>
             )}
             <div className="dc-case-grid">
-              {CASES.map((c, idx) => (
-                <button
-                  key={c.title + idx}
-                  type="button"
-                  className={`dc-case-tile ${solvedCases.has(idx) ? 'solved' : ''}`}
-                  onClick={() => handleOpenCase(idx)}
-                >
-                  <div className="dc-case-num">CASE {String(idx + 1).padStart(3, '0')}</div>
-                  <div className="dc-case-title">{c.title}</div>
-                </button>
-              ))}
+              {CASES.map((c, idx) => {
+                const isAttempted = attemptedCases.has(idx);
+                const isSolved = solvedCases.has(idx);
+                return (
+                  <button
+                    key={c.title + idx}
+                    type="button"
+                    className={`dc-case-tile ${isSolved ? 'solved' : ''} ${isAttempted ? 'answered' : ''} ${isAttempted && !isSolved ? 'failed' : ''}`}
+                    onClick={() => !isAttempted && handleOpenCase(idx)}
+                    disabled={isAttempted}
+                    title={isAttempted ? "Case closed - you cannot revisit an attempted case." : `Open Case ${idx + 1}`}
+                  >
+                    <div className="dc-case-num">
+                      CASE {String(idx + 1).padStart(3, '0')} &middot; {c.points} PT{c.points > 1 ? 'S' : ''} ({c.difficulty.toUpperCase()})
+                    </div>
+                    <div className="dc-case-title">{c.title}</div>
+                    {isAttempted && (
+                      <div style={{
+                        marginTop: '10px',
+                        fontSize: '11px',
+                        fontFamily: "'Courier Prime', monospace",
+                        color: isSolved ? 'var(--green)' : 'var(--rust)',
+                        letterSpacing: '0.05em',
+                        fontWeight: 700
+                      }}>
+                        {isSolved ? '✓ SOLVED (LOCKED)' : '✗ FAILED (LOCKED)'}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         ) : (
@@ -991,8 +1184,11 @@ export default function DetectiveCrimeGame({ onExit }) {
               )}
             </div>
 
-            <div className="dc-case-tag">
-              CASE NO. {String(selectedCaseIdx + 1).padStart(3, '0')} — {currentCase.place.toUpperCase()}
+            <div className="dc-case-tag" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <span>CASE NO. {String(selectedCaseIdx + 1).padStart(3, '0')} — {currentCase.place.toUpperCase()}</span>
+              <span className="dc-tag" style={{ background: 'var(--brass)', color: 'var(--board)', fontWeight: 700 }}>
+                VALUE: {currentCase.points} POINT{currentCase.points > 1 ? 'S' : ''} &middot; {currentCase.difficulty.toUpperCase()}
+              </span>
             </div>
 
             <div className="dc-brief">
@@ -1060,7 +1256,9 @@ export default function DetectiveCrimeGame({ onExit }) {
                       className="dc-select"
                       value={suspectChoice}
                       onChange={(e) => setSuspectChoice(e.target.value)}
+                      disabled={attemptedCases.has(selectedCaseIdx)}
                     >
+                      <option value="" disabled>--select--</option>
                       {currentCase.suspects.map((s, i) => (
                         <option key={s.name} value={i}>{s.name}</option>
                       ))}
@@ -1074,24 +1272,28 @@ export default function DetectiveCrimeGame({ onExit }) {
                       className="dc-select"
                       value={clueChoice}
                       onChange={(e) => setClueChoice(e.target.value)}
+                      disabled={attemptedCases.has(selectedCaseIdx)}
                     >
+                      <option value="" disabled>--select--</option>
                       {currentCase.clues.map((cl, i) => (
                         <option key={cl.label} value={i}>{cl.label}</option>
                       ))}
                     </select>
                   </div>
 
-                  <button type="submit" className="dc-btn-solve">
-                    Close The Case
+                  <button type="submit" className="dc-btn-solve" disabled={attemptedCases.has(selectedCaseIdx)}>
+                    {attemptedCases.has(selectedCaseIdx) ? "Case Closed" : "Close The Case"}
                   </button>
                 </form>
 
                 {resultStatus && (
                   <div ref={resultRef} className={`dc-result ${resultStatus.type}`}>
                     <h3>{resultStatus.title}</h3>
-                    <p>{resultStatus.message}</p>
+                    <p style={{ whiteSpace: 'pre-line' }}>{resultStatus.message}</p>
                     <div className="dc-result-actions">
-                      <button type="button" onClick={handleNextCase}>Next Case &rarr;</button>
+                      {hasNextUnattemptedCase ? (
+                        <button type="button" onClick={handleNextCase}>Next Unattempted Case &rarr;</button>
+                      ) : null}
                       <button type="button" onClick={handleBackToList}>Back to Case Files</button>
                     </div>
                   </div>

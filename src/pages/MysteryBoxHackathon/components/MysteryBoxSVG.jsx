@@ -23,7 +23,6 @@ export function MysteryBoxSVG({ size = 300 }) {
       <rect x="80" y="130" width="160" height="110" rx="8" fill="#1a1200" stroke="#FF9900" strokeWidth="1.5" />
       <rect x="76" y="118" width="168" height="30" rx="6" fill="#221800" stroke="#FF9900" strokeWidth="1.5" />
       <rect x="148" y="118" width="24" height="122" rx="4" fill="#FF9900" opacity="0.6" />
-      <text x="160" y="188" textAnchor="middle" fontSize="48" fontFamily="Arial">❓</text>
       <circle cx="80" cy="60" r="6" fill="#00A8FF" opacity="0.8" />
       <circle cx="240" cy="80" r="4" fill="#7C4DFF" opacity="0.8" />
       <circle cx="260" cy="40" r="5" fill="#FF9900" opacity="0.6" />
@@ -50,7 +49,6 @@ export function MiniMysteryBox() {
       <rect x="40" y="90" width="120" height="80" rx="6" fill="#1a1200" stroke="#FF9900" strokeWidth="2" />
       <rect x="36" y="78" width="128" height="22" rx="5" fill="#221800" stroke="#FF9900" strokeWidth="2" />
       <rect x="92" y="78" width="16" height="92" rx="3" fill="#FF9900" opacity="0.7" />
-      <text x="100" y="143" textAnchor="middle" fontSize="36">❓</text>
       <circle cx="100" cy="50" r="28" fill="none" stroke="#FF9900" strokeWidth="1" strokeDasharray="4 3" opacity="0.5" />
       <circle cx="100" cy="50" r="38" fill="none" stroke="#FF9900" strokeWidth="0.5" strokeDasharray="2 6" opacity="0.3" />
     </motion.svg>
