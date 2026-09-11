@@ -37,7 +37,7 @@ const ACTIVITY_TYPE_CONFIG = {
   TEAM_CREATED:    { icon: '👥', label: 'Squad Created',  bg: 'rgba(192,132,252,0.15)',border: 'rgba(192,132,252,0.4)',text: '#c084fc' },
   MEMBER_JOINED:   { icon: '👤', label: 'Member Joined',  bg: 'rgba(129,140,248,0.15)',border: 'rgba(129,140,248,0.4)',text: '#818cf8' },
   POINTS_ADJUSTED: { icon: '⚡', label: 'Points Adjusted',bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', text: '#fbbf24' },
-  PRESENTATION_UPLOADED: { icon: '📊', label: 'PPT Uploaded', bg: 'rgba(52,211,153,0.15)', border: 'rgba(52,211,153,0.4)', text: '#34d399' },
+  PRESENTATION_UPLOADED: { icon: '🔗', label: 'Link Submitted', bg: 'rgba(52,211,153,0.15)', border: 'rgba(52,211,153,0.4)', text: '#34d399' },
 };
 
 function fmt(dateStr) {
@@ -500,6 +500,109 @@ function Dashboard({ token, onLogout }) {
     document.body.removeChild(link);
   };
 
+  const downloadSingleTeamLink = (t) => {
+    if (!t) return;
+    const link = t.presentation?.link || 'No link submitted';
+    const leader = (t.members || []).find(m => m.isLeader);
+    const content = `================================================================
+AWS HACKATHON - TEAM SUBMISSION LINK
+================================================================
+Team Name: ${t.teamName || 'Unknown Team'}
+Team Code: #${t.code}
+Submission Status: ${t.presentation?.link ? 'SUBMITTED' : 'NOT SUBMITTED'}
+Submission Link: ${link}
+Submitted By: ${t.presentation?.uploadedBy || 'N/A'}
+Last Updated: ${t.presentation?.uploadedAt ? fmt(t.presentation.uploadedAt) : 'N/A'}
+
+Leader: ${leader?.name || 'N/A'} (${leader?.email || 'N/A'}${leader?.regNo || leader?.reg_no ? ` - ${leader.regNo || leader.reg_no}` : ''})
+Total Members: ${(t.members || []).length}
+Roster:
+${(t.members || []).map((m, idx) => `  ${idx + 1}. ${m.name || 'Member'} (${m.email}${m.regNo || m.reg_no ? ` - Reg: ${m.regNo || m.reg_no}` : ''})${m.isLeader ? ' [LEADER]' : ''}`).join('\n')}
+================================================================
+`;
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(t.teamName || t.code).replace(/[^a-zA-Z0-9_-]/g, '_')}_submission_link.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    notify(`Downloaded link details for ${t.teamName}`);
+  };
+
+  const exportAllLinksTxt = () => {
+    if (!hackathonTeams || hackathonTeams.length === 0) {
+      alert('No hackathon teams found to export.');
+      return;
+    }
+
+    const submittedTeams = hackathonTeams.filter(t => Boolean(t.presentation?.link));
+    const pendingTeams = hackathonTeams.filter(t => !t.presentation?.link);
+
+    const lines = [
+      '================================================================',
+      'AWS HACKQUEST - TEAM SUBMISSION LINKS DIRECTORY',
+      `Export Generated: ${new Date().toLocaleString('en-IN')}`,
+      `Total Teams: ${hackathonTeams.length} | Submitted: ${submittedTeams.length} | Pending: ${pendingTeams.length}`,
+      '================================================================',
+      '',
+      '----------------------------------------------------------------',
+      `>>> SUBMITTED TEAMS & LINKS (${submittedTeams.length}) <<<`,
+      '----------------------------------------------------------------',
+      '',
+    ];
+
+    if (submittedTeams.length === 0) {
+      lines.push('No teams have submitted links yet.\n');
+    } else {
+      submittedTeams.forEach((t, idx) => {
+        const leader = (t.members || []).find(m => m.isLeader);
+        lines.push(`[${idx + 1}] TEAM: ${t.teamName || 'Unknown Team'} (Code: #${t.code})`);
+        lines.push(`    LINK: ${t.presentation.link}`);
+        lines.push(`    SUBMITTED BY: ${t.presentation.uploadedBy || 'Team Member'}`);
+        if (t.presentation.uploadedAt) {
+          lines.push(`    UPDATED AT: ${fmt(t.presentation.uploadedAt)}`);
+        }
+        lines.push(`    LEADER: ${leader?.name || 'N/A'} (${leader?.email || 'N/A'}${leader?.regNo || leader?.reg_no ? ` - ${leader.regNo || leader.reg_no}` : ''})`);
+        lines.push(`    MEMBERS (${(t.members || []).length}): ${(t.members || []).map(m => `${m.name || m.email.split('@')[0]} (${m.email})`).join(', ')}`);
+        lines.push('');
+      });
+    }
+
+    lines.push('----------------------------------------------------------------');
+    lines.push(`>>> PENDING TEAMS (NO LINK YET - ${pendingTeams.length}) <<<`);
+    lines.push('----------------------------------------------------------------');
+    lines.push('');
+
+    if (pendingTeams.length === 0) {
+      lines.push('All teams have submitted their links!\n');
+    } else {
+      pendingTeams.forEach((t, idx) => {
+        const leader = (t.members || []).find(m => m.isLeader);
+        lines.push(`[${idx + 1}] TEAM: ${t.teamName || 'Unknown Team'} (Code: #${t.code}) - STATUS: PENDING`);
+        lines.push(`    LEADER: ${leader?.name || 'N/A'} (${leader?.email || 'N/A'}${leader?.regNo || leader?.reg_no ? ` - ${leader.regNo || leader.reg_no}` : ''})`);
+        lines.push('');
+      });
+    }
+
+    lines.push('================================================================');
+    lines.push('END OF EXPORT');
+    lines.push('================================================================');
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Hackathon_All_Team_Links_${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    notify(`Bulk exported links (${submittedTeams.length} submitted, ${pendingTeams.length} pending)`);
+  };
+
   // Hackathon filtered & sorted teams
   const filteredHackathonTeams = hackathonTeams
     .filter(t => {
@@ -520,6 +623,8 @@ function Dashboard({ token, onLogout }) {
       if (hackathonFilter === 'chaos') return matchSearch && t.isChaosOpened && !t.isChaosResolved;
       if (hackathonFilter === 'swapped') return matchSearch && t.hasChangedQuestion;
       if (hackathonFilter === 'opened') return matchSearch && t.isOpened;
+      if (hackathonFilter === 'submitted_link') return matchSearch && Boolean(t.presentation?.link);
+      if (hackathonFilter === 'missing_link') return matchSearch && !t.presentation?.link;
 
       return matchSearch;
     })
@@ -540,6 +645,7 @@ function Dashboard({ token, onLogout }) {
   const totalHackathonParticipants = hackathonTeams.reduce((sum, t) => sum + (t.members || []).length, 0);
   const totalDecryptedCount = hackathonTeams.filter(t => t.isOpened).length;
   const totalChaosCount = hackathonTeams.filter(t => t.isChaosOpened && !t.isChaosResolved).length;
+  const totalLinksSubmitted = hackathonTeams.filter(t => Boolean(t.presentation?.link)).length;
   const avgTeamPoints = hackathonTeams.length ? Math.round(hackathonTeams.reduce((sum, t) => sum + (t.points || 0), 0) / hackathonTeams.length) : 0;
 
   // Quiz filters
@@ -688,14 +794,23 @@ function Dashboard({ token, onLogout }) {
                 >
                   <span>📥</span> Export Teams CSV
                 </button>
+                <button
+                  type="button"
+                  onClick={exportAllLinksTxt}
+                  className="bg-[#00a8e0]/15 border border-[#00a8e0]/50 hover:bg-[#00a8e0] hover:text-white text-[#00a8e0] font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all cursor-pointer flex items-center gap-2"
+                  title="Download all team submission links as a .txt file"
+                >
+                  <span>📁</span> Bulk Download Links (.txt)
+                </button>
               </div>
             </div>
 
             {/* Metrics Row */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
               {[
                 { label: 'Registered Squads', val: hackathonTeams.length, icon: 'groups', color: '#FF9900' },
                 { label: 'Total Hackers', val: totalHackathonParticipants, icon: 'badge', color: '#00a8e0' },
+                { label: 'Links Submitted', val: `${totalLinksSubmitted}/${hackathonTeams.length}`, icon: 'link', color: '#34d399' },
                 { label: 'Topics Unveiled', val: `${totalDecryptedCount}/${hackathonTeams.length}`, icon: 'lock_open', color: '#a8e063' },
                 { label: 'Chaos Injected', val: totalChaosCount, icon: 'warning', color: '#f87171' },
                 { label: 'Avg Squad Points', val: `${avgTeamPoints} pts`, icon: 'stars', color: '#c084fc' },
@@ -788,7 +903,9 @@ function Dashboard({ token, onLogout }) {
                     onChange={e => setHackathonFilter(e.target.value)}
                     className="bg-white/5 border border-white/10 px-3 py-2.5 font-mono text-xs text-[#dbc2ad] focus:outline-none focus:border-[#FF9900]"
                   >
-                    <option value="all">All Tracks</option>
+                    <option value="all">All Tracks &amp; Link Statuses</option>
+                    <option value="submitted_link">🔗 Link Submitted</option>
+                    <option value="missing_link">⏳ Link Pending (No Link)</option>
                     {[...new Set(challenges.map((challenge) => challenge.track))].map((track) => (
                       <option key={track} value={`track:${track.toLowerCase()}`}>{track}</option>
                     ))}
@@ -1094,36 +1211,37 @@ function Dashboard({ token, onLogout }) {
                                   </button>
                                 </div>
 
-                                {/* PPT Submission Row (Directly below the 5 buttons, centered and prominent) */}
-                                <div className="mt-2.5 flex items-center justify-center">
-                                  {t.presentation?.hasFile ? (
-                                    <a
-                                      href={`/api/mystery-box/teams/${t.code}/presentation/download`}
-                                      download
-                                      title={`Download PPT (${t.presentation.fileName})`}
-                                      className="w-full py-2 px-3 bg-emerald-500/20 hover:bg-emerald-500 border border-emerald-500/50 text-emerald-300 hover:text-white font-mono text-xs font-bold uppercase tracking-wider transition-all cursor-pointer rounded-lg inline-flex items-center justify-center gap-2 no-underline shadow-[0_0_15px_rgba(16,185,129,0.2)] active:scale-[0.98]"
-                                    >
-                                      <span className="text-sm">📊</span>
-                                      <span>Download PPT</span>
-                                    </a>
-                                  ) : t.presentation?.link ? (
-                                    <a
-                                      href={t.presentation.link}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      title="Open Cloud Presentation Deck"
-                                      className="w-full py-2 px-3 bg-[#00a8e0]/20 hover:bg-[#00a8e0] border border-[#00a8e0]/50 text-[#00a8e0] hover:text-white font-mono text-xs font-bold uppercase tracking-wider transition-all cursor-pointer rounded-lg inline-flex items-center justify-center gap-2 no-underline shadow-[0_0_15px_rgba(0,168,224,0.2)] active:scale-[0.98]"
-                                    >
-                                      <span className="text-sm">🔗</span>
-                                      <span>Open Cloud PPT</span>
-                                    </a>
+                                {/* Submission Link Row & Individual Download */}
+                                <div className="mt-2.5 flex items-center gap-1.5 justify-center">
+                                  {t.presentation?.link ? (
+                                    <>
+                                      <a
+                                        href={t.presentation.link}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title={`Open Submission Link: ${t.presentation.link}`}
+                                        className="flex-1 py-1.5 px-2 bg-[#00a8e0]/20 hover:bg-[#00a8e0] border border-[#00a8e0]/50 text-[#00a8e0] hover:text-white font-mono text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer rounded-lg inline-flex items-center justify-center gap-1.5 no-underline shadow-[0_0_12px_rgba(0,168,224,0.15)] active:scale-[0.98]"
+                                      >
+                                        <span className="text-xs">🔗</span>
+                                        <span>Open Link</span>
+                                      </a>
+                                      <button
+                                        type="button"
+                                        onClick={() => downloadSingleTeamLink(t)}
+                                        title="Download Team Link Details (.txt)"
+                                        className="py-1.5 px-2.5 bg-emerald-500/20 hover:bg-emerald-500 hover:text-white border border-emerald-500/50 text-emerald-300 font-mono text-[11px] font-bold transition-all cursor-pointer rounded-lg flex items-center justify-center gap-1 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
+                                      >
+                                        <span>⬇️</span>
+                                        <span>.txt</span>
+                                      </button>
+                                    </>
                                   ) : (
                                     <div
-                                      title="No presentation uploaded yet"
-                                      className="w-full py-1.5 px-3 bg-white/5 border border-dashed border-white/15 text-white/40 font-mono text-xs rounded-lg inline-flex items-center justify-center gap-1.5 cursor-default"
+                                      title="No submission link provided yet"
+                                      className="w-full py-1.5 px-2.5 bg-white/5 border border-dashed border-white/15 text-white/40 font-mono text-[11px] rounded-lg inline-flex items-center justify-center gap-1.5 cursor-default"
                                     >
                                       <span>⏳</span>
-                                      <span>No PPT Uploaded</span>
+                                      <span>No Link Submitted</span>
                                     </div>
                                   )}
                                 </div>
@@ -1512,35 +1630,35 @@ function Dashboard({ token, onLogout }) {
               )}
             </div>
 
-            {/* Pitch Deck / PPT Presentation Submission */}
+            {/* Project / GDrive Submission Link */}
             <div className="mb-6 p-4 rounded-xl border border-white/10 bg-white/[0.02]">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <span>📊</span> Final Pitch Presentation
+                  <span>🔗</span> Project / GDrive Submission Link
                 </div>
                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                  inspectTeam.presentation ? 'bg-green-500/20 text-green-300 border border-green-500/40' : 'bg-white/5 text-[#dbc2ad]/60 border border-white/10'
+                  inspectTeam.presentation?.link ? 'bg-green-500/20 text-green-300 border border-green-500/40' : 'bg-white/5 text-[#dbc2ad]/60 border border-white/10'
                 }`}>
-                  {inspectTeam.presentation ? '✓ Uploaded' : 'Not Uploaded'}
+                  {inspectTeam.presentation?.link ? '✓ Link Submitted' : 'No Link Submitted'}
                 </span>
               </div>
 
-              {inspectTeam.presentation ? (
+              {inspectTeam.presentation?.link ? (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/3 p-3.5 rounded-lg border border-white/5">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="text-sm font-bold text-white flex items-center gap-2 flex-wrap">
-                      <span className="truncate">{inspectTeam.presentation.fileName}</span>
-                      {inspectTeam.presentation.fileSize && (
-                        <span className="text-[10px] text-[#00a8e0] font-mono bg-[#00a8e0]/10 px-1.5 py-0.5 rounded">
-                          {inspectTeam.presentation.fileSize < 1024 * 1024
-                            ? `${(inspectTeam.presentation.fileSize / 1024).toFixed(1)} KB`
-                            : `${(inspectTeam.presentation.fileSize / (1024 * 1024)).toFixed(1)} MB`}
-                        </span>
-                      )}
+                      <a
+                        href={inspectTeam.presentation.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#00a8e0] hover:underline font-mono text-xs break-all"
+                      >
+                        {inspectTeam.presentation.link}
+                      </a>
                     </div>
-                    <div className="text-[11px] text-[#dbc2ad] mt-1">
+                    <div className="text-[11px] text-[#dbc2ad] mt-1.5">
                       {inspectTeam.presentation.uploadedBy && (
-                        <span>Uploaded by: <strong className="text-white">{inspectTeam.presentation.uploadedBy}</strong></span>
+                        <span>Submitted by: <strong className="text-white">{inspectTeam.presentation.uploadedBy}</strong></span>
                       )}
                       {inspectTeam.presentation.uploadedAt && (
                         <span className="ml-2">• {fmt(inspectTeam.presentation.uploadedAt)}</span>
@@ -1549,30 +1667,26 @@ function Dashboard({ token, onLogout }) {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                    {inspectTeam.presentation.hasFile && (
-                      <a
-                        href={`/api/mystery-box/teams/${inspectTeam.code}/presentation/download`}
-                        download
-                        className="px-3.5 py-2 bg-green-600 hover:bg-green-500 text-white rounded font-bold text-xs uppercase cursor-pointer no-underline flex items-center gap-1.5 shadow-[0_0_15px_rgba(34,197,94,0.3)] transition-all"
-                      >
-                        <span>⬇️</span> Download PPT
-                      </a>
-                    )}
-                    {inspectTeam.presentation.link && (
-                      <a
-                        href={inspectTeam.presentation.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3.5 py-2 bg-[#00a8e0] hover:bg-[#0090c0] text-white rounded font-bold text-xs uppercase cursor-pointer no-underline flex items-center gap-1.5 transition-all"
-                      >
-                        <span>🔗</span> Open Deck Link
-                      </a>
-                    )}
+                    <a
+                      href={inspectTeam.presentation.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3.5 py-2 bg-[#00a8e0] hover:bg-[#0090c0] text-white rounded font-bold text-xs uppercase cursor-pointer no-underline flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(0,168,224,0.3)]"
+                    >
+                      <span>🔗</span> Open Link
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => downloadSingleTeamLink(inspectTeam)}
+                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-bold text-xs uppercase cursor-pointer flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                    >
+                      <span>⬇️</span> Download .txt
+                    </button>
                   </div>
                 </div>
               ) : (
                 <div className="text-xs text-[#dbc2ad]/60 italic py-1">
-                  This squad has not uploaded a presentation yet.
+                  This squad has not submitted a project / Google Drive link yet.
                 </div>
               )}
             </div>

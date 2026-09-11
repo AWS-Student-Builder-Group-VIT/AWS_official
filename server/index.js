@@ -461,8 +461,8 @@ app.post('/api/mystery-box/teams/:code/presentation', async (req, res) => {
       team.code,
       team.team_name,
       'PRESENTATION_UPLOADED',
-      `Uploaded presentation: ${presentationMeta.fileName}`,
-      { fileName: presentationMeta.fileName, uploadedBy }
+      link ? `Submitted project link: ${link}` : `Uploaded deliverable: ${presentationMeta.fileName}`,
+      { fileName: presentationMeta.fileName, link, uploadedBy }
     );
 
     res.json({ ok: true, success: true, presentation: presentationMeta });
