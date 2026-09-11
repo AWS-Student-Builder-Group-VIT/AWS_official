@@ -20,3 +20,23 @@ test('official Hack Type completion submits the best of five typing scores', () 
   ]), { score: 80 });
   assert.deepEqual(hackTypeCore.getHackTypeCompletion([]), { score: 0 });
 });
+
+test('finishing an attempt retains a renderable run until the results screen takes over', () => {
+  assert.equal(typeof hackTypeCore.finishHackTypeAttempt, 'function');
+  const currentRun = {
+    started: 100,
+    remaining: 0,
+    correctCharacters: 100,
+    incorrectCharacters: 20,
+    words: 7,
+    active: [],
+    input: '',
+    lastSpawn: 200,
+  };
+  const finished = hackTypeCore.finishHackTypeAttempt(createAttempt(1), currentRun);
+
+  assert.equal(finished.screen, 'result');
+  assert.equal(finished.save.attempt, 2);
+  assert.equal(finished.save.results.length, 1);
+  assert.equal(finished.run, currentRun);
+});

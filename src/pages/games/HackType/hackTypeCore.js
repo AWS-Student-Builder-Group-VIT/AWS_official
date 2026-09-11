@@ -21,5 +21,19 @@ export function getHackTypeCompletion(results = []) {
   }, 0);
   return { score: bestScore };
 }
+export function finishHackTypeAttempt(saved, currentRun) {
+  const stats = calculateStats({ ...currentRun, elapsedMs: GAME_TIME_MS });
+  const save = {
+    ...saved,
+    results: [...saved.results, { ...stats, words: currentRun.words }],
+    attempt: saved.attempt + 1,
+    completed: saved.attempt === TOTAL_ATTEMPTS,
+  };
+  return {
+    save,
+    run: currentRun,
+    screen: save.completed ? 'complete' : 'result',
+  };
+}
 export function createAttempt(attempt = 1) { return { version: 1, attempt, results: [], completed: false }; }
 export function restoreState(raw) { try { const state = JSON.parse(raw); return state?.version === 1 && state.attempt >= 1 && state.attempt <= TOTAL_ATTEMPTS ? state : createAttempt(); } catch { return createAttempt(); } }

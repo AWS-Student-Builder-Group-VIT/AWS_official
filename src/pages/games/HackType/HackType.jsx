@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   calculateStats,
+  finishHackTypeAttempt,
   GAME_TIME_MS,
   getHackTypeCompletion,
   restoreState,
   STORAGE_KEY,
-  TOTAL_ATTEMPTS,
   WORD_SETS,
 } from './hackTypeCore.js';
 import './hackType.css';
@@ -46,22 +46,16 @@ export default function HackType({ onExit, onComplete }) {
         const saved = saveRef.current;
 
         if (!remaining) {
-          const stats = calculateStats({ ...current, elapsedMs: GAME_TIME_MS });
-          const next = {
-            ...saved,
-            results: [...saved.results, { ...stats, words: current.words }],
-            attempt: saved.attempt + 1,
-            completed: saved.attempt === TOTAL_ATTEMPTS,
-          };
-          saveRef.current = next;
-          setSave(next);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-          setScreen(next.completed ? 'complete' : 'result');
-          if (next.completed && !completionReportedRef.current) {
+          const finished = finishHackTypeAttempt(saved, current);
+          saveRef.current = finished.save;
+          setSave(finished.save);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(finished.save));
+          setScreen(finished.screen);
+          if (finished.save.completed && !completionReportedRef.current) {
             completionReportedRef.current = true;
-            void onComplete?.(getHackTypeCompletion(next.results));
+            void onComplete?.(getHackTypeCompletion(finished.save.results));
           }
-          return null;
+          return finished.run;
         }
 
         const active = current.active
