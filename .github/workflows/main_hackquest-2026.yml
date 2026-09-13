@@ -26,13 +26,14 @@ jobs:
           node-version: '24.x'
           cache: npm
 
-      - name: Install, build, and test
+      - name: Install, lint, test, and build
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
         run: |
           npm ci
+          npm run lint
+          npm test
           npm run build
-          npm run test --if-present
 
       - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4

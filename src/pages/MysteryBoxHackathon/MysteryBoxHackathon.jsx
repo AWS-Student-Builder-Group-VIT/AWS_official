@@ -155,17 +155,6 @@ function MysteryBoxHackathonInner() {
     };
   }, [registerOpen, joinOpen]);
 
-  const persistTeam = (nextTeam) => {
-    setTeam(nextTeam);
-    if (typeof window !== 'undefined') {
-      if (nextTeam) {
-        window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(nextTeam));
-      } else {
-        window.localStorage.removeItem(TEAM_STORAGE_KEY);
-      }
-    }
-  };
-
   const handleGoogleSuccess = async (credentialResponse, mode) => {
     const setError = mode === 'register' ? setFormError : setJoinError;
     setError('');

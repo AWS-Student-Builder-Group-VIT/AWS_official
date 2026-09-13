@@ -9,6 +9,9 @@
     "dev:frontend": "vite",
     "dev:backend": "node server/index.js",
     "build": "vite build",
+    "test": "npm run test:node && npm run test:vitest",
+    "test:node": "node scripts/run-node-tests.mjs",
+    "test:vitest": "vitest run src/pages/games/ASCII-Wordle/src/wordleCore.test.js src/pages/games/ASCII-Wordle/src/WordleGame.test.jsx src/pages/games/ASCII-Wordle/src/OfficialGameReceipt.test.jsx src/pages/games/Morse-Game/src/morseCore.test.js src/pages/games/Morse-Game/src/MorseGame.test.jsx src/pages/games/level-devil/src/levelDevilCore.test.js src/pages/games/level-devil/src/LevelDevilGame.test.jsx",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -54,6 +57,9 @@
     "vite": "^8.0.12"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.8"
+    "@electric-sql/pglite": "^0.5.8",
+    "@testing-library/react": "^16.3.3",
+    "jsdom": "^30.0.1",
+    "vitest": "^5.0.0"
   }
 }
