@@ -1,48 +1,15 @@
-import { useId, useRef, useState, useEffect } from 'react';
-import TeamAdminEditor from './TeamAdminEditor';
-import { eventRequest } from '../utils/eventRewards';
+import { useState, useEffect } from 'react';
 import {
   adminLogin,
   fetchAdminScores,
   fetchAdminStats,
   fetchQuizStatus,
   updateQuizStatus,
-  fetchAdminHackathonTeams,
-  fetchAdminHackathonActivity,
-  fetchAdminGameMode,
-  updateAdminTeamPoints,
-  updateAdminGameMode,
-  updateAdminTeamGameLimit,
-  resetAdminTeamGameAttempt,
-  fetchAdminChallenges,
-  resolveAdminTeamChaos,
-  reassignAdminTeamTopic,
-  deleteAdminHackathonTeam,
-  removeAdminHackathonMember,
-  fetchMysterySettings,
-  toggleAdminSubmissionsFreeze,
-  updateAdminTeamBoardScores,
 } from '../utils/auth';
 
 const QUIZ_TYPE_COLOR = {
   quiz:       { bg: 'rgba(255,153,0,0.15)',  border: 'rgba(255,153,0,0.5)',  text: '#FF9900' },
   case_study: { bg: 'rgba(168,85,247,0.15)', border: 'rgba(168,85,247,0.5)', text: '#c084fc' },
-};
-
-const ACTIVITY_TYPE_CONFIG = {
-  BUFF_PURCHASED:  { icon: '🛒', label: 'Buff Purchased', bg: 'rgba(255,153,0,0.15)', border: 'rgba(255,153,0,0.4)', text: '#FF9900' },
-  TOPIC_SWAPPED:   { icon: '🔄', label: 'Topic Swapped',   bg: 'rgba(0,168,224,0.15)',  border: 'rgba(0,168,224,0.4)',  text: '#00a8e0' },
-  TOPIC_DECRYPTED: { icon: '🎁', label: 'Box Unveiled',    bg: 'rgba(168,224,99,0.15)', border: 'rgba(168,224,99,0.4)', text: '#a8e063' },
-  CHAOS_INJECTED:  { icon: '🌪️', label: 'Chaos Injected', bg: 'rgba(239,68,68,0.15)',  border: 'rgba(239,68,68,0.4)',  text: '#f87171' },
-  CHAOS_REVEALED:  { icon: '🌪️', label: 'Chaos Revealed', bg: 'rgba(239,68,68,0.15)', border: 'rgba(239,68,68,0.4)', text: '#f87171' },
-  CHAOS_RESOLVED:  { icon: '✓',  label: 'Chaos Mitigated',bg: 'rgba(52,211,153,0.15)', border: 'rgba(52,211,153,0.4)', text: '#34d399' },
-  CHALLENGE_REASSIGNED: { icon: '🔄', label: 'Challenge Reassigned', bg: 'rgba(0,168,224,0.15)', border: 'rgba(0,168,224,0.4)', text: '#00a8e0' },
-  TEAM_CREATED:    { icon: '👥', label: 'Squad Created',  bg: 'rgba(192,132,252,0.15)',border: 'rgba(192,132,252,0.4)',text: '#c084fc' },
-  MEMBER_JOINED:   { icon: '👤', label: 'Member Joined',  bg: 'rgba(129,140,248,0.15)',border: 'rgba(129,140,248,0.4)',text: '#818cf8' },
-  POINTS_ADJUSTED: { icon: '⚡', label: 'Points Adjusted',bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.4)', text: '#fbbf24' },
-  PRESENTATION_UPLOADED: { icon: '🔗', label: 'Link Submitted', bg: 'rgba(52,211,153,0.15)', border: 'rgba(52,211,153,0.4)', text: '#34d399' },
-  PRIMARY_BOXES_UNLOCKED: { icon: '🎁', label: 'Boxes Unlocked', bg: 'rgba(168,224,99,0.15)', border: 'rgba(168,224,99,0.4)', text: '#a8e063' },
-  PRIMARY_BOXES_LOCKED: { icon: '🔒', label: 'Boxes Locked', bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.4)', text: '#f87171' },
 };
 
 function fmt(dateStr) {
@@ -51,17 +18,6 @@ function fmt(dateStr) {
     day: '2-digit', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
   });
-}
-
-function timeAgo(dateStr) {
-  if (!dateStr) return '';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const secs = Math.floor(diff / 1000);
-  if (secs < 60) return `${secs}s ago`;
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  return `${hrs}h ago`;
 }
 
 function ScoreBadge({ pct }) {
@@ -134,7 +90,6 @@ function AdminLogin({ onLogin }) {
             {loading ? 'Authenticating...' : 'Access Dashboard'}
           </button>
         </form>
-
       </div>
     </div>
   );
@@ -142,70 +97,16 @@ function AdminLogin({ onLogin }) {
 
 // ── Dashboard ──────────────────────────────────────────────────
 function Dashboard({ token, onLogout }) {
-  const [activeTab, setActiveTab] = useState('hackathon'); // 'hackathon' | 'quiz'
-
-  // Quiz state
   const [scores, setScores] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
-  const [sortBy, setSortBy] = useState('date'); // date | score | name
-  const [viewMode, setViewMode] = useState('attempts'); // 'attempts' | 'leaderboard'
+  const [sortBy, setSortBy] = useState('date');
+  const [viewMode, setViewMode] = useState('attempts');
   const [quizStatus, setQuizStatus] = useState('inactive');
-
-  // Hackathon state
-  const [hackathonTeams, setHackathonTeams] = useState([]);
-  const [hackathonLoading, setHackathonLoading] = useState(true);
-  const [hackathonSearch, setHackathonSearch] = useState('');
-  const [hackathonFilter, setHackathonFilter] = useState('all');
-  const [hackathonSort, setHackathonSort] = useState('points'); // points | newest | name
-  const [hackathonSubView, setHackathonSubView] = useState('teams'); // 'teams' | 'activity'
-  const [expandedRosters, setExpandedRosters] = useState({}); // { [teamCode]: boolean }
-
-  const toggleRoster = (teamCode) => {
-    setExpandedRosters(prev => ({
-      ...prev,
-      [teamCode]: !prev[teamCode],
-    }));
-  };
-
-  // Live Activity & Alerts State
-  const [activities, setActivities] = useState([]);
-  const [liveToast, setLiveToast] = useState(null);
-  const [activityFilter, setActivityFilter] = useState('all');
-
-  // Team Inspect Modal (Detailed Information)
-  const [inspectTeam, setInspectTeam] = useState(null);
-
-  // In-App Deletion Confirmation Modal State
-  const [deleteConfirmTeam, setDeleteConfirmTeam] = useState(null);
   const [terminateQuizModalOpen, setTerminateQuizModalOpen] = useState(false);
-
-  // Hackathon Action Modals
-  const [pointsModalTeam, setPointsModalTeam] = useState(null);
-  const [pointDeltaInput, setPointDeltaInput] = useState('');
-  const [chaosModalTeam, setChaosModalTeam] = useState(null);
-  const [reassignModalTeam, setReassignModalTeam] = useState(null);
-  const [challenges, setChallenges] = useState([]);
-  const [chaosEnabled, setChaosEnabled] = useState(false);
-  const [primaryBoxesUnlocked, setPrimaryBoxesUnlocked] = useState(false);
-  const [primaryBoxesUnlockedAt, setPrimaryBoxesUnlockedAt] = useState(null);
-  const [editingTeamCode, setEditingTeamCode] = useState(null);
-  const [selectedReassignQuestion, setSelectedReassignQuestion] = useState('');
-  const [resetSwapCheckbox, setResetSwapCheckbox] = useState(false);
-  const [gameModeEnabled, setGameModeEnabled] = useState(false);
-  const [gameLimitTeam, setGameLimitTeam] = useState(null);
-  const [gameLimitInput, setGameLimitInput] = useState('5');
-  const [gameResetReason, setGameResetReason] = useState('');
-
   const [notification, setNotification] = useState('');
-  const [submissionsFrozen, setSubmissionsFrozen] = useState(false);
-  const [boardScoreDrafts, setBoardScoreDrafts] = useState({});
-  const [expandedBoardScoreTeams, setExpandedBoardScoreTeams] = useState({});
-  const [editingSectionIds, setEditingSectionIds] = useState({});
-  const reviewSectionIdPrefix = useId().replaceAll(':', '');
-  const reviewSectionSequence = useRef(0);
 
   const notify = (msg) => {
     setNotification(msg);
@@ -215,7 +116,7 @@ function Dashboard({ token, onLogout }) {
   const loadQuizData = async () => {
     setLoading(true);
     const [s, st, status] = await Promise.all([
-      fetchAdminScores(token), 
+      fetchAdminScores(token),
       fetchAdminStats(token),
       fetchQuizStatus()
     ]);
@@ -224,34 +125,19 @@ function Dashboard({ token, onLogout }) {
       const userMap = {};
       s.forEach(r => {
         if (!userMap[r.email]) {
-          userMap[r.email] = {
-            first_name: r.first_name,
-            last_name: r.last_name,
-            email: r.email,
-            attempts: 0,
-            bestScores: {},
-          };
+          userMap[r.email] = { first_name: r.first_name, last_name: r.last_name, email: r.email, attempts: 0, bestScores: {} };
         }
         userMap[r.email].attempts += 1;
-        
         const currentScore = parseFloat(r.composite_score || r.pct || 0);
         if (!userMap[r.email].bestScores[r.quiz_id] || currentScore > userMap[r.email].bestScores[r.quiz_id]) {
-           userMap[r.email].bestScores[r.quiz_id] = currentScore;
+          userMap[r.email].bestScores[r.quiz_id] = currentScore;
         }
       });
-      
-      const computedLeaderboard = Object.values(userMap).map(u => {
-        const total = Object.values(u.bestScores).reduce((sum, val) => sum + val, 0);
-        return {
-          ...u,
-          total_score: parseFloat(total.toFixed(2))
-        };
-      }).sort((a, b) => b.total_score - a.total_score);
-      
-      if (st) {
-        st.leaderboard = computedLeaderboard;
-        st.topScorers = computedLeaderboard.slice(0, 5);
-      }
+      const computedLeaderboard = Object.values(userMap).map(u => ({
+        ...u,
+        total_score: parseFloat(Object.values(u.bestScores).reduce((sum, v) => sum + v, 0).toFixed(2))
+      })).sort((a, b) => b.total_score - a.total_score);
+      if (st) { st.leaderboard = computedLeaderboard; st.topScorers = computedLeaderboard.slice(0, 5); }
     }
 
     setScores(s);
@@ -260,70 +146,10 @@ function Dashboard({ token, onLogout }) {
     setLoading(false);
   };
 
-  const loadHackathonData = async () => {
-    const [teams, mode, catalog, settings] = await Promise.all([
-      fetchAdminHackathonTeams(token),
-      fetchAdminGameMode(token),
-      fetchAdminChallenges(token),
-      fetchMysterySettings(),
-    ]);
-    setHackathonTeams(teams);
-    if (settings) {
-      setSubmissionsFrozen(Boolean(settings.submissionsFrozen));
-      setPrimaryBoxesUnlocked(Boolean(settings.primaryBoxesUnlocked));
-      setPrimaryBoxesUnlockedAt(settings.primaryBoxesUnlockedAt || null);
-    }
-    setInspectTeam(current => current ? teams.find(t => t.code === current.code) || null : null);
-    if (mode.ok) setGameModeEnabled(mode.enabled);
-    if (catalog.ok) {
-      setChallenges(catalog.challenges);
-      setChaosEnabled(catalog.chaosEnabled);
-      setSelectedReassignQuestion((current) => current || catalog.challenges[0]?.id || '');
-    }
-    setHackathonLoading(false);
-  };
+  useEffect(() => { loadQuizData(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const pollActivities = async () => {
-    const actList = await fetchAdminHackathonActivity(token);
-    if (actList && actList.length > 0) {
-      setActivities(prev => {
-        if (prev.length > 0 && actList[0].id !== prev[0].id) {
-          // New live activity detected!
-          const newEvent = actList[0];
-          setLiveToast(newEvent);
-          setTimeout(() => setLiveToast(null), 6000);
-          loadHackathonData(); // Auto-refresh team stats
-        }
-        return actList;
-      });
-    }
-  };
-
-  const loadAll = () => {
-    loadQuizData();
-    loadHackathonData();
-    pollActivities();
-  };
-
-  useEffect(() => {
-    // The dashboard intentionally performs its initial fetch when the authenticated token changes.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadAll();
-    // Real-time live polling for activity logs and team updates every 2.5 seconds
-    const interval = setInterval(() => {
-      if (document.visibilityState !== 'visible') return;
-      pollActivities();
-      loadHackathonData();
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Quiz Handlers
   const handleStatusChange = async (action) => {
-    if (action === 'terminate') {
-      setTerminateQuizModalOpen(true);
-      return;
-    }
+    if (action === 'terminate') { setTerminateQuizModalOpen(true); return; }
     const res = await updateQuizStatus(token, action);
     if (res.ok) setQuizStatus(res.status);
     else notify('Failed to change status: ' + res.error);
@@ -332,457 +158,10 @@ function Dashboard({ token, onLogout }) {
   const confirmTerminateQuiz = async () => {
     setTerminateQuizModalOpen(false);
     const res = await updateQuizStatus(token, 'terminate');
-    if (res.ok) {
-      setQuizStatus('inactive');
-      notify('Global Quiz Terminated & Locked.');
-    } else {
-      notify('Failed to terminate quiz: ' + res.error);
-    }
+    if (res.ok) { setQuizStatus(res.status); notify('Quiz terminated.'); }
+    else notify('Failed: ' + res.error);
   };
 
-  // Hackathon Handlers
-  const handlePrimaryBoxesToggle = async () => {
-    const nextEnabled = !primaryBoxesUnlocked;
-    const action = nextEnabled ? 'unlock' : 'lock';
-    if (!window.confirm(`${nextEnabled ? 'Unlock' : 'Lock'} Mystery Boxes for all teams?`)) return;
-    try {
-      const result = await eventRequest('admin/mystery-box/primary-mode', { adminToken: token, method: 'POST', body: { enabled: nextEnabled } });
-      setPrimaryBoxesUnlocked(result.unlocked === true);
-      setPrimaryBoxesUnlockedAt(result.unlockedAt || null);
-      notify(result.unchanged ? `Mystery Boxes were already ${action}ed.` : `Mystery Boxes ${action}ed successfully.`);
-      loadHackathonData();
-      pollActivities();
-    } catch (error) {
-      notify(error.message || `Failed to ${action} Mystery Boxes`);
-    }
-  };
-
-  const handlePointsSubmit = async (delta) => {
-    if (!pointsModalTeam) return;
-    const val = delta !== undefined ? delta : parseInt(pointDeltaInput);
-    if (isNaN(val)) {
-      notify('Please enter a valid numeric points value.');
-      return;
-    }
-    const res = await updateAdminTeamPoints(token, { code: pointsModalTeam.code, delta: val });
-    if (res.ok) {
-      notify(`Adjusted points for ${pointsModalTeam.teamName} (${val >= 0 ? '+' : ''}${val} pts)`);
-      setPointsModalTeam(null);
-      setPointDeltaInput('');
-      loadHackathonData();
-      pollActivities();
-    } else {
-      notify(res.error || 'Failed to update points');
-    }
-  };
-
-  const handleTriggerChaos = async (resolve = false) => {
-    if (!resolve) {
-      const action = chaosEnabled ? 'disable Chaos Mode and reseal every team card' : 'enable Chaos Mode for every team';
-      if (!window.confirm(`Do you want to ${action}?`)) return;
-      const reason = `Organizer confirmed: ${action}`;
-      try {
-        await eventRequest('admin/mystery-box/chaos-mode', {adminToken:token,method:'POST',body:{enabled:!chaosEnabled,reason}});
-        setChaosEnabled(!chaosEnabled); setChaosModalTeam(null);
-        notify(chaosEnabled ? 'Chaos disabled. Team cards are sealed.' : 'Chaos enabled for every team.');
-        loadHackathonData(); pollActivities();
-      } catch(error) { notify(error.message); }
-      return;
-    }
-    const res = await resolveAdminTeamChaos(token, chaosModalTeam?.code);
-
-    if (res.ok) {
-      
-      notify('Chaos adaptation marked as resolved!');
-      setChaosModalTeam(null);
-      loadHackathonData();
-      pollActivities();
-    } else {
-      notify(res.error || 'Failed to trigger chaos event');
-    }
-  };
-
-  const handleReassignTopic = async () => {
-    if (!reassignModalTeam) return;
-    const qObj = challenges.find(q => q.id === selectedReassignQuestion) || challenges[0];
-    const res = await reassignAdminTeamTopic(token, {
-      code: reassignModalTeam.code,
-      challengeId: qObj?.id,
-      resetSwapUsed: resetSwapCheckbox
-    });
-
-    if (res.ok) {
-      notify(`Reassigned challenge for ${reassignModalTeam.teamName} to "${qObj.title}" [${qObj.track}]`);
-      setReassignModalTeam(null);
-      setResetSwapCheckbox(false);
-      loadHackathonData();
-      pollActivities();
-    } else {
-      notify(res.error || 'Failed to reassign topic');
-    }
-  };
-
-  const handleGameModeToggle = async () => {
-    const res = await updateAdminGameMode(token, !gameModeEnabled);
-    if (res.ok) {
-      setGameModeEnabled(res.enabled);
-      notify(`Official game mode ${res.enabled ? 'enabled' : 'disabled'}.`);
-    } else {
-      notify(res.error || 'Failed to update game mode');
-    }
-  };
-
-  const handleGameLimitSubmit = async () => {
-    if (!gameLimitTeam) return;
-    const maxAttempts = parseInt(gameLimitInput, 10);
-    if (!Number.isInteger(maxAttempts) || maxAttempts < 0 || maxAttempts > 12) {
-      notify('Enter a game limit from 0 to 12.');
-      return;
-    }
-    const res = await updateAdminTeamGameLimit(token, { code: gameLimitTeam.code, maxAttempts });
-    if (res.ok) {
-      notify(`Updated ${gameLimitTeam.teamName} game limit to ${res.maxAttempts}.`);
-      setGameLimitTeam(null);
-      loadHackathonData();
-    } else {
-      notify(res.error || 'Failed to update game limit');
-    }
-  };
-
-  const handleGameAttemptReset = async (attempt) => {
-    if (!gameLimitTeam || !attempt || attempt.voidedAt) return;
-    const reason = gameResetReason.trim();
-    if (reason.length < 5) {
-      notify('Enter an audit reason of at least 5 characters.');
-      return;
-    }
-    const res = await resetAdminTeamGameAttempt(token, {
-      code: gameLimitTeam.code,
-      gameSlug: attempt.gameSlug,
-      reason,
-    });
-    if (res.ok) {
-      notify(`Voided ${attempt.gameSlug}; ${res.reversedPoints || 0} points reversed.`);
-      setGameResetReason('');
-      setGameLimitTeam(null);
-      loadHackathonData();
-      pollActivities();
-    } else {
-      notify(res.error || 'Failed to reset official game attempt');
-    }
-  };
-
-  const handleRemoveMember = async (team, member) => {
-    if (!team?.code || !member?.email || member.isLeader) return;
-    const res = await removeAdminHackathonMember(token, { code: team.code, email: member.email });
-    if (res.ok) {
-      notify(`Removed ${member.email} from ${team.teamName}.`);
-      setInspectTeam(res.team);
-      loadHackathonData();
-      pollActivities();
-    } else {
-      notify(res.error || 'Failed to remove member');
-    }
-  };
-
-  // In-app deletion handler (no browser popup)
-  const executeDeleteTeam = async () => {
-    if (!deleteConfirmTeam) return;
-    const teamToDelete = deleteConfirmTeam;
-    const res = await deleteAdminHackathonTeam(token, teamToDelete.code);
-    if (res.ok) {
-      notify(`Squad "${teamToDelete.teamName}" (#${teamToDelete.code}) was permanently deleted.`);
-      if (inspectTeam?.code === teamToDelete.code) setInspectTeam(null);
-      setDeleteConfirmTeam(null);
-      loadHackathonData();
-      pollActivities();
-    } else {
-      notify(res.error || 'Failed to delete team');
-    }
-  };
-
-  const handleToggleSubmissionsFreeze = async () => {
-    const nextState = !submissionsFrozen;
-    const res = await toggleAdminSubmissionsFreeze(token, nextState);
-    if (res.ok) {
-      setSubmissionsFrozen(nextState);
-      notify(nextState ? 'Submissions are now FROZEN globally. Participants cannot edit links.' : 'Submissions are now UNFROZEN globally.');
-      pollActivities();
-    } else {
-      notify(res.error || 'Failed to update submissions freeze state');
-    }
-  };
-
-  const getEffectiveBoardScores = (t) => {
-    if (boardScoreDrafts[t.code] !== undefined) {
-      return boardScoreDrafts[t.code];
-    }
-    return Array.isArray(t.boardScores) ? t.boardScores : [];
-  };
-
-  const calculateTotalBoardScore = (scores) => {
-    if (!Array.isArray(scores)) return 0;
-    return scores.reduce((sum, item) => {
-      const raw = item?.marks !== undefined && item?.marks !== '' ? item.marks : item?.score;
-      const val = parseFloat(raw);
-      return sum + (isNaN(val) ? 0 : val);
-    }, 0);
-  };
-
-  const toggleBoardScoreExpanded = (teamCode) => {
-    setExpandedBoardScoreTeams(prev => ({
-      ...prev,
-      [teamCode]: !prev[teamCode]
-    }));
-  };
-
-  const handleAddReviewSection = (team) => {
-    const currentScores = getEffectiveBoardScores(team);
-    reviewSectionSequence.current += 1;
-    const newId = `sec_${reviewSectionIdPrefix}_${reviewSectionSequence.current}`;
-    const newSection = {
-      id: newId,
-      title: '',
-      marks: ''
-    };
-    setBoardScoreDrafts(prev => ({
-      ...prev,
-      [team.code]: [...currentScores, newSection]
-    }));
-    setExpandedBoardScoreTeams(prev => ({
-      ...prev,
-      [team.code]: true
-    }));
-    setEditingSectionIds(prev => ({
-      ...prev,
-      [newId]: true
-    }));
-  };
-
-  const handleStartEditSection = (team, section) => {
-    if (boardScoreDrafts[team.code] === undefined) {
-      setBoardScoreDrafts(prev => ({
-        ...prev,
-        [team.code]: Array.isArray(team.boardScores) ? [...team.boardScores] : []
-      }));
-    }
-    setExpandedBoardScoreTeams(prev => ({
-      ...prev,
-      [team.code]: true
-    }));
-    setEditingSectionIds(prev => ({
-      ...prev,
-      [section.id]: true
-    }));
-  };
-
-  const handleUpdateReviewField = (teamCode, index, field, value) => {
-    setBoardScoreDrafts(prev => {
-      const current = prev[teamCode] ? [...prev[teamCode]] : [...(hackathonTeams.find(t => t.code === teamCode)?.boardScores || [])];
-      if (!current[index]) {
-        current[index] = { id: `sec_${Date.now()}_${index}`, title: '', marks: '' };
-      }
-      current[index] = { ...current[index], [field]: value };
-      return { ...prev, [teamCode]: current };
-    });
-  };
-
-  const handleDeleteReviewSection = (teamCode, index) => {
-    setBoardScoreDrafts(prev => {
-      const current = prev[teamCode] ? [...prev[teamCode]] : [...(hackathonTeams.find(t => t.code === teamCode)?.boardScores || [])];
-      const next = current.filter((_, i) => i !== index);
-      return { ...prev, [teamCode]: next };
-    });
-  };
-
-  const handleSaveBoardScore = async (teamCode) => {
-    const draft = boardScoreDrafts[teamCode];
-    const team = hackathonTeams.find(t => t.code === teamCode);
-    const scoresToSave = draft !== undefined ? draft : (team?.boardScores || []);
-
-    const cleaned = scoresToSave
-      .filter(s => (s.title && String(s.title).trim()) || (s.marks !== '' && s.marks !== null && !isNaN(Number(s.marks))) || (s.score !== '' && s.score !== null && !isNaN(Number(s.score))))
-      .map((s, idx) => {
-        const raw = s.marks !== undefined && s.marks !== '' ? s.marks : s.score;
-        const num = raw === '' || raw === null || raw === undefined || isNaN(Number(raw)) ? 0 : Number(raw);
-        return {
-          id: s.id || `sec_${Date.now()}_${idx}`,
-          title: (String(s.title || `Review ${idx + 1}`)).trim(),
-          marks: num,
-          score: num
-        };
-      });
-
-    const res = await updateAdminTeamBoardScores(token, teamCode, cleaned);
-    if (res.ok) {
-      const total = calculateTotalBoardScore(cleaned);
-      notify(`Board scores saved for Squad #${teamCode} (Total: ${total} pts)`);
-      setHackathonTeams(prev => prev.map(t => t.code === teamCode ? { ...t, boardScores: cleaned } : t));
-      setBoardScoreDrafts(prev => {
-        const next = { ...prev };
-        delete next[teamCode];
-        return next;
-      });
-      setEditingSectionIds(prev => {
-        const next = { ...prev };
-        cleaned.forEach(s => { delete next[s.id]; });
-        return next;
-      });
-      pollActivities();
-    } else {
-      notify(res.error || 'Failed to save board scores');
-    }
-  };
-
-  const downloadSingleTeamLink = (t) => {
-    if (!t) return;
-    const link = t.presentation?.link || 'No link submitted';
-    const leader = (t.members || []).find(m => m.isLeader);
-    const content = `================================================================
-AWS HACKATHON - TEAM SUBMISSION LINK
-================================================================
-Team Name: ${t.teamName || 'Unknown Team'}
-Team Code: #${t.code}
-Submission Status: ${t.presentation?.link ? 'SUBMITTED' : 'NOT SUBMITTED'}
-Submission Link: ${link}
-Submitted By: ${t.presentation?.uploadedBy || 'N/A'}
-Last Updated: ${t.presentation?.uploadedAt ? fmt(t.presentation.uploadedAt) : 'N/A'}
-
-Leader: ${leader?.name || 'N/A'} (${leader?.email || 'N/A'}${leader?.regNo || leader?.reg_no ? ` - ${leader.regNo || leader.reg_no}` : ''})
-Total Members: ${(t.members || []).length}
-Roster:
-${(t.members || []).map((m, idx) => `  ${idx + 1}. ${m.name || 'Member'} (${m.email}${m.regNo || m.reg_no ? ` - Reg: ${m.regNo || m.reg_no}` : ''})${m.isLeader ? ' [LEADER]' : ''}`).join('\n')}
-================================================================
-`;
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(t.teamName || t.code).replace(/[^a-zA-Z0-9_-]/g, '_')}_submission_link.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    notify(`Downloaded link details for ${t.teamName}`);
-  };
-
-  const exportAllLinksTxt = () => {
-    if (!hackathonTeams || hackathonTeams.length === 0) {
-      alert('No hackathon teams found to export.');
-      return;
-    }
-
-    const submittedTeams = hackathonTeams.filter(t => Boolean(t.presentation?.link));
-    const pendingTeams = hackathonTeams.filter(t => !t.presentation?.link);
-
-    const lines = [
-      '================================================================',
-      'AWS HACKQUEST - TEAM SUBMISSION LINKS DIRECTORY',
-      `Export Generated: ${new Date().toLocaleString('en-IN')}`,
-      `Total Teams: ${hackathonTeams.length} | Submitted: ${submittedTeams.length} | Pending: ${pendingTeams.length}`,
-      '================================================================',
-      '',
-      '----------------------------------------------------------------',
-      `>>> SUBMITTED TEAMS & LINKS (${submittedTeams.length}) <<<`,
-      '----------------------------------------------------------------',
-      '',
-    ];
-
-    if (submittedTeams.length === 0) {
-      lines.push('No teams have submitted links yet.\n');
-    } else {
-      submittedTeams.forEach((t, idx) => {
-        const leader = (t.members || []).find(m => m.isLeader);
-        lines.push(`[${idx + 1}] TEAM: ${t.teamName || 'Unknown Team'} (Code: #${t.code})`);
-        lines.push(`    LINK: ${t.presentation.link}`);
-        lines.push(`    SUBMITTED BY: ${t.presentation.uploadedBy || 'Team Member'}`);
-        if (t.presentation.uploadedAt) {
-          lines.push(`    UPDATED AT: ${fmt(t.presentation.uploadedAt)}`);
-        }
-        lines.push(`    LEADER: ${leader?.name || 'N/A'} (${leader?.email || 'N/A'}${leader?.regNo || leader?.reg_no ? ` - ${leader.regNo || leader.reg_no}` : ''})`);
-        lines.push(`    MEMBERS (${(t.members || []).length}): ${(t.members || []).map(m => `${m.name || m.email.split('@')[0]} (${m.email})`).join(', ')}`);
-        lines.push('');
-      });
-    }
-
-    lines.push('----------------------------------------------------------------');
-    lines.push(`>>> PENDING TEAMS (NO LINK YET - ${pendingTeams.length}) <<<`);
-    lines.push('----------------------------------------------------------------');
-    lines.push('');
-
-    if (pendingTeams.length === 0) {
-      lines.push('All teams have submitted their links!\n');
-    } else {
-      pendingTeams.forEach((t, idx) => {
-        const leader = (t.members || []).find(m => m.isLeader);
-        lines.push(`[${idx + 1}] TEAM: ${t.teamName || 'Unknown Team'} (Code: #${t.code}) - STATUS: PENDING`);
-        lines.push(`    LEADER: ${leader?.name || 'N/A'} (${leader?.email || 'N/A'}${leader?.regNo || leader?.reg_no ? ` - ${leader.regNo || leader.reg_no}` : ''})`);
-        lines.push('');
-      });
-    }
-
-    lines.push('================================================================');
-    lines.push('END OF EXPORT');
-    lines.push('================================================================');
-
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Hackathon_All_Team_Links_${new Date().toISOString().slice(0, 10)}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    notify(`Bulk exported links (${submittedTeams.length} submitted, ${pendingTeams.length} pending)`);
-  };
-
-  // Hackathon filtered & sorted teams
-  const filteredHackathonTeams = hackathonTeams
-    .filter(t => {
-      const q = hackathonSearch.toLowerCase().trim();
-      const matchSearch = !q ||
-        t.code.toLowerCase().includes(q) ||
-        (t.teamName || '').toLowerCase().includes(q) ||
-        (t.members || []).some(m =>
-          (m.email || '').toLowerCase().includes(q) ||
-          (m.name || '').toLowerCase().includes(q) ||
-          (m.regNo || m.reg_no || '').toLowerCase().includes(q)
-        );
-
-      const parsedQ = typeof t.mysteryQuestion === 'object' ? t.mysteryQuestion : {};
-      const track = (parsedQ.track || '').toLowerCase();
-
-      if (hackathonFilter.startsWith('track:')) return matchSearch && track === hackathonFilter.slice(6);
-      if (hackathonFilter === 'chaos') return matchSearch && t.isChaosOpened && !t.isChaosResolved;
-      if (hackathonFilter === 'swapped') return matchSearch && t.hasChangedQuestion;
-      if (hackathonFilter === 'opened') return matchSearch && t.isOpened;
-      if (hackathonFilter === 'submitted_link') return matchSearch && Boolean(t.presentation?.link);
-      if (hackathonFilter === 'missing_link') return matchSearch && !t.presentation?.link;
-
-      return matchSearch;
-    })
-    .sort((a, b) => {
-      if (hackathonSort === 'points') return (b.points || 0) - (a.points || 0);
-      if (hackathonSort === 'newest') return (b.registeredAt || 0) - (a.registeredAt || 0);
-      if (hackathonSort === 'name') return (a.teamName || '').localeCompare(b.teamName || '');
-      return 0;
-    });
-
-  // Filtered Activities
-  const filteredActivities = activities.filter(act => {
-    if (activityFilter === 'all') return true;
-    return act.eventType === activityFilter;
-  });
-
-  // Hackathon Stats
-  const totalHackathonParticipants = hackathonTeams.reduce((sum, t) => sum + (t.members || []).length, 0);
-  const totalDecryptedCount = hackathonTeams.filter(t => t.isOpened).length;
-  const totalChaosCount = hackathonTeams.filter(t => t.isChaosOpened && !t.isChaosResolved).length;
-  const totalLinksSubmitted = hackathonTeams.filter(t => Boolean(t.presentation?.link)).length;
-  const avgTeamPoints = hackathonTeams.length ? Math.round(hackathonTeams.reduce((sum, t) => sum + (t.points || 0), 0) / hackathonTeams.length) : 0;
-
-  // Quiz filters
   const filteredScores = scores
     .filter(r => {
       const q = search.toLowerCase();
@@ -794,10 +173,8 @@ ${(t.members || []).map((m, idx) => `  ${idx + 1}. ${m.name || 'Member'} (${m.em
     })
     .sort((a, b) => {
       if (sortBy === 'score') {
-        const compB = parseFloat(b.composite_score || b.pct || 0);
-        const compA = parseFloat(a.composite_score || a.pct || 0);
-        if (compB !== compA) return compB - compA;
-        return (a.time_taken || 0) - (b.time_taken || 0);
+        const diff = parseFloat(b.composite_score || b.pct || 0) - parseFloat(a.composite_score || a.pct || 0);
+        return diff !== 0 ? diff : (a.time_taken || 0) - (b.time_taken || 0);
       }
       if (sortBy === 'name') return `${a.first_name}`.localeCompare(`${b.first_name}`);
       return new Date(b.attempted_at) - new Date(a.attempted_at);
@@ -810,1700 +187,232 @@ ${(t.members || []).map((m, idx) => `  ${idx + 1}. ${m.name || 'Member'} (${m.em
     });
 
   return (
-    <div className="min-h-screen bg-[#0A0C10] text-[#f1dfd1]"
-      style={{ backgroundImage: 'linear-gradient(to right,rgba(255,255,255,0.04) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.04) 1px,transparent 1px)', backgroundSize: '80px 80px' }}>
+    <div className="min-h-screen bg-[#0A0C10] text-white"
+      style={{ backgroundImage: 'linear-gradient(to right,rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.03) 1px,transparent 1px)', backgroundSize: '80px 80px' }}>
 
-      {/* Top Floating Real-time Event Toast Notification */}
-      {liveToast && (
-        <div className="fixed top-20 right-6 z-50 max-w-sm w-full bg-[#12141a] border border-[#FF9900] p-4 rounded-xl shadow-[0_0_30px_rgba(255,153,0,0.35)] animate-bounce font-mono">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xl">⚡</span>
-              <div>
-                <div className="text-[10px] text-[#FF9900] font-bold uppercase tracking-widest flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[#FF9900] animate-ping" />
-                  LIVE EVENT ALERT
-                </div>
-                <div className="text-xs font-bold text-white mt-0.5">{liveToast.teamName} (#{liveToast.teamCode})</div>
-              </div>
-            </div>
-            <button onClick={() => setLiveToast(null)} className="text-white/40 hover:text-white border-0 bg-transparent cursor-pointer text-xs">✕</button>
-          </div>
-          <div className="mt-2 text-xs text-white/90 leading-snug bg-white/5 p-2 rounded border border-white/10">
-            {liveToast.message}
-          </div>
+      {/* Header */}
+      <div className="border-b border-white/8 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-[#FF9900] animate-pulse" />
+          <span className="font-mono text-sm font-bold text-[#FF9900] uppercase tracking-widest">Admin Dashboard</span>
         </div>
-      )}
+        <div className="flex items-center gap-4">
+          <button onClick={loadQuizData} className="font-mono text-[10px] text-[#dbc2ad] hover:text-white uppercase tracking-widest flex items-center gap-1 cursor-pointer bg-transparent border-none">
+            <span className="material-symbols-outlined text-sm">refresh</span> Refresh
+          </button>
+          <button onClick={onLogout} className="font-mono text-[10px] text-[#f87171] hover:text-white uppercase tracking-widest cursor-pointer bg-transparent border-none">
+            Logout
+          </button>
+        </div>
+      </div>
 
-      {/* Standard Toast Notification */}
       {notification && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-[#FF9900] text-[#111] font-mono text-xs uppercase tracking-wider px-6 py-3 shadow-[0_0_30px_rgba(255,153,0,0.5)] font-bold flex items-center gap-2 border border-white/20">
-          <span>⚡</span> {notification}
+        <div className="fixed bottom-6 right-6 z-50 bg-[#1a1a1a] border border-[#FF9900]/50 px-5 py-3 font-mono text-sm text-[#FF9900] shadow-xl">
+          {notification}
         </div>
       )}
 
-      {/* Navbar */}
-      <nav className="sticky top-0 z-20 flex items-center justify-between px-6 py-4 border-b border-white/5 bg-[#0A0C10]/95 backdrop-blur-xl">
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-xs bg-[#FF9900] text-[#111] px-2 py-0.5 font-bold uppercase tracking-widest">ADMIN</span>
-          <span className="font-mono text-sm text-[#dbc2ad] uppercase tracking-widest hidden sm:inline">AWS Operations Command</span>
-        </div>
-
-        {/* Section Switch Tabs */}
-        <div className="flex bg-white/5 border border-white/10 p-1 rounded">
-          <button
-            onClick={() => setActiveTab('hackathon')}
-            className={`font-mono text-xs px-3.5 py-1.5 uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === 'hackathon'
-                ? 'bg-[#FF9900] text-[#111] font-bold shadow-[0_0_15px_rgba(255,153,0,0.3)]'
-                : 'text-[#dbc2ad] hover:text-white'
-            }`}
-          >
-            🎁 HackQuest ({hackathonTeams.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('quiz')}
-            className={`font-mono text-xs px-3.5 py-1.5 uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === 'quiz'
-                ? 'bg-[#FF9900] text-[#111] font-bold shadow-[0_0_15px_rgba(255,153,0,0.3)]'
-                : 'text-[#dbc2ad] hover:text-white'
-            }`}
-          >
-            📊 Quizzes &amp; Tests
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button onClick={loadAll} title="Refresh All Data"
-            className="font-mono text-xs text-[#dbc2ad] border border-white/10 px-3 py-2 hover:border-[#00a8e0]/50 hover:text-[#00a8e0] transition-all flex items-center justify-center cursor-pointer">
-            <span className="material-symbols-outlined text-sm">refresh</span>
-          </button>
-          <button onClick={onLogout}
-            className="font-mono text-xs text-[#dbc2ad] border border-white/10 px-4 py-2 hover:border-[#FF9900]/50 hover:text-[#FF9900] transition-all uppercase tracking-widest flex items-center gap-2 cursor-pointer">
-            <span className="material-symbols-outlined text-sm">logout</span> <span className="hidden sm:inline">Logout</span>
-          </button>
-        </div>
-      </nav>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-
-        {/* ═══════════════════════════════════════════════════════════
-            TAB 1: HACKQUEST OPERATIONS
-           ═══════════════════════════════════════════════════════════ */}
-        {activeTab === 'hackathon' && (
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Quiz Controls */}
+        <div className="mb-8 border border-white/10 bg-white/3 p-5 flex flex-col md:flex-row items-center justify-between gap-4">
           <div>
-            {/* Action Bar */}
-            <div className="mb-8 border border-[#FF9900]/30 bg-gradient-to-r from-[#FF9900]/10 via-white/5 to-transparent p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div>
-                <div className="font-mono text-xs text-[#FF9900] uppercase tracking-widest mb-1 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#FF9900] animate-ping" />
-                  Live Event Operations &amp; Real-time Audit
-                </div>
-                <h2 className="font-mono text-2xl font-bold text-white uppercase tracking-wider m-0">
-                  HackQuest Hub
-                </h2>
-                <p className="font-mono text-xs text-[#dbc2ad] mt-1 mb-0">Live team telemetry, topic swaps, vendor shop purchases, and chaos injection controls.</p>
-              </div>
-
-              <div className="flex items-center gap-3 flex-wrap w-full md:w-auto">
-                <button
-                  type="button"
-                  onClick={handlePrimaryBoxesToggle}
-                  className={`${primaryBoxesUnlocked ? 'bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500 hover:text-white' : 'bg-[#FF9900]/20 border-[#FF9900]/60 text-[#FF9900] hover:bg-[#FF9900] hover:text-black'} border font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all flex items-center gap-2 cursor-pointer`}
-                  title={primaryBoxesUnlockedAt ? `Unlocked ${fmt(primaryBoxesUnlockedAt)} — click to lock and hide challenges` : 'Allow every verified team member to open their shared Mystery Box'}
-                >
-                  <span>{primaryBoxesUnlocked ? '🔒' : '🎁'}</span> {primaryBoxesUnlocked ? 'Lock Mystery Boxes' : 'Unlock Mystery Boxes'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleGameModeToggle}
-                  className={`${gameModeEnabled ? 'bg-green-500/20 border-green-500/50 text-green-300 hover:bg-green-500' : 'bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500'} hover:text-white font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all cursor-pointer flex items-center gap-2`}
-                >
-                  <span>🎮</span> {gameModeEnabled ? 'Disable Game Mode' : 'Enable Game Mode'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleTriggerChaos(false)}
-                  className="bg-red-500/20 border border-red-500/50 hover:bg-red-500 hover:text-white text-red-300 font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span>🌪️</span> {chaosEnabled ? 'Disable Chaos Mode' : 'Enable Chaos Mode'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleToggleSubmissionsFreeze}
-                  className={`${
-                    submissionsFrozen
-                      ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 hover:bg-amber-500 hover:text-black shadow-[0_0_12px_rgba(245,158,11,0.25)]'
-                      : 'bg-white/5 border-white/10 hover:border-amber-400/50 hover:text-amber-300 text-white'
-                  } border font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all cursor-pointer flex items-center gap-2`}
-                  title={submissionsFrozen ? 'Submissions currently locked for all teams. Click to unfreeze.' : 'Submissions are open. Click to freeze drive links for all teams.'}
-                >
-                  <span>{submissionsFrozen ? '🔒' : '🔓'}</span>
-                  <span>{submissionsFrozen ? 'Unfreeze Submissions' : 'Freeze Submissions'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={exportAllLinksTxt}
-                  className="bg-[#00a8e0]/15 border border-[#00a8e0]/50 hover:bg-[#00a8e0] hover:text-white text-[#00a8e0] font-mono text-xs font-bold uppercase tracking-wider px-4 py-2.5 transition-all cursor-pointer flex items-center gap-2"
-                  title="Download all team submission links as a .txt file"
-                >
-                  <span>📁</span> Bulk Download Links (.txt)
-                </button>
-              </div>
+            <div className="font-mono text-xs text-[#dbc2ad] uppercase tracking-widest mb-1">Global Quiz Status</div>
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${quizStatus === 'active' ? 'bg-[#a8e063] animate-pulse' : 'bg-[#E24B4A]'}`} />
+              <span className={`font-mono text-lg font-bold uppercase ${quizStatus === 'active' ? 'text-[#a8e063]' : 'text-[#E24B4A]'}`}>
+                {quizStatus === 'active' ? 'LIVE (Accepting)' : 'ON HOLD (Blocked)'}
+              </span>
             </div>
+          </div>
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <button
+              onClick={() => handleStatusChange('initiate')} disabled={quizStatus === 'active'}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#a8e063]/10 text-[#a8e063] border border-[#a8e063]/30 px-6 py-3 font-mono text-xs font-bold uppercase tracking-widest hover:bg-[#a8e063]/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              <span className="material-symbols-outlined text-sm">play_arrow</span> Initiate Quiz
+            </button>
+            <button
+              onClick={() => handleStatusChange('terminate')} disabled={quizStatus === 'inactive'}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#E24B4A]/10 text-[#E24B4A] border border-[#E24B4A]/30 px-6 py-3 font-mono text-xs font-bold uppercase tracking-widest hover:bg-[#E24B4A]/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+              <span className="material-symbols-outlined text-sm">stop</span> Terminate Quiz
+            </button>
+          </div>
+        </div>
 
-            {/* Metrics Row */}
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
-              {[
-                { label: 'Registered Squads', val: hackathonTeams.length, icon: 'groups', color: '#FF9900' },
-                { label: 'Total Hackers', val: totalHackathonParticipants, icon: 'badge', color: '#00a8e0' },
-                { label: 'Links Submitted', val: `${totalLinksSubmitted}/${hackathonTeams.length}`, icon: 'link', color: '#34d399' },
-                { label: 'Topics Unveiled', val: `${totalDecryptedCount}/${hackathonTeams.length}`, icon: 'lock_open', color: '#a8e063' },
-                { label: 'Chaos Injected', val: totalChaosCount, icon: 'warning', color: '#f87171' },
-                { label: 'Avg Squad Points', val: `${avgTeamPoints} pts`, icon: 'stars', color: '#c084fc' },
-              ].map((s) => (
-                <div key={s.label} className="border border-white/10 bg-white/3 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="material-symbols-outlined text-base" style={{ color: s.color }}>{s.icon}</span>
-                    <span className="font-mono text-[10px] text-[#dbc2ad] uppercase tracking-widest truncate">{s.label}</span>
+        {/* Stats */}
+        {stats && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+            {[
+              { label: 'Students Tested', val: stats.totalStudents, icon: 'group', color: '#FF9900' },
+              { label: 'Total Attempts', val: stats.totalAttempts, icon: 'quiz', color: '#00a8e0' },
+              { label: 'Avg Score', val: `${stats.avgScore}%`, icon: 'trending_up', color: '#a8e063' },
+              { label: 'Quiz Types', val: '3 + CS', icon: 'layers', color: '#c084fc' },
+            ].map(s => (
+              <div key={s.label} className="border border-white/10 bg-white/3 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="material-symbols-outlined text-base" style={{ color: s.color }}>{s.icon}</span>
+                  <span className="font-mono text-[10px] text-[#dbc2ad] uppercase tracking-widest">{s.label}</span>
+                </div>
+                <div className="font-mono text-3xl font-bold" style={{ color: s.color }}>{s.val}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Top scorers */}
+        {stats?.topScorers?.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center gap-4 mb-4">
+              <span className="font-mono text-[10px] text-[#dbc2ad] uppercase tracking-[0.15em]">🏆 Top Scorers</span>
+              <div className="flex-1 h-px bg-white/8" />
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {stats.topScorers.map((s, i) => (
+                <div key={s.email} className="flex-shrink-0 border border-white/10 bg-white/3 p-3 min-w-[160px]">
+                  <div className="font-mono text-[10px] text-[#FF9900] mb-1">#{i + 1}</div>
+                  <div className="font-mono text-sm text-white font-bold truncate">{s.first_name} {s.last_name}</div>
+                  <div className="font-mono text-[10px] text-[#dbc2ad] truncate mb-2">{s.email}</div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[10px] text-[#dbc2ad]">{s.attempts} attempts</span>
+                    <span className="font-mono text-sm font-bold text-[#FF9900]">{s.total_score} pts</span>
                   </div>
-                  <div className="font-mono text-2xl font-bold" style={{ color: s.color }}>{s.val}</div>
                 </div>
               ))}
             </div>
-
-            {/* Sub-view Switch: Teams Directory vs Live Activity Feed */}
-            <div className="flex items-center justify-between gap-4 mb-6 border-b border-white/10 pb-4">
-              <div className="flex bg-white/5 border border-white/10 p-1 rounded">
-                <button
-                  type="button"
-                  onClick={() => setHackathonSubView('teams')}
-                  className={`font-mono text-xs px-4 py-2 uppercase tracking-wider cursor-pointer transition-all ${
-                    hackathonSubView === 'teams'
-                      ? 'bg-[#FF9900] text-[#111] font-bold shadow'
-                      : 'text-[#dbc2ad] hover:text-white'
-                  }`}
-                >
-                  📋 Squads Directory ({filteredHackathonTeams.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHackathonSubView('activity')}
-                  className={`font-mono text-xs px-4 py-2 uppercase tracking-wider cursor-pointer transition-all flex items-center gap-2 ${
-                    hackathonSubView === 'activity'
-                      ? 'bg-[#FF9900] text-[#111] font-bold shadow'
-                      : 'text-[#dbc2ad] hover:text-white'
-                  }`}
-                >
-                  <span>⚡ Live Activity Stream</span>
-                  <span className="w-2 h-2 rounded-full bg-green-400 animate-ping" />
-                </button>
-              </div>
-
-              {hackathonSubView === 'activity' && (
-                <div className="flex items-center gap-2 font-mono text-xs text-[#dbc2ad]">
-                  <span>Filter Stream:</span>
-                  <select
-                    value={activityFilter}
-                    onChange={e => setActivityFilter(e.target.value)}
-                    className="bg-white/5 border border-white/10 px-3 py-1.5 font-mono text-xs text-[#dbc2ad] focus:outline-none focus:border-[#FF9900]"
-                  >
-                    <option value="all">All Events</option>
-                    <option value="BUFF_PURCHASED">Buffs / Purchases</option>
-                    <option value="TOPIC_SWAPPED">Topic Swaps</option>
-                    <option value="TOPIC_DECRYPTED">Decryptions</option>
-                    <option value="CHAOS_RESOLVED">Chaos Mitigations</option>
-                    <option value="TEAM_CREATED">Team Registrations</option>
-                    <option value="MEMBER_JOINED">Member Joins</option>
-                  </select>
-                </div>
-              )}
-            </div>
-
-            {/* ── SUB-VIEW 1: TEAMS DIRECTORY ── */}
-            {hackathonSubView === 'teams' && (
-              <div>
-                {/* Filter & Search Controls */}
-                <div className="flex flex-col md:flex-row gap-3 mb-6">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      value={hackathonSearch}
-                      onChange={e => setHackathonSearch(e.target.value)}
-                      placeholder="Search by Registration No. (e.g. 22BCE9876), Team Name, Code, or Member..."
-                      className="w-full bg-white/5 border border-white/10 pl-10 pr-10 py-2.5 font-mono text-sm text-white focus:outline-none focus:border-[#FF9900] transition-colors placeholder-white/30 rounded"
-                    />
-                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-lg pointer-events-none">search</span>
-                    {hackathonSearch && (
-                      <button
-                        type="button"
-                        onClick={() => setHackathonSearch('')}
-                        title="Clear search"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white bg-transparent border-0 cursor-pointer text-sm font-mono"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  <select
-                    value={hackathonFilter}
-                    onChange={e => setHackathonFilter(e.target.value)}
-                    className="bg-white/5 border border-white/10 px-3 py-2.5 font-mono text-xs text-[#dbc2ad] focus:outline-none focus:border-[#FF9900]"
-                  >
-                    <option value="all">All Tracks &amp; Link Statuses</option>
-                    <option value="submitted_link">🔗 Link Submitted</option>
-                    <option value="missing_link">⏳ Link Pending (No Link)</option>
-                    {[...new Set(challenges.map((challenge) => challenge.track))].map((track) => (
-                      <option key={track} value={`track:${track.toLowerCase()}`}>{track}</option>
-                    ))}
-                    <option value="opened">Decrypted Topics Only</option>
-                    <option value="chaos">Active Chaos Only</option>
-                    <option value="swapped">Topic Swapped (1x Used)</option>
-                  </select>
-                  <select
-                    value={hackathonSort}
-                    onChange={e => setHackathonSort(e.target.value)}
-                    className="bg-white/5 border border-white/10 px-3 py-2.5 font-mono text-xs text-[#dbc2ad] focus:outline-none focus:border-[#FF9900]"
-                  >
-                    <option value="points">Sort: Score ↓</option>
-                    <option value="newest">Sort: Newest Teams</option>
-                    <option value="name">Sort: Team Name A–Z</option>
-                  </select>
-                </div>
-
-                {/* Search query feedback */}
-                {hackathonSearch.trim() && (
-                  <div className="mb-4 -mt-2 flex items-center justify-between text-xs font-mono text-[#dbc2ad] bg-white/5 border border-white/10 px-3.5 py-2 rounded">
-                    <span>
-                      Showing <strong className="text-[#FF9900]">{filteredHackathonTeams.length}</strong> squads matching &ldquo;<span className="text-white">{hackathonSearch}</span>&rdquo;
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setHackathonSearch('')}
-                      className="text-[#FF9900] hover:underline bg-transparent border-0 cursor-pointer p-0 text-xs font-mono"
-                    >
-                      Clear Filter
-                    </button>
-                  </div>
-                )}
-
-                {/* Teams Table */}
-                {hackathonLoading ? (
-                  <div className="text-center py-20 font-mono text-[#dbc2ad]">Loading hackathon squads...</div>
-                ) : filteredHackathonTeams.length === 0 ? (
-                  <div className="text-center py-20 font-mono text-[#dbc2ad] border border-white/10 bg-white/3">
-                    No teams matching criteria found.
-                  </div>
-                ) : (
-                  <div className="border border-white/10 overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-white/5 border-b border-white/10 font-mono text-[10px] text-[#dbc2ad] uppercase tracking-widest">
-                          <th className="py-3.5 px-4">Squad / Code</th>
-                          <th className="py-3.5 px-4 min-w-[260px]">Roster (Members Dropdown)</th>
-                          <th className="py-3.5 px-4">Active Problem Statement</th>
-                          <th className="py-3.5 px-4 text-center">Score / Buffs</th>
-                          <th className="py-3.5 px-4 min-w-[280px]">Board Score (Review)</th>
-                          <th className="py-3.5 px-4 text-center">Chaos Mode</th>
-                          <th className="py-3.5 px-4 text-right">Admin Operations</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5 font-mono text-xs">
-                        {filteredHackathonTeams.map((t) => {
-                          const q = typeof t.mysteryQuestion === 'object' && t.mysteryQuestion ? t.mysteryQuestion : null;
-                          const leader = (t.members || []).find(m => m.isLeader);
-                          const tierColor = '#00a8e0';
-                          const isRosterOpen = Boolean(expandedRosters[t.code] || (hackathonSearch.trim() && (t.members || []).some(m =>
-                            (m.regNo || m.reg_no || '').toLowerCase().includes(hackathonSearch.toLowerCase().trim()) ||
-                            (m.email || '').toLowerCase().includes(hackathonSearch.toLowerCase().trim()) ||
-                            (m.name || '').toLowerCase().includes(hackathonSearch.toLowerCase().trim())
-                          )));
-
-                          return (
-                            <tr key={t.code} className="hover:bg-white/3 transition-colors">
-                              {/* Team Name & Code */}
-                              <td className="py-3.5 px-4 align-top">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-white text-sm">{t.teamName}</span>
-                                </div>
-                                <div className="mt-1 flex items-center gap-2">
-                                  <span className="bg-[#FF9900]/15 text-[#FF9900] border border-[#FF9900]/30 px-2 py-0.5 rounded font-mono font-bold tracking-widest text-[11px]">
-                                    #{t.code}
-                                  </span>
-                                  <span className="text-[10px] text-[#dbc2ad]">{fmt(t.registeredAt)}</span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => setInspectTeam(t)}
-                                  className="mt-2 text-[10px] text-[#00a8e0] hover:underline flex items-center gap-1 cursor-pointer bg-transparent border-0 p-0"
-                                >
-                                  🔍 View Full Squad Dossier
-                                </button>
-                              </td>
-
-                              {/* Roster with Dropdown Menu */}
-                              <td className="py-3.5 px-4 align-top min-w-[260px] max-w-[320px]">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="font-bold text-white flex items-center gap-1.5 truncate">
-                                    <span className="text-[9px] bg-[#FF9900]/20 text-[#FF9900] border border-[#FF9900]/30 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
-                                      Leader
-                                    </span>
-                                    <span className="truncate text-xs text-white" title={leader?.name || leader?.email || 'N/A'}>
-                                      {leader?.name || leader?.email?.split('@')[0] || 'N/A'}
-                                    </span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleRoster(t.code)}
-                                    title={isRosterOpen ? 'Collapse Members' : 'Expand Members Dropdown'}
-                                    className="px-2 py-1 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#FF9900]/50 text-[#dbc2ad] hover:text-white font-mono text-[10px] rounded transition-all cursor-pointer flex items-center gap-1 shrink-0"
-                                  >
-                                    <span>👥</span>
-                                    <span>{(t.members || []).length}</span>
-                                    <span className="text-[9px]">{isRosterOpen ? '▲' : '▼'}</span>
-                                  </button>
-                                </div>
-
-                                {leader?.regNo && !isRosterOpen && (
-                                  <div className="text-[10px] text-[#00a8e0] font-mono mt-0.5">
-                                    Reg: {leader.regNo}
-                                  </div>
-                                )}
-
-                                {/* Dropdown Menu showing full team roster */}
-                                {isRosterOpen ? (
-                                  <div className="mt-2 p-2.5 bg-black/50 border border-white/15 rounded-lg space-y-2 shadow-xl">
-                                    <div className="text-[9px] text-[#dbc2ad] font-bold uppercase tracking-wider border-b border-white/10 pb-1 flex justify-between items-center">
-                                      <span>Squad Members Dropdown</span>
-                                      <span className="text-white/60">{(t.members || []).length} Total</span>
-                                    </div>
-                                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                                      {(t.members || []).map((m, idx) => {
-                                        const query = hackathonSearch.toLowerCase().trim();
-                                        const reg = m.regNo || m.reg_no || '';
-                                        const isMatch = query && (
-                                          reg.toLowerCase().includes(query) ||
-                                          (m.email || '').toLowerCase().includes(query) ||
-                                          (m.name || '').toLowerCase().includes(query)
-                                        );
-                                        return (
-                                          <div
-                                            key={idx}
-                                            className={`p-2 rounded border text-[11px] transition-all ${
-                                              isMatch
-                                                ? 'bg-[#FF9900]/20 border-[#FF9900]/60 text-white shadow-[0_0_10px_rgba(255,153,0,0.25)]'
-                                                : 'bg-white/5 border-white/10 text-white/90'
-                                            }`}
-                                          >
-                                            <div className="flex items-center justify-between gap-1">
-                                              <span className="font-bold truncate text-white" title={m.name || m.email}>
-                                                {m.name || m.email?.split('@')[0]}
-                                              </span>
-                                              {m.isLeader ? (
-                                                <span className="px-1.5 py-0.2 text-[8px] bg-[#FF9900]/20 text-[#FF9900] border border-[#FF9900]/40 rounded font-bold uppercase shrink-0">
-                                                  Leader
-                                                </span>
-                                              ) : (
-                                                <span className="px-1.5 py-0.2 text-[8px] bg-white/10 text-[#dbc2ad] rounded uppercase shrink-0">
-                                                  Member
-                                                </span>
-                                              )}
-                                            </div>
-                                            <div className="text-[10px] text-[#dbc2ad] truncate mt-0.5" title={m.email}>
-                                              {m.email}
-                                            </div>
-                                            <div className="mt-1 flex items-center justify-between text-[10px]">
-                                              <span className="text-[#dbc2ad]/70">Reg No:</span>
-                                              <span className={`font-mono font-bold px-1.5 py-0.2 rounded text-[10px] ${
-                                                reg
-                                                  ? isMatch
-                                                    ? 'bg-[#FF9900] text-black font-extrabold'
-                                                    : 'bg-[#00a8e0]/20 text-[#00a8e0] border border-[#00a8e0]/40'
-                                                  : 'text-white/30 italic'
-                                              }`}>
-                                                {reg || 'Not provided'}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="text-[10px] text-[#dbc2ad]/70 mt-1 truncate" title={(t.members || []).map(m => m.name || m.email.split('@')[0]).join(', ')}>
-                                    {(t.members || []).map(m => m.name || m.email.split('@')[0]).join(', ')}
-                                  </div>
-                                )}
-                              </td>
-
-                              {/* Problem Statement */}
-                              <td className="py-3.5 px-4 align-top max-w-[280px]">
-                                {t.isOpened ? (
-                                  <div>
-                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                      <span
-                                        className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider"
-                                        style={{
-                                          background: `${tierColor}20`,
-                                          color: tierColor,
-                                          border: `1px solid ${tierColor}40`
-                                        }}
-                                      >
-                                        {q?.track || 'Track pending'} ({q?.points || 100} pts)
-                                      </span>
-                                      {t.hasChangedQuestion && (
-                                        <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] rounded uppercase font-bold">
-                                          Swapped (1x)
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="font-bold text-white truncate text-sm">{q?.title || 'Unknown Topic'}</div>
-                                    <div className="text-[11px] text-[#dbc2ad] line-clamp-2 mt-0.5 leading-snug">{q?.desc}</div>
-                                  </div>
-                                ) : (
-                                  <div className="text-on-surface-variant/60 flex items-center gap-1.5 italic">
-                                    <span>🔒</span> Sealed Mystery Box (Not Opened Yet)
-                                  </div>
-                                )}
-                              </td>
-
-                              {/* Points */}
-                              <td className="py-3.5 px-4 align-top text-center">
-                                <div className="text-lg font-bold text-[#a8e063]">{t.points || 0} pts</div>
-                                <div className="text-[9px] text-[#00a8e0] mt-1">
-                                  Games: {(t.gameAttempts || []).filter((attempt) => !attempt.voidedAt).length}/{t.maxGameAttempts ?? 5}
-                                </div>
-                                {t.ownedItems && t.ownedItems.length > 0 && (
-                                  <div className="text-[9px] text-[#FF9900] mt-1 truncate max-w-[140px] mx-auto" title={t.ownedItems.join(', ')}>
-                                    Buffs: {t.ownedItems.join(', ')}
-                                  </div>
-                                )}
-                              </td>
-
-                              {/* Board Score Column (Google Colab style review blocks) */}
-                              <td className="py-3.5 px-4 align-top min-w-[280px] max-w-[360px]">
-                                {(() => {
-                                  const effectiveScores = getEffectiveBoardScores(t);
-                                  const totalScore = calculateTotalBoardScore(effectiveScores);
-                                  const isExpanded = Boolean(expandedBoardScoreTeams[t.code]);
-                                  const hasDraft = boardScoreDrafts[t.code] !== undefined;
-
-                                  return (
-                                    <div className="space-y-2">
-                                      {/* Header Bar */}
-                                      <div className="flex items-center justify-between gap-2 bg-white/5 border border-white/10 px-2.5 py-1.5 rounded-lg">
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="text-sm">⭐</span>
-                                          <span className="text-xs font-bold text-amber-400 font-mono">{totalScore} pts</span>
-                                          <span className="text-[10px] text-white/50">({effectiveScores.length} reviews)</span>
-                                          {hasDraft && (
-                                            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" title="Unsaved changes" />
-                                          )}
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <button
-                                            type="button"
-                                            onClick={() => handleAddReviewSection(t)}
-                                            title="Add new review section (Google Colab style)"
-                                            className="px-2 py-0.5 bg-[#FF9900]/20 hover:bg-[#FF9900] text-[#FF9900] hover:text-black border border-[#FF9900]/40 rounded font-bold text-[10px] font-mono transition-all cursor-pointer flex items-center gap-1"
-                                          >
-                                            <span>+</span>
-                                            <span>Section</span>
-                                          </button>
-                                          {effectiveScores.length > 0 && (
-                                            <button
-                                              type="button"
-                                              onClick={() => toggleBoardScoreExpanded(t.code)}
-                                              title={isExpanded ? 'Collapse sections' : 'Expand sections'}
-                                              className="px-1.5 py-0.5 bg-white/5 hover:bg-white/15 border border-white/10 text-white/70 hover:text-white rounded text-[10px] font-mono transition-all cursor-pointer"
-                                            >
-                                              {isExpanded ? '▲' : '▼'}
-                                            </button>
-                                          )}
-                                        </div>
-                                      </div>
-
-                                      {/* Expanded Review Blocks (Colab style) */}
-                                      {isExpanded && (
-                                        <div className="space-y-2 pt-1">
-                                          {effectiveScores.length === 0 ? (
-                                            <div className="text-[11px] text-[#dbc2ad]/60 italic p-2 bg-black/30 border border-dashed border-white/10 rounded text-center">
-                                              No review sections yet. Click &quot;+ Section&quot; above to add one.
-                                            </div>
-                                          ) : (
-                                            effectiveScores.map((sec, idx) => {
-                                              const isEditing = Boolean(editingSectionIds[sec.id] || (sec.title === '' && (sec.marks === '' || sec.marks === undefined)));
-                                              const sectionMarks = sec.marks !== undefined && sec.marks !== '' ? sec.marks : (sec.score !== undefined ? sec.score : 0);
-
-                                              return (
-                                                <div
-                                                  key={sec.id || idx}
-                                                  className="p-2 bg-black/40 border border-white/15 rounded-lg space-y-1.5 shadow-sm relative group hover:border-[#FF9900]/40 transition-colors"
-                                                >
-                                                  {isEditing ? (
-                                                    <div className="flex items-center gap-1.5">
-                                                      <span className="text-[9px] font-mono font-bold text-[#FF9900] px-1 bg-[#FF9900]/10 border border-[#FF9900]/20 rounded shrink-0">
-                                                        #{idx + 1}
-                                                      </span>
-                                                      <input
-                                                        type="text"
-                                                        value={sec.title || ''}
-                                                        onChange={e => handleUpdateReviewField(t.code, idx, 'title', e.target.value)}
-                                                        onKeyDown={e => {
-                                                          if (e.key === 'Enter') {
-                                                            e.preventDefault();
-                                                            handleSaveBoardScore(t.code);
-                                                          }
-                                                        }}
-                                                        placeholder="Section Title (e.g. Review 1, Idea...)"
-                                                        className="flex-1 min-w-0 bg-white/5 border border-white/10 px-2 py-1 text-xs text-white font-mono rounded focus:outline-none focus:border-[#FF9900] placeholder-white/30"
-                                                        autoFocus={Boolean(editingSectionIds[sec.id])}
-                                                      />
-                                                      <div className="flex items-center gap-1 w-20 shrink-0">
-                                                        <input
-                                                          type="number"
-                                                          step="any"
-                                                          value={sec.marks !== undefined ? sec.marks : (sec.score !== undefined ? sec.score : '')}
-                                                          onChange={e => handleUpdateReviewField(t.code, idx, 'marks', e.target.value)}
-                                                          onKeyDown={e => {
-                                                            if (e.key === 'Enter') {
-                                                              e.preventDefault();
-                                                              handleSaveBoardScore(t.code);
-                                                            }
-                                                          }}
-                                                          placeholder="Marks"
-                                                          className="w-full bg-white/5 border border-white/10 px-2 py-1 text-xs text-amber-300 font-mono font-bold rounded focus:outline-none focus:border-[#FF9900] text-right placeholder-white/30"
-                                                        />
-                                                      </div>
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => handleSaveBoardScore(t.code)}
-                                                        title="Save section score"
-                                                        className="px-1.5 py-1 bg-green-500/20 hover:bg-green-500 text-green-300 hover:text-black border border-green-500/40 rounded text-[10px] font-bold font-mono transition-colors cursor-pointer shrink-0"
-                                                      >
-                                                        ✓
-                                                      </button>
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteReviewSection(t.code, idx)}
-                                                        title="Delete section"
-                                                        className="p-1 text-white/40 hover:text-red-400 bg-transparent border-0 cursor-pointer transition-colors shrink-0"
-                                                      >
-                                                        ✕
-                                                      </button>
-                                                    </div>
-                                                  ) : (
-                                                    <div className="flex items-center justify-between gap-1.5">
-                                                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                                        <span className="text-[9px] font-mono font-bold text-[#FF9900] px-1 bg-[#FF9900]/10 border border-[#FF9900]/20 rounded shrink-0">
-                                                          #{idx + 1}
-                                                        </span>
-                                                        <span className="text-xs text-white font-mono font-bold truncate" title={sec.title}>
-                                                          {sec.title || `Review ${idx + 1}`}
-                                                        </span>
-                                                      </div>
-                                                      <div className="flex items-center gap-1.5 shrink-0">
-                                                        <span className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-xs font-bold rounded">
-                                                          {sectionMarks} pts
-                                                        </span>
-                                                        <button
-                                                          type="button"
-                                                          onClick={() => handleStartEditSection(t, sec)}
-                                                          title="Edit Section Title or Marks"
-                                                          className="px-1.5 py-0.5 bg-white/5 hover:bg-[#00a8e0] hover:text-white border border-white/10 text-[#00a8e0] rounded text-[10px] font-mono transition-all cursor-pointer flex items-center gap-0.5"
-                                                        >
-                                                          <span>✏️</span>
-                                                          <span>Edit</span>
-                                                        </button>
-                                                        <button
-                                                          type="button"
-                                                          onClick={() => {
-                                                            handleDeleteReviewSection(t.code, idx);
-                                                            handleSaveBoardScore(t.code);
-                                                          }}
-                                                          title="Delete section"
-                                                          className="p-1 text-white/40 hover:text-red-400 bg-transparent border-0 cursor-pointer transition-colors"
-                                                        >
-                                                          ✕
-                                                        </button>
-                                                      </div>
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              );
-                                            })
-                                          )}
-
-                                          {/* Section Action Row */}
-                                          <div className="flex items-center justify-between gap-2 pt-1">
-                                            <button
-                                              type="button"
-                                              onClick={() => handleAddReviewSection(t)}
-                                              className="text-[10px] text-[#00a8e0] hover:text-[#38bdf8] flex items-center gap-1 bg-transparent border-0 cursor-pointer p-0 font-mono"
-                                            >
-                                              <span>+ Add another section</span>
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleSaveBoardScore(t.code)}
-                                              className="px-2.5 py-1 bg-green-500/20 hover:bg-green-500 text-green-300 hover:text-black border border-green-500/40 rounded font-bold text-[10px] font-mono transition-all cursor-pointer flex items-center gap-1 shadow-sm"
-                                            >
-                                              <span>💾</span>
-                                              <span>Save (↵ Enter)</span>
-                                            </button>
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
-                              </td>
-
-                              {/* Chaos Status */}
-                              <td className="py-3.5 px-4 align-top text-center">
-                                {t.isChaosOpened ? (
-                                  t.isChaosResolved ? (
-                                    <span className="px-2 py-1 bg-green-500/10 border border-green-500/30 text-green-400 font-bold rounded text-[10px] uppercase">
-                                      ✓ Mitigated
-                                    </span>
-                                  ) : (
-                                    <div>
-                                      <span className="px-2 py-1 bg-red-500/20 border border-red-500/40 text-red-400 font-bold rounded text-[10px] uppercase animate-pulse">
-                                        🌪️ Injected
-                                      </span>
-                                      <div className="text-[10px] text-red-300 mt-1 truncate max-w-[120px]">
-                                        {t.chaosEvent?.title || 'Chaos Active'}
-                                      </div>
-                                    </div>
-                                  )
-                                ) : (
-                                  <span className="text-[10px] text-[#dbc2ad]/50 uppercase">Standby</span>
-                                )}
-                              </td>
-
-                              {/* Action Buttons */}
-                              <td className="py-3.5 px-4 align-top text-right whitespace-nowrap">
-                                <div className="flex items-center justify-end gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPointsModalTeam(t);
-                                      setPointDeltaInput('');
-                                    }}
-                                    title="Inject / Deduct Points"
-                                    className="px-2.5 py-1.5 bg-white/5 hover:bg-[#FF9900] hover:text-[#111] border border-white/10 text-white font-mono text-[11px] font-bold uppercase transition-all cursor-pointer rounded"
-                                  >
-                                    ⚡ Points
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setChaosModalTeam(t);
-                                    }}
-                                    title="Chaos Event Controls"
-                                    className="px-2.5 py-1.5 bg-white/5 hover:bg-red-500 hover:text-white border border-white/10 text-red-300 font-mono text-[11px] font-bold uppercase transition-all cursor-pointer rounded"
-                                  >
-                                    🌪️ Chaos
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setReassignModalTeam(t);
-                                      setSelectedReassignQuestion(challenges[0]?.id || '');
-                                      setResetSwapCheckbox(false);
-                                    }}
-                                    title="Reassign Problem Topic"
-                                    className="px-2.5 py-1.5 bg-white/5 hover:bg-[#00a8e0] hover:text-white border border-white/10 text-[#00a8e0] font-mono text-[11px] font-bold uppercase transition-all cursor-pointer rounded"
-                                  >
-                                    🔄 Reassign
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setGameLimitTeam(t);
-                                      setGameLimitInput(String(t.maxGameAttempts ?? 5));
-                                    }}
-                                    title="Set Official Game Limit"
-                                    className="px-2.5 py-1.5 bg-white/5 hover:bg-[#a8e063] hover:text-[#111] border border-white/10 text-[#a8e063] font-mono text-[11px] font-bold uppercase transition-all cursor-pointer rounded"
-                                  >
-                                    🎮 Games
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setDeleteConfirmTeam(t)}
-                                    title="Delete / Disband Team"
-                                    className="px-2 py-1.5 bg-red-950/30 hover:bg-red-600 hover:text-white border border-red-500/30 text-red-400 font-mono text-[11px] transition-all cursor-pointer rounded"
-                                  >
-                                    🗑️
-                                  </button>
-                                </div>
-
-                                {/* Submission Link Row & Individual Download */}
-                                <div className="mt-2.5 flex items-center gap-1.5 justify-center">
-                                  {t.presentation?.link ? (
-                                    <>
-                                      <a
-                                        href={t.presentation.link}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        title={`Open Submission Link: ${t.presentation.link}`}
-                                        className="flex-1 py-1.5 px-2 bg-[#00a8e0]/20 hover:bg-[#00a8e0] border border-[#00a8e0]/50 text-[#00a8e0] hover:text-white font-mono text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer rounded-lg inline-flex items-center justify-center gap-1.5 no-underline shadow-[0_0_12px_rgba(0,168,224,0.15)] active:scale-[0.98]"
-                                      >
-                                        <span className="text-xs">🔗</span>
-                                        <span>Open Link</span>
-                                      </a>
-                                      <button
-                                        type="button"
-                                        onClick={() => downloadSingleTeamLink(t)}
-                                        title="Download Team Link Details (.txt)"
-                                        className="py-1.5 px-2.5 bg-emerald-500/20 hover:bg-emerald-500 hover:text-white border border-emerald-500/50 text-emerald-300 font-mono text-[11px] font-bold transition-all cursor-pointer rounded-lg flex items-center justify-center gap-1 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
-                                      >
-                                        <span>⬇️</span>
-                                        <span>.txt</span>
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <div
-                                      title="No submission link provided yet"
-                                      className="w-full py-1.5 px-2.5 bg-white/5 border border-dashed border-white/15 text-white/40 font-mono text-[11px] rounded-lg inline-flex items-center justify-center gap-1.5 cursor-default"
-                                    >
-                                      <span>⏳</span>
-                                      <span>No Link Submitted</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── SUB-VIEW 2: LIVE ACTIVITY FEED ── */}
-            {hackathonSubView === 'activity' && (
-              <div className="border border-white/10 bg-white/2 p-6 rounded-xl font-mono">
-                <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-ping" />
-                    <span className="text-sm font-bold text-white uppercase tracking-wider">Live Audit Trail</span>
-                  </div>
-                  <span className="text-xs text-[#dbc2ad]">Showing last {filteredActivities.length} events</span>
-                </div>
-
-                {filteredActivities.length === 0 ? (
-                  <div className="text-center py-16 text-[#dbc2ad]">No activity events recorded yet.</div>
-                ) : (
-                  <div className="space-y-3 max-h-[650px] overflow-y-auto pr-2">
-                    {filteredActivities.map((act) => {
-                      const cfg = ACTIVITY_TYPE_CONFIG[act.eventType] || {
-                        icon: '⚡', label: act.eventType, bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.2)', text: '#fff'
-                      };
-
-                      return (
-                        <div
-                          key={act.id}
-                          className="p-4 rounded-lg border bg-white/[0.02] hover:bg-white/[0.04] transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                          style={{ borderColor: cfg.border }}
-                        >
-                          <div className="flex items-start gap-3">
-                            <span className="text-2xl">{cfg.icon}</span>
-                            <div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span
-                                  className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
-                                  style={{ background: cfg.bg, color: cfg.text, border: `1px solid ${cfg.border}` }}
-                                >
-                                  {cfg.label}
-                                </span>
-                                <span className="text-xs font-bold text-white">{act.teamName}</span>
-                                <span className="text-[10px] bg-white/10 text-[#FF9900] px-1.5 py-0.2 rounded">#{act.teamCode}</span>
-                              </div>
-                              <div className="text-xs text-white/90 mt-1 leading-relaxed">{act.message}</div>
-                            </div>
-                          </div>
-
-                          <div className="text-right shrink-0">
-                            <div className="text-[11px] text-[#dbc2ad]">{timeAgo(act.createdAt)}</div>
-                            <div className="text-[9px] text-white/40">{fmt(act.createdAt)}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
 
-        {/* ═══════════════════════════════════════════════════════════
-            TAB 2: QUIZZES & ASSESSMENTS ADMIN (EXISTING)
-           ═══════════════════════════════════════════════════════════ */}
-        {activeTab === 'quiz' && (
-          <div>
-            {/* Global Quiz Controls */}
-            <div className="mb-8 border border-white/10 bg-white/3 p-5 flex flex-col md:flex-row items-center justify-between gap-4">
-              <div>
-                <div className="font-mono text-xs text-[#dbc2ad] uppercase tracking-widest mb-1">Global Quiz Status</div>
-                <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${quizStatus === 'active' ? 'bg-[#a8e063] animate-pulse' : 'bg-[#E24B4A]'}`} />
-                  <span className={`font-mono text-lg font-bold uppercase ${quizStatus === 'active' ? 'text-[#a8e063]' : 'text-[#E24B4A]'}`}>
-                    {quizStatus === 'active' ? 'LIVE (Accepting)' : 'ON HOLD BY AWS (Blocked)'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 w-full md:w-auto">
-                <button
-                  onClick={() => handleStatusChange('initiate')}
-                  disabled={quizStatus === 'active'}
-                  className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#a8e063]/10 text-[#a8e063] border border-[#a8e063]/30 px-6 py-3 font-mono text-xs font-bold uppercase tracking-widest hover:bg-[#a8e063]/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-                  <span className="material-symbols-outlined text-sm">play_arrow</span>
-                  Initiate Quiz
-                </button>
-                <button
-                  onClick={() => handleStatusChange('terminate')}
-                  disabled={quizStatus === 'inactive'}
-                  className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#E24B4A]/10 text-[#E24B4A] border border-[#E24B4A]/30 px-6 py-3 font-mono text-xs font-bold uppercase tracking-widest hover:bg-[#E24B4A]/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
-                  <span className="material-symbols-outlined text-sm">stop</span>
-                  Terminate Quiz
-                </button>
-              </div>
-            </div>
-
-            {/* Stats row */}
-            {stats && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-                {[
-                  { label: 'Students Tested', val: stats.totalStudents, icon: 'group', color: '#FF9900' },
-                  { label: 'Total Attempts', val: stats.totalAttempts, icon: 'quiz', color: '#00a8e0' },
-                  { label: 'Avg Score', val: `${stats.avgScore}%`, icon: 'trending_up', color: '#a8e063' },
-                  { label: 'Quiz Types', val: '3 + CS', icon: 'layers', color: '#c084fc' },
-                ].map(s => (
-                  <div key={s.label} className="border border-white/10 bg-white/3 p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="material-symbols-outlined text-base" style={{ color: s.color }}>{s.icon}</span>
-                      <span className="font-mono text-[10px] text-[#dbc2ad] uppercase tracking-widest">{s.label}</span>
-                    </div>
-                    <div className="font-mono text-3xl font-bold" style={{ color: s.color }}>{s.val}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Top scorers */}
-            {stats?.topScorers?.length > 0 && (
-              <div className="mb-8">
-                <div className="flex items-center gap-4 mb-4">
-                  <span className="font-mono text-[10px] text-[#dbc2ad] uppercase tracking-[0.15em]">🏆 Top Scorers</span>
-                  <div className="flex-1 h-px bg-white/8" />
-                </div>
-                <div className="flex gap-3 overflow-x-auto pb-2">
-                  {stats.topScorers.map((s, i) => (
-                    <div key={s.email} className="flex-shrink-0 border border-white/10 bg-white/3 p-3 min-w-[160px]">
-                      <div className="font-mono text-[10px] text-[#FF9900] mb-1">#{i + 1}</div>
-                      <div className="font-mono text-sm text-white font-bold truncate">{s.first_name} {s.last_name}</div>
-                      <div className="font-mono text-[10px] text-[#dbc2ad] truncate mb-2">{s.email}</div>
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-[10px] text-[#dbc2ad]">{s.attempts} attempts</span>
-                        <span className="font-mono text-sm font-bold text-[#FF9900]">{s.total_score} pts</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Filters */}
-            <div className="flex flex-col md:flex-row gap-3 mb-6">
-              <div className="flex bg-white/5 border border-white/10 p-1 shrink-0">
-                <button
-                  onClick={() => setViewMode('attempts')}
-                  className={`font-mono text-xs px-4 py-2 uppercase tracking-widest transition-colors cursor-pointer ${viewMode === 'attempts' ? 'bg-[#FF9900] text-[#111] font-bold' : 'text-[#dbc2ad] hover:text-white'}`}
-                >
-                  All Attempts
-                </button>
-                <button
-                  onClick={() => setViewMode('leaderboard')}
-                  className={`font-mono text-xs px-4 py-2 uppercase tracking-widest transition-colors cursor-pointer ${viewMode === 'leaderboard' ? 'bg-[#FF9900] text-[#111] font-bold' : 'text-[#dbc2ad] hover:text-white'}`}
-                >
-                  Leaderboard
-                </button>
-              </div>
-              <input
-                type="text" value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search by name or email..."
-                className="flex-1 bg-white/5 border border-white/10 px-4 py-2.5 font-mono text-sm text-white focus:outline-none focus:border-[#FF9900] transition-colors placeholder-white/30"
-              />
-              <select value={filterType} onChange={e => setFilterType(e.target.value)}
-                className="bg-white/5 border border-white/10 px-3 py-2.5 font-mono text-xs text-[#dbc2ad] focus:outline-none focus:border-[#FF9900]">
-                <option value="all">All Types</option>
-                <option value="quiz">Quizzes</option>
-                <option value="case_study">Case Studies</option>
-              </select>
-              <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-                className="bg-white/5 border border-white/10 px-3 py-2.5 font-mono text-xs text-[#dbc2ad] focus:outline-none focus:border-[#FF9900]">
-                <option value="date">Sort: Latest</option>
-                <option value="score">Sort: Score ↓</option>
-                <option value="name">Sort: Name A–Z</option>
-              </select>
-            </div>
-
-            {/* Scores table */}
-            {loading ? (
-              <div className="text-center py-20 font-mono text-[#dbc2ad]">Loading data...</div>
-            ) : (viewMode === 'attempts' && filteredScores.length === 0) || (viewMode === 'leaderboard' && filteredLeaderboard.length === 0) ? (
-              <div className="text-center py-20 font-mono text-[#dbc2ad]">No records found.</div>
-            ) : viewMode === 'attempts' ? (
-              <div className="border border-white/10 overflow-hidden">
-                {/* Header */}
-                <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr_1.5fr] gap-0 bg-white/5 border-b border-white/10 px-4 py-3 hidden md:grid">
-                  {['Student', 'Quiz', 'Type', 'Score / Time', 'Composite', 'Date'].map(h => (
-                    <span key={h} className="font-mono text-[10px] text-[#dbc2ad] uppercase tracking-widest">{h}</span>
-                  ))}
-                </div>
-
-                {/* Rows */}
-                <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
-                  {filteredScores.map(r => {
-                    const tc = QUIZ_TYPE_COLOR[r.quiz_type] || QUIZ_TYPE_COLOR.quiz;
-                    return (
-                      <div key={r.id} className="grid grid-cols-1 md:grid-cols-[2fr_2fr_1fr_1fr_1fr_1.5fr] gap-2 md:gap-0 px-4 py-3 hover:bg-white/3 transition-colors">
-                        <div>
-                          <div className="font-mono text-sm text-white font-bold">{r.first_name} {r.last_name}</div>
-                          <div className="font-mono text-[10px] text-[#dbc2ad]">{r.email}</div>
-                        </div>
-                        <div className="font-mono text-sm text-[#dbc2ad] flex items-center">{r.quiz_title || r.quiz_id}</div>
-                        <div className="flex items-center">
-                          <span className="font-mono text-[9px] px-1.5 py-0.5 uppercase tracking-wider" style={{ background: tc.bg, color: tc.text, border: `1px solid ${tc.border}` }}>
-                            {r.quiz_type === 'case_study' ? 'Case Study' : 'Quiz'}
-                          </span>
-                        </div>
-                        <div className="font-mono text-sm text-[#dbc2ad] flex items-center">{r.score}/{r.total} ({r.time_taken || 0}s)</div>
-                        <div className="flex items-center"><ScoreBadge pct={parseFloat(r.composite_score || r.pct).toFixed(0)} /></div>
-                        <div className="font-mono text-[10px] text-[#dbc2ad] flex items-center">{fmt(r.attempted_at)}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Footer */}
-                <div className="px-4 py-3 bg-white/3 border-t border-white/8 font-mono text-[10px] text-[#dbc2ad]">
-                  Showing {filteredScores.length} of {scores.length} attempts
-                </div>
-              </div>
-            ) : (
-              <div className="border border-white/10 overflow-hidden">
-                {/* Header */}
-                <div className="grid grid-cols-[0.5fr_3fr_1fr_1fr] gap-0 bg-white/5 border-b border-white/10 px-4 py-3 hidden md:grid">
-                  {['Rank', 'Student', 'Total Score', 'Attempts'].map(h => (
-                    <span key={h} className="font-mono text-[10px] text-[#dbc2ad] uppercase tracking-widest">{h}</span>
-                  ))}
-                </div>
-
-                {/* Rows */}
-                <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
-                  {filteredLeaderboard.map((r, i) => (
-                      <div key={r.email} className="grid grid-cols-1 md:grid-cols-[0.5fr_3fr_1fr_1fr] gap-2 md:gap-0 px-4 py-3 hover:bg-white/3 transition-colors">
-                        <div className="font-mono text-sm font-bold text-[#FF9900] flex items-center">#{i + 1}</div>
-                        <div>
-                          <div className="font-mono text-sm text-white font-bold">{r.first_name} {r.last_name}</div>
-                          <div className="font-mono text-[10px] text-[#dbc2ad]">{r.email}</div>
-                        </div>
-                        <div className="font-mono text-xl font-bold text-[#a8e063] flex items-center">{r.total_score} pts</div>
-                        <div className="font-mono text-sm text-[#dbc2ad] flex items-center">{r.attempts}</div>
-                      </div>
-                  ))}
-                </div>
-
-                {/* Footer */}
-                <div className="px-4 py-3 bg-white/3 border-t border-white/8 font-mono text-[10px] text-[#dbc2ad]">
-                  Showing {filteredLeaderboard.length} of {stats?.leaderboard?.length || 0} students
-                </div>
-              </div>
-            )}
+        {/* Filters */}
+        <div className="flex flex-col md:flex-row gap-3 mb-6">
+          <div className="flex bg-white/5 border border-white/10 p-1 shrink-0">
+            <button onClick={() => setViewMode('attempts')}
+              className={`font-mono text-xs px-4 py-2 uppercase tracking-widest transition-colors cursor-pointer ${viewMode === 'attempts' ? 'bg-[#FF9900] text-[#111] font-bold' : 'text-[#dbc2ad] hover:text-white'}`}>
+              All Attempts
+            </button>
+            <button onClick={() => setViewMode('leaderboard')}
+              className={`font-mono text-xs px-4 py-2 uppercase tracking-widest transition-colors cursor-pointer ${viewMode === 'leaderboard' ? 'bg-[#FF9900] text-[#111] font-bold' : 'text-[#dbc2ad] hover:text-white'}`}>
+              Leaderboard
+            </button>
           </div>
-        )}
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name or email..."
+            className="flex-1 bg-white/5 border border-white/10 px-4 py-2.5 font-mono text-sm text-white focus:outline-none focus:border-[#FF9900] transition-colors placeholder-white/30"
+          />
+          <select value={filterType} onChange={e => setFilterType(e.target.value)}
+            className="bg-white/5 border border-white/10 px-3 py-2.5 font-mono text-xs text-[#dbc2ad] focus:outline-none focus:border-[#FF9900]">
+            <option value="all">All Types</option>
+            <option value="quiz">Quizzes</option>
+            <option value="case_study">Case Studies</option>
+          </select>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+            className="bg-white/5 border border-white/10 px-3 py-2.5 font-mono text-xs text-[#dbc2ad] focus:outline-none focus:border-[#FF9900]">
+            <option value="date">Sort: Latest</option>
+            <option value="score">Sort: Score ↓</option>
+            <option value="name">Sort: Name A–Z</option>
+          </select>
+        </div>
 
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════
-          MODAL 0: FULL SQUAD DOSSIER / DETAILED INSPECT MODAL
-         ═══════════════════════════════════════════════════════════ */}
-      {editingTeamCode && hackathonTeams.some(t=>t.code===editingTeamCode) && <TeamAdminEditor key={editingTeamCode} team={hackathonTeams.find(t=>t.code===editingTeamCode)} token={token} challenges={challenges} onClose={()=>setEditingTeamCode(null)} onSaved={loadHackathonData} />}
-      {inspectTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-          <div className="w-full max-w-2xl bg-[#111114] border border-[#00a8e0]/50 p-6 rounded-2xl shadow-2xl font-mono max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-start mb-4 border-b border-white/10 pb-3">
-              <div>
-                <span className="text-[10px] bg-[#00a8e0]/20 text-[#00a8e0] px-2 py-0.5 rounded font-bold uppercase tracking-widest">
-                  Squad Dossier #{inspectTeam.code}
-                </span>
-                <h2 className="text-xl font-bold text-white mt-1 m-0">{inspectTeam.teamName}</h2>
-                <button className="bg-orange-400 text-black px-4 py-2 rounded mt-3" onClick={()=>setEditingTeamCode(inspectTeam.code)}>Manage all team details</button>
-                <div className="text-xs text-[#dbc2ad] mt-0.5">Created: {fmt(inspectTeam.registeredAt)}</div>
-              </div>
-              <button
-                onClick={() => setInspectTeam(null)}
-                className="text-white/60 hover:text-white border-0 bg-transparent cursor-pointer text-xl"
-              >
-                ✕
-              </button>
+        {/* Table */}
+        {loading ? (
+          <div className="text-center py-20 font-mono text-[#dbc2ad]">Loading data...</div>
+        ) : (viewMode === 'attempts' && filteredScores.length === 0) || (viewMode === 'leaderboard' && filteredLeaderboard.length === 0) ? (
+          <div className="text-center py-20 font-mono text-[#dbc2ad]">No records found.</div>
+        ) : viewMode === 'attempts' ? (
+          <div className="border border-white/10 overflow-hidden">
+            <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr_1.5fr] gap-0 bg-white/5 border-b border-white/10 px-4 py-3 hidden md:grid">
+              {['Student', 'Quiz', 'Type', 'Score / Time', 'Composite', 'Date'].map(h => (
+                <span key={h} className="font-mono text-[10px] text-[#dbc2ad] uppercase tracking-widest">{h}</span>
+              ))}
             </div>
-
-            {/* Quick Metrics Bar */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-              <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-center">
-                <div className="text-[10px] text-[#dbc2ad] uppercase">Score Balance</div>
-                <div className="text-xl font-bold text-[#a8e063] mt-0.5">{inspectTeam.points || 0} pts</div>
-              </div>
-              <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-center">
-                <div className="text-[10px] text-[#dbc2ad] uppercase">Topic Swapped</div>
-                <div className="text-sm font-bold text-white mt-1">
-                  {inspectTeam.hasChangedQuestion ? 'YES (1/1 Used)' : 'NO (Available)'}
-                </div>
-              </div>
-              <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-center">
-                <div className="text-[10px] text-[#dbc2ad] uppercase">Chaos Status</div>
-                <div className="text-sm font-bold mt-1" style={{ color: inspectTeam.isChaosOpened ? (inspectTeam.isChaosResolved ? '#34d399' : '#f87171') : '#dbc2ad' }}>
-                  {inspectTeam.isChaosOpened ? (inspectTeam.isChaosResolved ? 'Mitigated' : 'Active Injected') : 'Standby'}
-                </div>
-              </div>
-              <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-center">
-                <div className="text-[10px] text-[#dbc2ad] uppercase">Official Games</div>
-                <div className="text-sm font-bold text-[#00a8e0] mt-1">
-                  {(inspectTeam.gameAttempts || []).filter((attempt) => !attempt.voidedAt).length}/{inspectTeam.maxGameAttempts ?? 5}
-                </div>
-              </div>
-            </div>
-
-            {/* Active Challenge Details */}
-            <div className="mb-6 p-4 bg-white/[0.03] border border-white/10 rounded-xl">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-bold text-[#FF9900] uppercase tracking-wider">Active Problem Statement</span>
-                <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-white/10 text-white">
-                  {inspectTeam.mysteryQuestion?.track || 'Track pending'} ({inspectTeam.mysteryQuestion?.points || 100} pts)
-                </span>
-              </div>
-              <div className="text-sm font-bold text-white">{inspectTeam.mysteryQuestion?.title || 'Sealed Box'}</div>
-              <div className="text-xs text-[#dbc2ad] mt-1.5 leading-relaxed">{inspectTeam.mysteryQuestion?.desc || 'Not unveiled yet.'}</div>
-              {inspectTeam.mysteryQuestion?.tags && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {inspectTeam.mysteryQuestion.tags.map((t, idx) => (
-                    <span key={idx} className="px-2 py-0.5 text-[10px] bg-white/5 border border-white/10 text-[#dbc2ad] rounded">
-                      #{t}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Complete Roster */}
-            <div className="mb-6">
-              <div className="text-xs font-bold text-white uppercase tracking-wider mb-2">
-                Squad Roster ({(inspectTeam.members || []).length} Members)
-              </div>
-              <div className="space-y-2">
-                {(inspectTeam.members || []).map((m, idx) => (
-                  <div key={idx} className="p-3 bg-white/5 border border-white/10 rounded-lg flex justify-between items-center text-xs">
+            <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
+              {filteredScores.map(r => {
+                const tc = QUIZ_TYPE_COLOR[r.quiz_type] || QUIZ_TYPE_COLOR.quiz;
+                return (
+                  <div key={r.id} className="grid grid-cols-1 md:grid-cols-[2fr_2fr_1fr_1fr_1fr_1.5fr] gap-2 md:gap-0 px-4 py-3 hover:bg-white/3 transition-colors">
                     <div>
-                      <div className="font-bold text-white flex items-center gap-2">
-                        <span>{m.name || 'Hacker'}</span>
-                        {m.isLeader && (
-                          <span className="px-1.5 py-0.5 bg-[#FF9900]/20 text-[#FF9900] border border-[#FF9900]/40 text-[9px] rounded uppercase font-bold">
-                            Leader
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-[#dbc2ad] mt-0.5">{m.email}</div>
+                      <div className="font-mono text-sm text-white font-bold">{r.first_name} {r.last_name}</div>
+                      <div className="font-mono text-[10px] text-[#dbc2ad]">{r.email}</div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {m.regNo && (
-                        <span className="px-2 py-0.5 bg-[#00a8e0]/15 text-[#00a8e0] border border-[#00a8e0]/30 rounded font-mono text-[10px] font-bold">
-                          Reg: {m.regNo}
-                        </span>
-                      )}
-                      {!m.isLeader && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveMember(inspectTeam, m)}
-                          className="px-2 py-1 bg-red-950/40 hover:bg-red-600 border border-red-500/30 text-red-300 hover:text-white text-[10px] uppercase font-bold rounded cursor-pointer"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Owned Store Buffs */}
-            <div className="mb-6">
-              <div className="text-xs font-bold text-white uppercase tracking-wider mb-2">Purchased Buffs &amp; Inventory</div>
-              {inspectTeam.ownedItems && inspectTeam.ownedItems.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {inspectTeam.ownedItems.map((item, idx) => (
-                    <span key={idx} className="px-3 py-1 bg-[#FF9900]/10 border border-[#FF9900]/30 text-[#FF9900] text-xs font-bold rounded-lg flex items-center gap-1">
-                      <span>✓</span> {item}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-xs text-[#dbc2ad]/60 italic">No shop buffs purchased yet.</div>
-              )}
-            </div>
-
-            {/* Project / GDrive Submission Link */}
-            <div className="mb-6 p-4 rounded-xl border border-white/10 bg-white/[0.02]">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <span>🔗</span> Project / GDrive Submission Link
-                </div>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                  inspectTeam.presentation?.link ? 'bg-green-500/20 text-green-300 border border-green-500/40' : 'bg-white/5 text-[#dbc2ad]/60 border border-white/10'
-                }`}>
-                  {inspectTeam.presentation?.link ? '✓ Link Submitted' : 'No Link Submitted'}
-                </span>
-              </div>
-
-              {inspectTeam.presentation?.link ? (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/3 p-3.5 rounded-lg border border-white/5">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold text-white flex items-center gap-2 flex-wrap">
-                      <a
-                        href={inspectTeam.presentation.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[#00a8e0] hover:underline font-mono text-xs break-all"
-                      >
-                        {inspectTeam.presentation.link}
-                      </a>
-                    </div>
-                    <div className="text-[11px] text-[#dbc2ad] mt-1.5">
-                      {inspectTeam.presentation.uploadedBy && (
-                        <span>Submitted by: <strong className="text-white">{inspectTeam.presentation.uploadedBy}</strong></span>
-                      )}
-                      {inspectTeam.presentation.uploadedAt && (
-                        <span className="ml-2">• {fmt(inspectTeam.presentation.uploadedAt)}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                    <a
-                      href={inspectTeam.presentation.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3.5 py-2 bg-[#00a8e0] hover:bg-[#0090c0] text-white rounded font-bold text-xs uppercase cursor-pointer no-underline flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(0,168,224,0.3)]"
-                    >
-                      <span>🔗</span> Open Link
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => downloadSingleTeamLink(inspectTeam)}
-                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-bold text-xs uppercase cursor-pointer flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-                    >
-                      <span>⬇️</span> Download .txt
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-xs text-[#dbc2ad]/60 italic py-1">
-                  This squad has not submitted a project / Google Drive link yet.
-                </div>
-              )}
-            </div>
-
-            {/* Board Score Breakdown */}
-            <div className="mb-6 p-4 rounded-xl border border-white/10 bg-white/[0.02]">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <span>⭐</span> Official Board Score Breakdown
-                </div>
-                <span className="px-2.5 py-0.5 rounded text-xs font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
-                  Total: {calculateTotalBoardScore(getEffectiveBoardScores(inspectTeam))} pts
-                </span>
-              </div>
-
-              {getEffectiveBoardScores(inspectTeam).length > 0 ? (
-                <div className="space-y-2">
-                  {getEffectiveBoardScores(inspectTeam).map((sec, idx) => (
-                    <div key={sec.id || idx} className="flex items-center justify-between p-2.5 bg-white/5 border border-white/10 rounded-lg text-xs font-mono">
-                      <div className="flex items-center gap-2">
-                        <span className="px-1.5 py-0.5 bg-[#FF9900]/20 text-[#FF9900] border border-[#FF9900]/30 rounded text-[10px] font-bold">
-                          #{idx + 1}
-                        </span>
-                        <span className="text-white font-bold">{sec.title || `Review ${idx + 1}`}</span>
-                      </div>
-                      <span className="text-amber-300 font-bold text-sm">
-                        {sec.marks !== undefined && sec.marks !== '' ? sec.marks : (sec.score || 0)} pts
+                    <div className="font-mono text-sm text-[#dbc2ad] flex items-center">{r.quiz_title || r.quiz_id}</div>
+                    <div className="flex items-center">
+                      <span className="font-mono text-[9px] px-1.5 py-0.5 uppercase tracking-wider" style={{ background: tc.bg, color: tc.text, border: `1px solid ${tc.border}` }}>
+                        {r.quiz_type === 'case_study' ? 'Case Study' : 'Quiz'}
                       </span>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-xs text-[#dbc2ad]/60 italic py-1">
-                  No board review sections recorded yet for this squad. Add sections in the Squads Directory table.
-                </div>
-              )}
-            </div>
-
-            {/* Quick Actions Drawer Footer */}
-            <div className="flex items-center justify-between gap-2 pt-4 border-t border-white/10 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setDeleteConfirmTeam(inspectTeam)}
-                className="px-3 py-2 bg-red-950/40 hover:bg-red-600 border border-red-500/30 text-red-400 hover:text-white font-bold text-xs uppercase cursor-pointer rounded transition-all"
-              >
-                🗑️ Delete Squad
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPointsModalTeam(inspectTeam);
-                    setPointDeltaInput('');
-                  }}
-                  className="px-3 py-2 bg-[#FF9900] text-[#111] font-bold text-xs uppercase cursor-pointer rounded"
-                >
-                  ⚡ Adjust Points
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReassignModalTeam(inspectTeam);
-                    setSelectedReassignQuestion(challenges[0]?.id || '');
-                    setResetSwapCheckbox(false);
-                  }}
-                  className="px-3 py-2 bg-[#00a8e0] text-white font-bold text-xs uppercase cursor-pointer rounded"
-                >
-                  🔄 Reassign Question
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setGameLimitTeam(inspectTeam);
-                    setGameLimitInput(String(inspectTeam.maxGameAttempts ?? 5));
-                  }}
-                  className="px-3 py-2 bg-[#a8e063] text-[#111] font-bold text-xs uppercase cursor-pointer rounded"
-                >
-                  🎮 Game Limit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInspectTeam(null)}
-                  className="px-4 py-2 bg-white/10 text-white font-bold text-xs uppercase cursor-pointer rounded"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════
-          MODAL 1: POINTS INJECTION / ADJUSTMENT
-         ═══════════════════════════════════════════════════════════ */}
-      {pointsModalTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#111114] border border-[#FF9900]/40 p-6 rounded-2xl shadow-2xl font-mono">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-bold text-white uppercase tracking-wider m-0">⚡ Adjust Points</h3>
-              <button onClick={() => setPointsModalTeam(null)} className="text-white/60 hover:text-white border-0 bg-transparent cursor-pointer text-lg">✕</button>
-            </div>
-
-            <div className="p-3 bg-white/5 border border-white/10 rounded mb-4">
-              <div className="text-[10px] text-[#dbc2ad] uppercase">Team:</div>
-              <div className="text-sm font-bold text-white">{pointsModalTeam.teamName} (#{pointsModalTeam.code})</div>
-              <div className="text-xs text-[#a8e063] mt-1">Current Points: {pointsModalTeam.points || 0} pts</div>
-            </div>
-
-            <div className="mb-4">
-              <label className="text-[10px] text-[#dbc2ad] uppercase block mb-2">Quick Presets:</label>
-              <div className="grid grid-cols-4 gap-2">
-                {[
-                  { label: '+50 Quiz', val: 50 },
-                  { label: '+40 Puzzle', val: 40 },
-                  { label: '+80 Speed', val: 80 },
-                  { label: '−50 Penalty', val: -50 },
-                ].map(p => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => handlePointsSubmit(p.val)}
-                    className="p-2 text-[10px] font-bold border border-white/10 bg-white/5 hover:bg-[#FF9900] hover:text-[#111] text-white transition-all cursor-pointer rounded"
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="mb-6">
-              <label className="text-[10px] text-[#dbc2ad] uppercase block mb-2">Or Custom Delta (+/- Points):</label>
-              <input
-                type="number"
-                value={pointDeltaInput}
-                onChange={e => setPointDeltaInput(e.target.value)}
-                placeholder="e.g. 100 or -50"
-                className="w-full bg-white/5 border border-white/10 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#FF9900]"
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setPointsModalTeam(null)}
-                className="flex-1 bg-white/5 hover:bg-white/10 text-[#dbc2ad] py-2.5 text-xs font-bold uppercase cursor-pointer border-0 rounded"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePointsSubmit()}
-                className="flex-1 bg-[#FF9900] text-[#111] py-2.5 text-xs font-bold uppercase hover:bg-[#ffc082] cursor-pointer border-0 rounded"
-              >
-                Apply Points
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {gameLimitTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#111114] border border-[#a8e063]/40 p-6 rounded-2xl shadow-2xl font-mono">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-bold text-white uppercase tracking-wider m-0">🎮 Official Game Limit</h3>
-              <button onClick={() => setGameLimitTeam(null)} className="text-white/60 hover:text-white border-0 bg-transparent cursor-pointer text-lg">✕</button>
-            </div>
-
-            <div className="p-3 bg-white/5 border border-white/10 rounded mb-4">
-              <div className="text-[10px] text-[#dbc2ad] uppercase">Team:</div>
-              <div className="text-sm font-bold text-white">{gameLimitTeam.teamName} (#{gameLimitTeam.code})</div>
-              <div className="text-xs text-[#00a8e0] mt-1">Used Games: {(gameLimitTeam.gameAttempts || []).filter((attempt) => !attempt.voidedAt).length}/{gameLimitTeam.maxGameAttempts ?? 5}</div>
-            </div>
-
-            <label className="text-[10px] text-[#dbc2ad] uppercase block mb-2">Max Official Game Plays:</label>
-            <input
-              type="number"
-              min="0"
-              max="12"
-              value={gameLimitInput}
-              onChange={e => setGameLimitInput(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#a8e063] mb-5"
-            />
-
-            <div className="max-h-44 overflow-y-auto border border-white/10 rounded mb-5">
-              {(gameLimitTeam.gameAttempts || []).length ? (gameLimitTeam.gameAttempts || []).map((attempt) => (
-                <div key={attempt.attemptId} className="flex items-center justify-between gap-3 px-3 py-2 text-xs border-b border-white/5">
-                  <span className="text-[#dbc2ad]">#{attempt.slotNumber} {attempt.gameSlug}</span>
-                  <span className={attempt.voidedAt ? 'text-red-300' : 'text-[#FF9900]'}>{attempt.voidedAt ? 'voided' : attempt.status} · {attempt.points || 0} pts</span>
-                  {!attempt.voidedAt && (
-                    <button type="button" onClick={() => handleGameAttemptReset(attempt)} className="px-2 py-1 bg-red-950/40 hover:bg-red-600 border border-red-500/30 text-red-300 hover:text-white text-[10px] uppercase rounded cursor-pointer">Void</button>
-                  )}
-                </div>
-              )) : (
-                <div className="px-3 py-4 text-xs text-[#dbc2ad]/60">No official games started yet.</div>
-              )}
-            </div>
-
-            <label className="text-[10px] text-[#dbc2ad] uppercase block mb-2">Reset audit reason (required before voiding):</label>
-            <input
-              type="text"
-              maxLength="500"
-              value={gameResetReason}
-              onChange={event => setGameResetReason(event.target.value)}
-              placeholder="e.g. Duplicate pre-launch attempt"
-              className="w-full bg-white/5 border border-white/10 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-red-400 mb-5"
-            />
-
-            {(gameLimitTeam.pointLedger || []).some((entry) => ['game-reset', 'game-reversal'].includes(entry.sourceType)) && (
-              <div className="max-h-32 overflow-y-auto border border-white/10 rounded mb-5">
-                {(gameLimitTeam.pointLedger || []).filter((entry) => ['game-reset', 'game-reversal'].includes(entry.sourceType)).map((entry) => (
-                  <div key={`${entry.sourceType}:${entry.sourceRef}`} className="px-3 py-2 text-[10px] border-b border-white/5">
-                    <span className="text-red-300 font-bold">{entry.delta > 0 ? '+' : ''}{entry.delta} pts</span>
-                    <span className="text-[#dbc2ad] ml-2">{entry.reason}</span>
-                    <span className="text-white/40 ml-2">balance {entry.balanceAfter}</span>
+                    <div className="font-mono text-sm text-[#dbc2ad] flex items-center">{r.score}/{r.total} ({r.time_taken || 0}s)</div>
+                    <div className="flex items-center"><ScoreBadge pct={parseFloat(r.composite_score || r.pct).toFixed(0)} /></div>
+                    <div className="font-mono text-[10px] text-[#dbc2ad] flex items-center">{fmt(r.attempted_at)}</div>
                   </div>
-                ))}
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setGameLimitTeam(null)}
-                className="flex-1 bg-white/5 hover:bg-white/10 text-[#dbc2ad] py-2.5 text-xs font-bold uppercase cursor-pointer border-0 rounded"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleGameLimitSubmit}
-                className="flex-1 bg-[#a8e063] text-[#111] py-2.5 text-xs font-bold uppercase hover:bg-[#c9ff8c] cursor-pointer border-0 rounded"
-              >
-                Save Limit
-              </button>
+                );
+              })}
+            </div>
+            <div className="px-4 py-3 bg-white/3 border-t border-white/8 font-mono text-[10px] text-[#dbc2ad]">
+              Showing {filteredScores.length} of {scores.length} attempts
             </div>
           </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════
-          MODAL 2: CHAOS EVENT INJECTION
-         ═══════════════════════════════════════════════════════════ */}
-      {chaosModalTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-[#111114] border border-red-500/40 p-6 rounded-2xl shadow-2xl font-mono">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-bold text-red-400 uppercase tracking-wider m-0">🌪️ Chaos Event Control</h3>
-              <button onClick={() => setChaosModalTeam(null)} className="text-white/60 hover:text-white border-0 bg-transparent cursor-pointer text-lg">✕</button>
+        ) : (
+          <div className="border border-white/10 overflow-hidden">
+            <div className="grid grid-cols-[0.5fr_3fr_1fr_1fr] gap-0 bg-white/5 border-b border-white/10 px-4 py-3 hidden md:grid">
+              {['Rank', 'Student', 'Total Score', 'Attempts'].map(h => (
+                <span key={h} className="font-mono text-[10px] text-[#dbc2ad] uppercase tracking-widest">{h}</span>
+              ))}
             </div>
-
-            <div className="p-3 bg-white/5 border border-white/10 rounded mb-4">
-              <div className="text-[10px] text-[#dbc2ad] uppercase">Target Team:</div>
-              <div className="text-sm font-bold text-white">{chaosModalTeam.teamName} (#{chaosModalTeam.code})</div>
-              <div className="text-xs text-red-300 mt-1">
-                Current Status: {chaosModalTeam.isChaosOpened ? (chaosModalTeam.isChaosResolved ? 'Resolved' : 'Active Injected') : 'Standby'}
-              </div>
+            <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
+              {filteredLeaderboard.map((r, i) => (
+                <div key={r.email} className="grid grid-cols-1 md:grid-cols-[0.5fr_3fr_1fr_1fr] gap-2 md:gap-0 px-4 py-3 hover:bg-white/3 transition-colors">
+                  <div className="font-mono text-sm font-bold text-[#FF9900] flex items-center">#{i + 1}</div>
+                  <div>
+                    <div className="font-mono text-sm text-white font-bold">{r.first_name} {r.last_name}</div>
+                    <div className="font-mono text-[10px] text-[#dbc2ad]">{r.email}</div>
+                  </div>
+                  <div className="font-mono text-xl font-bold text-[#a8e063] flex items-center">{r.total_score} pts</div>
+                  <div className="font-mono text-sm text-[#dbc2ad] flex items-center">{r.attempts}</div>
+                </div>
+              ))}
             </div>
-
-            <p className="mb-5 text-xs leading-6 text-[#dbc2ad]">Chaos Mode is a one-time global reveal. Each team receives the curated adaptation stored with its assigned challenge; this screen can only mark the selected team’s adaptation resolved.</p>
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => handleTriggerChaos(true)}
-                disabled={!chaosModalTeam.isChaosOpened || chaosModalTeam.isChaosResolved}
-                className="bg-green-500/20 hover:bg-green-500 hover:text-white text-green-300 border border-green-500/40 py-2.5 px-3 text-xs font-bold uppercase cursor-pointer rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                ✓ Mark Resolved
-              </button>
-              <button
-                type="button"
-                onClick={() => setChaosModalTeam(null)}
-                className="flex-1 bg-white/5 hover:bg-white/10 text-[#dbc2ad] py-2.5 text-xs font-bold uppercase cursor-pointer border-0 rounded"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTriggerChaos(false)}
-                
-                className="flex-1 bg-red-600 text-white py-2.5 text-xs font-bold uppercase hover:bg-red-500 cursor-pointer border-0 rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {chaosEnabled ? 'Disable and Reseal Chaos Globally' : 'Enable Chaos Mode Globally'}
-              </button>
+            <div className="px-4 py-3 bg-white/3 border-t border-white/8 font-mono text-[10px] text-[#dbc2ad]">
+              Showing {filteredLeaderboard.length} of {stats?.leaderboard?.length || 0} students
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* ═══════════════════════════════════════════════════════════
-          MODAL 3: REASSIGN CHALLENGE TOPIC
-         ═══════════════════════════════════════════════════════════ */}
-      {reassignModalTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-xl bg-[#111114] border border-[#00a8e0]/40 p-6 rounded-2xl shadow-2xl font-mono">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-bold text-[#00a8e0] uppercase tracking-wider m-0">🔄 Reassign Challenge Topic</h3>
-              <button onClick={() => setReassignModalTeam(null)} className="text-white/60 hover:text-white border-0 bg-transparent cursor-pointer text-lg">✕</button>
-            </div>
-
-            <div className="p-3 bg-white/5 border border-white/10 rounded mb-4 flex justify-between items-center">
-              <div>
-                <div className="text-[10px] text-[#dbc2ad] uppercase">Target Team:</div>
-                <div className="text-sm font-bold text-white">{reassignModalTeam.teamName} (#{reassignModalTeam.code})</div>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] text-[#dbc2ad] block">Current Topic:</span>
-                <span className="text-xs text-white font-bold truncate max-w-[180px] block">
-                  {reassignModalTeam.mysteryQuestion?.title || 'Sealed'}
-                </span>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="text-[10px] text-[#dbc2ad] uppercase block mb-2">Select New Problem Statement:</label>
-              <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-                {challenges.map(q => {
-                  const isSelected = selectedReassignQuestion === q.id;
-                  const color = '#00a8e0';
-
-                  return (
-                    <div
-                      key={q.id}
-                      onClick={() => setSelectedReassignQuestion(q.id)}
-                      className={`p-3 rounded border transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-[#00a8e0]/20 border-[#00a8e0] text-white'
-                          : 'bg-white/3 border-white/10 hover:bg-white/5 text-[#dbc2ad]'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="font-bold text-xs text-white">{q.title}</span>
-                        <span
-                          className="px-2 py-0.5 text-[9px] font-bold rounded uppercase font-mono"
-                          style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}
-                        >
-                          {q.track} • {q.points} pts
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-white/70 line-clamp-2 leading-snug">{q.desc}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="mb-5 flex items-center gap-2 p-2 bg-white/5 rounded border border-white/10">
-              <input
-                type="checkbox"
-                id="resetSwap"
-                checked={resetSwapCheckbox}
-                onChange={e => setResetSwapCheckbox(e.target.checked)}
-                className="cursor-pointer accent-[#00a8e0]"
-              />
-              <label htmlFor="resetSwap" className="text-xs text-white cursor-pointer select-none">
-                Reset 1-Time Topic Swap limit (Allow team leader to use swap again)
-              </label>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setReassignModalTeam(null)}
-                className="flex-1 bg-white/5 hover:bg-white/10 text-[#dbc2ad] py-2.5 text-xs font-bold uppercase cursor-pointer border-0 rounded"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleReassignTopic}
-                className="flex-1 bg-[#00a8e0] text-white py-2.5 text-xs font-bold uppercase hover:bg-[#38bdf8] cursor-pointer border-0 rounded"
-              >
-                Confirm Reassignment
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════
-          MODAL 4: IN-APP SQUAD DELETION CONFIRMATION (NO BROWSER POPUP)
-         ═══════════════════════════════════════════════════════════ */}
-      {deleteConfirmTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-          <div className="w-full max-w-md bg-[#160a0a] border border-red-500/60 p-6 rounded-2xl shadow-[0_0_50px_rgba(239,68,68,0.25)] font-mono animate-in fade-in zoom-in-95">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-xl text-red-400 shrink-0">
-                ⚠️
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-red-400 uppercase tracking-wider m-0">Permanent Squad Deletion</h3>
-                <span className="text-[10px] text-[#dbc2ad] uppercase tracking-widest">Admin Irreversible Action</span>
-              </div>
-            </div>
-
-            <div className="p-4 bg-red-950/20 border border-red-500/30 rounded-xl mb-4 text-xs">
-              <div className="text-[#dbc2ad] uppercase text-[10px]">Target Squad:</div>
-              <div className="text-sm font-bold text-white mt-0.5">{deleteConfirmTeam.teamName}</div>
-              <div className="flex items-center gap-2 mt-1.5 text-[11px] text-red-300">
-                <span className="bg-red-500/20 px-1.5 py-0.5 rounded font-mono font-bold">#{deleteConfirmTeam.code}</span>
-                <span>• {(deleteConfirmTeam.members || []).length} Participants</span>
-                <span>• {deleteConfirmTeam.points || 0} Points</span>
-              </div>
-            </div>
-
-            <p className="text-xs text-white/80 leading-relaxed mb-6">
-              Are you sure you want to permanently disband and delete this squad? This will remove all team progress, wipe challenge allocations, and log the removal immediately.
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setDeleteConfirmTeam(null)}
-                className="flex-1 bg-white/5 hover:bg-white/10 text-[#dbc2ad] py-2.5 text-xs font-bold uppercase cursor-pointer border border-white/10 rounded-lg transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={executeDeleteTeam}
-                className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2.5 text-xs font-bold uppercase cursor-pointer border-0 rounded-lg shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all"
-              >
-                Confirm &amp; Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════
-          MODAL 5: TERMINATE QUIZ CONFIRMATION (NO BROWSER POPUP)
-         ═══════════════════════════════════════════════════════════ */}
+      {/* Terminate confirmation modal */}
       {terminateQuizModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-          <div className="w-full max-w-md bg-[#160a0a] border border-red-500/60 p-6 rounded-2xl shadow-2xl font-mono animate-in fade-in zoom-in-95">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-xl text-red-400 shrink-0">
-                🛑
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-red-400 uppercase tracking-wider m-0">Terminate Global Quiz</h3>
-                <span className="text-[10px] text-[#dbc2ad] uppercase tracking-widest">Global Status Lock</span>
-              </div>
-            </div>
-
-            <p className="text-xs text-white/80 leading-relaxed mb-6">
-              Are you sure you want to terminate the global quiz? All active participant sessions will be locked and blocked from further submissions.
-            </p>
-
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#111] border border-[#E24B4A]/40 p-6 max-w-sm w-full mx-4">
+            <h3 className="font-mono text-lg font-bold text-[#E24B4A] mb-2">Terminate Quiz?</h3>
+            <p className="font-mono text-sm text-[#dbc2ad] mb-6">This will block all further quiz submissions. Are you sure?</p>
             <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setTerminateQuizModalOpen(false)}
-                className="flex-1 bg-white/5 hover:bg-white/10 text-[#dbc2ad] py-2.5 text-xs font-bold uppercase cursor-pointer border border-white/10 rounded-lg transition-all"
-              >
-                Cancel
+              <button onClick={confirmTerminateQuiz}
+                className="flex-1 bg-[#E24B4A] text-white font-mono text-sm font-bold py-2.5 uppercase tracking-widest cursor-pointer border-none">
+                Terminate
               </button>
-              <button
-                type="button"
-                onClick={confirmTerminateQuiz}
-                className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2.5 text-xs font-bold uppercase cursor-pointer border-0 rounded-lg transition-all"
-              >
-                Terminate Quiz
+              <button onClick={() => setTerminateQuizModalOpen(false)}
+                className="flex-1 bg-white/5 border border-white/10 text-[#dbc2ad] font-mono text-sm py-2.5 uppercase tracking-widest cursor-pointer">
+                Cancel
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
 
-// ── Page root ──────────────────────────────────────────────────
+// ── Root ───────────────────────────────────────────────────────
 export default function AdminPage() {
-  const [adminToken, setAdminToken] = useState(() => sessionStorage.getItem('adminToken') || '');
+  const [token, setToken] = useState(() => sessionStorage.getItem('admin-token') || '');
 
-  function handleLogin(token) {
-    sessionStorage.setItem('adminToken', token);
-    setAdminToken(token);
-  }
+  const handleLogin = (t) => {
+    sessionStorage.setItem('admin-token', t);
+    setToken(t);
+  };
 
-  function handleLogout() {
-    sessionStorage.removeItem('adminToken');
-    setAdminToken('');
-  }
+  const handleLogout = () => {
+    sessionStorage.removeItem('admin-token');
+    setToken('');
+  };
 
-  if (!adminToken) return <AdminLogin onLogin={handleLogin} />;
-  return <Dashboard token={adminToken} onLogout={handleLogout} />;
+  if (!token) return <AdminLogin onLogin={handleLogin} />;
+  return <Dashboard token={token} onLogout={handleLogout} />;
 }

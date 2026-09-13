@@ -1,6 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { getGunshotCompletion } from '../../../utils/teamGameScoring';
 import './gunshotRoulette.css';
+
+function getGunshotCompletion({ dealerEliminated, bankroll }) {
+  const n = Number(bankroll);
+  return { score: dealerEliminated && Number.isFinite(n) && n > 0 ? n : 0 };
+}
 
 // The original DOM game is mounted and cleaned up by this hook, just like the
 // canvas engines used by the other game route components.
