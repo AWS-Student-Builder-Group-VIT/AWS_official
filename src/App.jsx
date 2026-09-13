@@ -16,7 +16,6 @@ import MacbookScrollSection from './components/MacbookScrollSection';
 import awsIcon from './assets/aws_icon.jpeg';
 
 import { checkSessionValidity, getUser, logout } from './utils/auth';
-import { games } from './pages/gamesRegistry';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
@@ -251,9 +250,7 @@ export default function App() {
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/account" element={<AccountPage />} />
             <Route path="/games" element={<GamesPage />} />
-            {games.map((game) => (
-              <Route key={game.slug} path={game.path} element={<GamePageRoute />} />
-            ))}
+            <Route path="/games/:gameSlug" element={<GamePageRoute />} />
           </Routes>
         </Suspense>
       </div>
