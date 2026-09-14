@@ -35,6 +35,40 @@ export interface SubdomainRoundGuideline {
   updated_by?: string;
 }
 
+export type WrittenQuestionScope = 'common_non_technical' | 'domain';
+export type WrittenResponseType = 'long_text' | 'long_text_with_links';
+
+export interface WrittenApplicationQuestion {
+  id: string;
+  slug: string;
+  scope: WrittenQuestionScope;
+  domainId: string;
+  answerKey: string;
+  group: string;
+  prompt: string;
+  instructions: string;
+  responseType: WrittenResponseType;
+  required: boolean;
+  sortOrder: number;
+}
+
+export interface WrittenApplicationRule {
+  domainId: string;
+  group: string;
+  minimumAnswers: number;
+}
+
+export interface CandidateWrittenAnswer {
+  candidate_id: string;
+  domain_id: string;
+  question_id: string;
+  answer_text: string;
+  submission_links: string[];
+  is_final: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface CandidateProfile {
   id: string;
   full_name: string;

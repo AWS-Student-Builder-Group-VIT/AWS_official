@@ -4,7 +4,7 @@ function isAnswered(value) {
 }
 
 function answerFor(question, answers) {
-  const scopedId = `${question.domainId}:${question.id}`;
+  const scopedId = question.answerKey ?? `${question.domainId}:${question.id}`;
   return Object.hasOwn(answers, scopedId) ? answers[scopedId] : answers[question.id];
 }
 
@@ -14,8 +14,17 @@ export function questionsForSelections(questions, selectedDomainIds) {
   const domainQuestions = questions.filter((question) => question.scope === 'domain');
 
   return uniqueDomainIds.flatMap((domainId) => [
-    ...commonQuestions.map((question) => ({ ...question, domainId })),
-    ...domainQuestions.filter((question) => question.domainId === domainId),
+    ...commonQuestions.map((question) => ({
+      ...question,
+      domainId,
+      answerKey: `${domainId}:${question.id}`,
+    })),
+    ...domainQuestions
+      .filter((question) => question.domainId === domainId)
+      .map((question) => ({
+        ...question,
+        answerKey: `${domainId}:${question.id}`,
+      })),
   ]);
 }
 

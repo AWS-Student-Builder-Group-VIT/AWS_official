@@ -59,3 +59,32 @@ test('reports blank required answers and an incomplete minimum-answer group', ()
     { valid: false, missing: ['why', 'design:design_tasks'] },
   );
 });
+
+test('deduplicates mixed selections, excludes Technical, and scopes repeated prompts by domain', () => {
+  const questions = [
+    { id: 'why', scope: 'common_non_technical' },
+    { id: 'work', scope: 'common_non_technical' },
+    { id: 'design-task-1', scope: 'domain', domainId: 'design' },
+  ];
+
+  const applied = questionsForSelections(questions, [
+    'events',
+    'design',
+    'design',
+    'finance',
+    'technical',
+  ]);
+
+  assert.deepEqual(
+    applied.map((item) => item.answerKey),
+    [
+      'events:why',
+      'events:work',
+      'design:why',
+      'design:work',
+      'design:design-task-1',
+      'finance:why',
+      'finance:work',
+    ],
+  );
+});
