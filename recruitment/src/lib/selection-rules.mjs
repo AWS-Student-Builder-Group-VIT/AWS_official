@@ -20,3 +20,19 @@ export function groupSelectionsByDomain(selectedTracks) {
     return groups;
   }, new Map());
 }
+
+export function toggleTrackSelection(currentIds, nextTrack, allTracks) {
+  if (currentIds.includes(nextTrack.id)) {
+    return { ids: currentIds.filter((id) => id !== nextTrack.id) };
+  }
+
+  const proposed = [...currentIds, nextTrack.id];
+  const selectedTracks = proposed
+    .map((id) => allTracks.find((track) => track.id === id))
+    .filter(Boolean);
+  const validation = validateTrackSelection(selectedTracks);
+
+  return validation.valid
+    ? { ids: proposed }
+    : { ids: currentIds, error: validation.code };
+}

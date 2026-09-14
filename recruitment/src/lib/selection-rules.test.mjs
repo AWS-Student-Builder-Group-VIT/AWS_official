@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateTrackSelection } from './selection-rules.mjs';
+import { toggleTrackSelection, validateTrackSelection } from './selection-rules.mjs';
 
 const track = (id, domainSlug) => ({ id, domainId: domainSlug, domainSlug });
 
@@ -38,4 +38,32 @@ test('requires at least one selection and rejects duplicate ids', () => {
     validateTrackSelection([track('web', 'technical'), track('web', 'technical')]).code,
     'DUPLICATE_SELECTION',
   );
+});
+
+test('toggles a whole-domain choice and preserves remaining order on removal', () => {
+  const tracks = [
+    track('web', 'technical'),
+    track('finance-whole', 'finance'),
+    track('events-ops', 'events'),
+  ];
+
+  assert.deepEqual(toggleTrackSelection(['web'], tracks[1], tracks), {
+    ids: ['web', 'finance-whole'],
+  });
+  assert.deepEqual(toggleTrackSelection(['web', 'finance-whole', 'events-ops'], tracks[1], tracks), {
+    ids: ['web', 'events-ops'],
+  });
+});
+
+test('rejects a third Technical choice without discarding current choices', () => {
+  const tracks = [
+    track('web', 'technical'),
+    track('app', 'technical'),
+    track('ai-ml', 'technical'),
+  ];
+
+  assert.deepEqual(toggleTrackSelection(['web', 'app'], tracks[2], tracks), {
+    ids: ['web', 'app'],
+    error: 'TECHNICAL_SELECTION_LIMIT',
+  });
 });
