@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { SEED_QUESTIONS, SEED_GUIDELINES, SEED_PROJECTS } from './seed-data';
 
 export interface LocalProject {
   id: string;
@@ -32,9 +33,24 @@ export interface LocalGuideline {
   updated_by?: string;
 }
 
+export interface LocalWrittenQuestion {
+  id: string;
+  scope: 'common_non_technical' | 'domain';
+  domain_id: string | null;
+  question_group: string;
+  prompt: string;
+  instructions: string;
+  response_type: 'long_text' | 'long_text_with_links';
+  required: boolean;
+  sort_order: number;
+  is_active: boolean;
+  minimum_answers?: number | null;
+  created_at: string;
+}
+
 interface LocalStoreData {
   questions: LocalQuestion[];
-  written_questions: any[];
+  written_questions: LocalWrittenQuestion[];
   guidelines: LocalGuideline[];
   projects: LocalProject[];
 }
@@ -49,10 +65,10 @@ function ensureStoreExists(): LocalStoreData {
 
   if (!fs.existsSync(STORE_PATH)) {
     const initial: LocalStoreData = {
-      questions: [],
+      questions: SEED_QUESTIONS,
       written_questions: [],
-      guidelines: [],
-      projects: [],
+      guidelines: SEED_GUIDELINES,
+      projects: SEED_PROJECTS,
     };
     fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf-8');
     return initial;
@@ -60,13 +76,30 @@ function ensureStoreExists(): LocalStoreData {
 
   try {
     const content = fs.readFileSync(STORE_PATH, 'utf-8');
-    return JSON.parse(content);
+    const parsed = JSON.parse(content) as LocalStoreData;
+    let modified = false;
+    if (!parsed.questions || parsed.questions.length === 0) {
+      parsed.questions = SEED_QUESTIONS;
+      modified = true;
+    }
+    if (!parsed.guidelines || parsed.guidelines.length === 0) {
+      parsed.guidelines = SEED_GUIDELINES;
+      modified = true;
+    }
+    if (!parsed.projects || parsed.projects.length === 0) {
+      parsed.projects = SEED_PROJECTS;
+      modified = true;
+    }
+    if (modified) {
+      fs.writeFileSync(STORE_PATH, JSON.stringify(parsed, null, 2), 'utf-8');
+    }
+    return parsed;
   } catch {
     const fallback: LocalStoreData = {
-      questions: [],
+      questions: SEED_QUESTIONS,
       written_questions: [],
-      guidelines: [],
-      projects: [],
+      guidelines: SEED_GUIDELINES,
+      projects: SEED_PROJECTS,
     };
     fs.writeFileSync(STORE_PATH, JSON.stringify(fallback, null, 2), 'utf-8');
     return fallback;
@@ -114,6 +147,50 @@ export const localStore = {
   clearQuestions(subdomainId: string): void {
     const data = ensureStoreExists();
     data.questions = data.questions.filter((q) => q.subdomain_id !== subdomainId);
+    writeStore(data);
+  },
+
+  getWrittenQuestions(domainId?: string | null): LocalWrittenQuestion[] {
+    const data = ensureStoreExists();
+    if (!domainId) return data.written_questions || [];
+    return (data.written_questions || []).filter(
+      (q) => q.domain_id === domainId || q.scope === 'common_non_technical'
+    );
+  },
+
+  addWrittenQuestion(question: Omit<LocalWrittenQuestion, 'id' | 'created_at'> & { id?: string }): LocalWrittenQuestion {
+    const data = ensureStoreExists();
+    if (!data.written_questions) data.written_questions = [];
+    const item: LocalWrittenQuestion = {
+      ...question,
+      id: question.id || `wq-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      created_at: new Date().toISOString(),
+    };
+    data.written_questions.unshift(item);
+    writeStore(data);
+    return item;
+  },
+
+  deleteWrittenQuestion(id: string): boolean {
+    const data = ensureStoreExists();
+    if (!data.written_questions) return false;
+    const initialLen = data.written_questions.length;
+    data.written_questions = data.written_questions.filter((q) => q.id !== id);
+    if (data.written_questions.length !== initialLen) {
+      writeStore(data);
+      return true;
+    }
+    return false;
+  },
+
+  clearWrittenQuestions(domainId?: string): void {
+    const data = ensureStoreExists();
+    if (!data.written_questions) return;
+    if (domainId) {
+      data.written_questions = data.written_questions.filter((q) => q.domain_id !== domainId);
+    } else {
+      data.written_questions = [];
+    }
     writeStore(data);
   },
 

@@ -382,7 +382,12 @@ export default function QuestionBank({ domains, onClose }: { domains: Domain[]; 
   }
 
   const technicalDomains = domains.filter((domain) => domain.slug === 'technical');
-  const selectableDomains = activeRound === 1 && questionMode === 'scored' ? technicalDomains : domains.filter((domain) => domain.slug !== 'technical');
+  const selectableDomains =
+    activeRound === 1
+      ? questionMode === 'scored'
+        ? technicalDomains
+        : domains.filter((domain) => domain.slug !== 'technical')
+      : domains;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#080a0d]/95 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="question-bank-title">

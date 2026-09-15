@@ -61,6 +61,7 @@ export async function GET(request: Request) {
   const domainId = new URL(request.url).searchParams.get('domain_id');
 
   const localQuestions = localStore.getQuestions(subdomainId);
+  const localWritten = localStore.getWrittenQuestions(domainId);
 
   try {
     if (mode === 'written') {
@@ -72,8 +73,10 @@ export async function GET(request: Request) {
           ? authorization.admin.from('written_application_rules').select('*').eq('domain_id', domainId)
           : Promise.resolve({ data: [], error: null }),
       ]);
-      if (error || ruleError) return NextResponse.json({ questions: [], rules: [] });
-      return NextResponse.json({ questions: data ?? [], rules: rules ?? [] });
+      if (data && data.length > 0) {
+        return NextResponse.json({ questions: data, rules: rules ?? [] });
+      }
+      return NextResponse.json({ questions: localWritten, rules: rules ?? [] });
     }
     let query = authorization.admin.from('assessment_questions').select('id,domain_id,subdomain_id,question_text,question_type,options,correct_answers,marks,difficulty,is_active,created_at').order('created_at', { ascending: false }).limit(500);
     if (subdomainId) query = query.eq('subdomain_id', subdomainId);
@@ -81,6 +84,9 @@ export async function GET(request: Request) {
     if (data && data.length > 0) return NextResponse.json({ questions: data });
   } catch (err) {}
 
+  if (mode === 'written') {
+    return NextResponse.json({ questions: localWritten, rules: [] });
+  }
   return NextResponse.json({ questions: localQuestions });
 }
 
@@ -94,6 +100,20 @@ export async function POST(request: Request) {
     if (!parsedWritten.success) return NextResponse.json({ error: parsedWritten.error.issues[0]?.message ?? 'Invalid written question.' }, { status: 400 });
     const input = parsedWritten.data;
     const slugRoot = input.prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 70) || 'written-question';
+    
+    const savedLocal = localStore.addWrittenQuestion({
+      scope: input.scope,
+      domain_id: input.scope === 'domain' ? input.domain_id : null,
+      question_group: input.question_group,
+      prompt: input.prompt,
+      instructions: input.instructions,
+      response_type: input.response_type,
+      required: input.required,
+      sort_order: input.sort_order,
+      is_active: input.is_active,
+      minimum_answers: input.minimum_answers,
+    });
+
     try {
       const { data } = await authorization.admin.from('written_application_questions').insert({
         slug: `${slugRoot}-${Date.now()}`,
@@ -110,14 +130,7 @@ export async function POST(request: Request) {
       if (data) return NextResponse.json({ question: data }, { status: 201 });
     } catch {}
 
-    return NextResponse.json({
-      question: {
-        id: `written-${Date.now()}`,
-        ...input,
-        slug: `${slugRoot}-${Date.now()}`,
-        created_at: new Date().toISOString(),
-      }
-    }, { status: 201 });
+    return NextResponse.json({ question: savedLocal }, { status: 201 });
   }
 
   const parsed = questionSchema.safeParse(body);
@@ -175,23 +188,35 @@ export async function DELETE(request: Request) {
   const domainId = searchParams.get('domain_id');
   const deleteAll = searchParams.get('all') === 'true';
 
-  if (deleteAll && subdomainId) {
-    localStore.clearQuestions(subdomainId);
-    try {
-      await authorization.admin.from('assessment_questions').delete().eq('subdomain_id', subdomainId);
-    } catch {}
-    return NextResponse.json({ success: true, message: 'All technical questions for subdomain cleared.' });
+  if (deleteAll) {
+    if (mode === 'written' && domainId) {
+      localStore.clearWrittenQuestions(domainId);
+      try {
+        await authorization.admin.from('written_application_questions').delete().eq('domain_id', domainId);
+      } catch {}
+      return NextResponse.json({ success: true, message: 'All written questions for domain cleared.' });
+    }
+    if (subdomainId) {
+      localStore.clearQuestions(subdomainId);
+      try {
+        await authorization.admin.from('assessment_questions').delete().eq('subdomain_id', subdomainId);
+      } catch {}
+      return NextResponse.json({ success: true, message: 'All technical questions for subdomain cleared.' });
+    }
   }
 
   if (id) {
-    localStore.deleteQuestion(id);
-    try {
-      if (mode === 'written') {
+    if (mode === 'written') {
+      localStore.deleteWrittenQuestion(id);
+      try {
         await authorization.admin.from('written_application_questions').delete().eq('id', id);
-      } else {
+      } catch {}
+    } else {
+      localStore.deleteQuestion(id);
+      try {
         await authorization.admin.from('assessment_questions').delete().eq('id', id);
-      }
-    } catch {}
+      } catch {}
+    }
     return NextResponse.json({ success: true, message: 'Question deleted successfully.' });
   }
 
