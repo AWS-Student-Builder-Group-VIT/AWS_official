@@ -11,7 +11,9 @@ export const createClient = () => {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true,
+        // AuthCallback exchanges the code itself. Auto-detection would race it,
+        // consuming the single-use code and deleting the PKCE verifier first.
+        detectSessionInUrl: false,
         // auth-js defaults to the implicit flow, which returns the session in the
         // URL hash. AuthCallback reads ?code= and calls exchangeCodeForSession,
         // both of which require PKCE.

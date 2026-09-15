@@ -8,8 +8,17 @@
 
 import { Router } from 'express';
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'node:crypto';
 
 const router = Router();
+
+/** Constant-time credential comparison; length is compared first because
+ *  timingSafeEqual throws on mismatched buffer lengths. */
+export function secretMatches(provided, expected) {
+  const a = Buffer.from(String(provided ?? ''), 'utf8');
+  const b = Buffer.from(String(expected ?? ''), 'utf8');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 // ── Supabase admin client (server-side only) ──────────────────────────────
 function adminSupabase() {
@@ -50,14 +59,42 @@ router.post('/admin/login', async (req, res) => {
   try {
     const { adminId, password } = req.body ?? {};
     if (!adminId || !password) return res.status(400).json({ error: 'adminId and password are required' });
+
+    const { ADMIN_ID, ADMIN_PASSWORD } = process.env;
+    if (!ADMIN_ID || !ADMIN_PASSWORD) {
+      return res.status(503).json({ error: 'Admin login is not configured: set ADMIN_ID and ADMIN_PASSWORD.' });
+    }
+    if (!secretMatches(adminId, ADMIN_ID) || !secretMatches(password, ADMIN_PASSWORD)) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // The dashboard's routes and every RLS policy key off auth.uid(), so the env
+    // credentials are exchanged for a real Supabase session. The account behind it
+    // is derived from ADMIN_ID and never typed or emailed: a magiclink creates the
+    // user when missing and returns a token redeemed here, server-side.
+    const adminEmail = `${ADMIN_ID.replace(/[^a-z0-9._-]/gi, '')}@admin.local`;
     const supabase = adminSupabase();
-    // Attempt sign-in with email+password
-    const { data, error } = await supabase.auth.signInWithPassword({ email: adminId, password });
-    if (error || !data.session) return res.status(401).json({ error: error?.message ?? 'Invalid credentials' });
-    // Verify the user is actually in admin_users
-    const { data: adminRow } = await supabase.from('admin_users').select('id').eq('id', data.user.id).maybeSingle();
-    if (!adminRow) return res.status(403).json({ error: 'Account does not have admin privileges' });
-    return res.json({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
+    const { data: link, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'magiclink',
+      email: adminEmail,
+    });
+    if (linkError) return res.status(500).json({ error: linkError.message });
+
+    const { data: verified, error: verifyError } = await supabase.auth.verifyOtp({
+      token_hash: link.properties.hashed_token,
+      type: 'magiclink',
+    });
+    if (verifyError || !verified.session) {
+      return res.status(500).json({ error: verifyError?.message ?? 'Could not create an admin session' });
+    }
+
+    // Keep admin_users in step so requireAdmin and the RLS policies accept this session.
+    await supabase.from('admin_users').upsert(
+      { id: verified.user.id, email: adminEmail, name: 'Admin', role: 'super_admin' },
+      { onConflict: 'id' },
+    );
+
+    return res.json({ access_token: verified.session.access_token, refresh_token: verified.session.refresh_token });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
