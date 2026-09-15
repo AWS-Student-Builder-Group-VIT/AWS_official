@@ -9,6 +9,7 @@
 import { Router } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'node:crypto';
+import { validateProfilePayload } from '../src/recruitment/lib/profile-schema.js';
 
 const router = Router();
 
@@ -120,6 +121,31 @@ router.post('/admin/login', async (req, res) => {
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
+});
+
+// POST /api/recruitment/profile/complete
+// Ported from the deleted Next.js app; without it the profile form posts to a
+// 404 and the candidate never gets a candidate_profiles row.
+router.post('/profile/complete', async (req, res) => {
+  const ctx = await requireAuth(req, res);
+  if (!ctx) return;
+  const { user, supabase } = ctx;
+  if (!user.email) return res.status(401).json({ error: 'Your signed-in account does not provide an email address.' });
+
+  const parsed = validateProfilePayload(req.body ?? null);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid profile.' });
+
+  const metadata = user.user_metadata ?? {};
+  const fullName = String(metadata.full_name || metadata.name || user.email.split('@')[0]);
+  const { data, error } = await supabase.from('candidate_profiles').upsert({
+    id: user.id,
+    full_name: fullName,
+    email: user.email,
+    ...parsed.data,
+    profile_complete: true,
+  }, { onConflict: 'id' }).select('*').single();
+  if (error) return res.status(500).json({ error: error.message });
+  return res.json({ profile: data });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

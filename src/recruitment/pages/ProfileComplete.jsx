@@ -32,17 +32,22 @@ export default function ProfileComplete() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { navigate('/recruitment/login', { replace: true }); return; }
     setError('');
-    const response = await fetch('/api/recruitment/profile/complete', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(values),
-    });
-    const result = await response.json();
-    if (!response.ok) { setError(result.error ?? 'Unable to complete profile.'); return; }
-    navigate('/recruitment/subdomain');
+    try {
+      const response = await fetch('/api/recruitment/profile/complete', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(values),
+      });
+      // A missing route or crashed function replies with HTML, not JSON.
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error ?? `Unable to complete profile (HTTP ${response.status}).`);
+      navigate('/recruitment/subdomain');
+    } catch (err) {
+      setError(err.message ?? 'Unable to complete profile.');
+    }
   }
 
   async function logout() {
