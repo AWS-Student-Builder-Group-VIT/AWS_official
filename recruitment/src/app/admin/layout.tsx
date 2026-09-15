@@ -16,21 +16,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     const check = async () => {
       if (isLoginPage) { setChecking(false); return; }
-      if (typeof window !== 'undefined' && sessionStorage.getItem('aws_admin_token')) {
-        setChecking(false);
-        return;
-      }
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { router.push('/admin/login'); return; }
         const { data: admin } = await supabase.from('admin_users').select('id, role').eq('id', user.id).maybeSingle();
         if (!admin) { router.push('/admin/login'); return; }
       } catch {
-        // If supabase is unreachable, check fallback
-        if (typeof window !== 'undefined' && sessionStorage.getItem('aws_admin_token')) {
-          setChecking(false);
-          return;
-        }
         router.push('/admin/login');
         return;
       }

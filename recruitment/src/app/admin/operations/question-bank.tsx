@@ -82,9 +82,6 @@ export default function QuestionBank({ domains, onClose }: { domains: Domain[]; 
       const { data: { session } } = await supabase.auth.getSession();
       token = session?.access_token || '';
     } catch {}
-    if (!token && typeof window !== 'undefined') {
-      token = sessionStorage.getItem('aws_admin_token') || localStorage.getItem('aws_admin_token') || '';
-    }
     return token ? { Authorization: `Bearer ${token}` } : null;
   }
 

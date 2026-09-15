@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createAdminClient } from '@/lib/supabase-server';
-import { localStore } from '@/lib/local-store';
+import { ASSESSMENT_ADMIN_ROLES, authorizeAdmin } from '@/lib/admin-authorization';
 
 const questionSchema = z.object({
   mode: z.literal('scored').default('scored'),
@@ -36,21 +35,7 @@ const writtenQuestionSchema = z.object({
 });
 
 async function authorize(request: Request) {
-  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-  if (!token) return { error: NextResponse.json({ error: 'Authentication required.' }, { status: 401 }) };
-  const admin = createAdminClient();
-
-  if (token === 'aws_admin_local_jwt_session_token' || token.startsWith('aws_admin_')) {
-    return { admin };
-  }
-
-  const { data: authData, error: authError } = await admin.auth.getUser(token);
-  if (authError || !authData.user) return { error: NextResponse.json({ error: 'Invalid session.' }, { status: 401 }) };
-  const { data: adminUser } = await admin.from('admin_users').select('role').eq('id', authData.user.id).maybeSingle();
-  if (!adminUser || !['super_admin', 'recruitment_admin', 'assessment_evaluator'].includes(adminUser.role)) {
-    return { error: NextResponse.json({ error: 'Question-bank access requires an assessment administrator.' }, { status: 403 }) };
-  }
-  return { admin };
+  return authorizeAdmin(request, ASSESSMENT_ADMIN_ROLES);
 }
 
 export async function GET(request: Request) {
@@ -60,34 +45,23 @@ export async function GET(request: Request) {
   const mode = new URL(request.url).searchParams.get('mode');
   const domainId = new URL(request.url).searchParams.get('domain_id');
 
-  const localQuestions = localStore.getQuestions(subdomainId);
-  const localWritten = localStore.getWrittenQuestions(domainId);
-
-  try {
-    if (mode === 'written') {
-      let writtenQuery = authorization.admin.from('written_application_questions').select('*').order('sort_order').limit(500);
-      if (domainId) writtenQuery = writtenQuery.or(`domain_id.eq.${domainId},scope.eq.common_non_technical`);
-      const [{ data, error }, { data: rules, error: ruleError }] = await Promise.all([
-        writtenQuery,
-        domainId
-          ? authorization.admin.from('written_application_rules').select('*').eq('domain_id', domainId)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-      if (data && data.length > 0) {
-        return NextResponse.json({ questions: data, rules: rules ?? [] });
-      }
-      return NextResponse.json({ questions: localWritten, rules: rules ?? [] });
-    }
-    let query = authorization.admin.from('assessment_questions').select('id,domain_id,subdomain_id,question_text,question_type,options,correct_answers,marks,difficulty,is_active,created_at').order('created_at', { ascending: false }).limit(500);
-    if (subdomainId) query = query.eq('subdomain_id', subdomainId);
-    const { data, error } = await query;
-    if (data && data.length > 0) return NextResponse.json({ questions: data });
-  } catch (err) {}
-
   if (mode === 'written') {
-    return NextResponse.json({ questions: localWritten, rules: [] });
+    let writtenQuery = authorization.admin.from('written_application_questions').select('*').order('sort_order').limit(500);
+    if (domainId) writtenQuery = writtenQuery.or(`domain_id.eq.${domainId},scope.eq.common_non_technical`);
+    const [{ data, error }, { data: rules, error: ruleError }] = await Promise.all([
+      writtenQuery,
+      domainId
+        ? authorization.admin.from('written_application_rules').select('*').eq('domain_id', domainId)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (error || ruleError) return NextResponse.json({ error: error?.message ?? ruleError?.message }, { status: 500 });
+    return NextResponse.json({ questions: data ?? [], rules: rules ?? [] });
   }
-  return NextResponse.json({ questions: localQuestions });
+  let query = authorization.admin.from('assessment_questions').select('id,domain_id,subdomain_id,question_text,question_type,options,correct_answers,marks,difficulty,is_active,created_at').order('created_at', { ascending: false }).limit(500);
+  if (subdomainId) query = query.eq('subdomain_id', subdomainId);
+  const { data, error } = await query;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ questions: data ?? [] });
 }
 
 export async function POST(request: Request) {
@@ -101,7 +75,8 @@ export async function POST(request: Request) {
     const input = parsedWritten.data;
     const slugRoot = input.prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 70) || 'written-question';
     
-    const savedLocal = localStore.addWrittenQuestion({
+    const { data, error } = await authorization.admin.from('written_application_questions').insert({
+      slug: `${slugRoot}-${Date.now()}`,
       scope: input.scope,
       domain_id: input.scope === 'domain' ? input.domain_id : null,
       question_group: input.question_group,
@@ -111,26 +86,9 @@ export async function POST(request: Request) {
       required: input.required,
       sort_order: input.sort_order,
       is_active: input.is_active,
-      minimum_answers: input.minimum_answers,
-    });
-
-    try {
-      const { data } = await authorization.admin.from('written_application_questions').insert({
-        slug: `${slugRoot}-${Date.now()}`,
-        scope: input.scope,
-        domain_id: input.scope === 'domain' ? input.domain_id : null,
-        question_group: input.question_group,
-        prompt: input.prompt,
-        instructions: input.instructions,
-        response_type: input.response_type,
-        required: input.required,
-        sort_order: input.sort_order,
-        is_active: input.is_active,
-      }).select('*').single();
-      if (data) return NextResponse.json({ question: data }, { status: 201 });
-    } catch {}
-
-    return NextResponse.json({ question: savedLocal }, { status: 201 });
+    }).select('*').single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ question: data }, { status: 201 });
   }
 
   const parsed = questionSchema.safeParse(body);
@@ -145,7 +103,11 @@ export async function POST(request: Request) {
     if (input.question_type === 'mcq' && input.correct_answers.length !== 1) return NextResponse.json({ error: 'A single-choice question must have exactly one correct option.' }, { status: 400 });
   }
 
-  const savedLocal = localStore.addQuestion({
+  const { data: subdomain, error: subdomainError } = await authorization.admin.from('subdomains').select('id,domain_id').eq('id', input.subdomain_id).eq('is_active', true).maybeSingle();
+  if (subdomainError || !subdomain) return NextResponse.json({ error: subdomainError?.message ?? 'Technical subdomain not found.' }, { status: 400 });
+
+  const { data, error } = await authorization.admin.from('assessment_questions').insert({
+    domain_id: subdomain.domain_id,
     subdomain_id: input.subdomain_id,
     question_text: input.question_text,
     question_type: input.question_type,
@@ -154,27 +116,9 @@ export async function POST(request: Request) {
     marks: input.marks,
     difficulty: input.difficulty,
     is_active: true,
-  });
-
-  try {
-    const { data: subdomain } = await authorization.admin.from('subdomains').select('id,domain_id').eq('id', input.subdomain_id).eq('is_active', true).maybeSingle();
-    const domainId = subdomain?.domain_id || '10000000-0000-4000-8000-000000000001';
-
-    const { data } = await authorization.admin.from('assessment_questions').insert({
-      domain_id: domainId,
-      subdomain_id: input.subdomain_id,
-      question_text: input.question_text,
-      question_type: input.question_type,
-      options: input.question_type === 'short_answer' ? null : input.options,
-      correct_answers: input.correct_answers,
-      marks: input.marks,
-      difficulty: input.difficulty,
-      is_active: true,
-    }).select('id,domain_id,subdomain_id,question_text,question_type,options,correct_answers,marks,difficulty,is_active,created_at').single();
-    if (data) return NextResponse.json({ question: data }, { status: 201 });
-  } catch {}
-
-  return NextResponse.json({ question: savedLocal }, { status: 201 });
+  }).select('id,domain_id,subdomain_id,question_text,question_type,options,correct_answers,marks,difficulty,is_active,created_at').single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ question: data }, { status: 201 });
 }
 
 export async function DELETE(request: Request) {
@@ -190,32 +134,24 @@ export async function DELETE(request: Request) {
 
   if (deleteAll) {
     if (mode === 'written' && domainId) {
-      localStore.clearWrittenQuestions(domainId);
-      try {
-        await authorization.admin.from('written_application_questions').delete().eq('domain_id', domainId);
-      } catch {}
+      const { error } = await authorization.admin.from('written_application_questions').delete().eq('domain_id', domainId);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ success: true, message: 'All written questions for domain cleared.' });
     }
     if (subdomainId) {
-      localStore.clearQuestions(subdomainId);
-      try {
-        await authorization.admin.from('assessment_questions').delete().eq('subdomain_id', subdomainId);
-      } catch {}
+      const { error } = await authorization.admin.from('assessment_questions').delete().eq('subdomain_id', subdomainId);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ success: true, message: 'All technical questions for subdomain cleared.' });
     }
   }
 
   if (id) {
     if (mode === 'written') {
-      localStore.deleteWrittenQuestion(id);
-      try {
-        await authorization.admin.from('written_application_questions').delete().eq('id', id);
-      } catch {}
+      const { error } = await authorization.admin.from('written_application_questions').delete().eq('id', id);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     } else {
-      localStore.deleteQuestion(id);
-      try {
-        await authorization.admin.from('assessment_questions').delete().eq('id', id);
-      } catch {}
+      const { error } = await authorization.admin.from('assessment_questions').delete().eq('id', id);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     }
     return NextResponse.json({ success: true, message: 'Question deleted successfully.' });
   }

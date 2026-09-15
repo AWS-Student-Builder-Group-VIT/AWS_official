@@ -69,9 +69,6 @@ export default function AdminOperationsPage() {
       const { data: { session } } = await supabase.auth.getSession();
       token = session?.access_token || '';
     } catch {}
-    if (!token && typeof window !== 'undefined') {
-      token = sessionStorage.getItem('aws_admin_token') || localStorage.getItem('aws_admin_token') || '';
-    }
     if (!token) { router.replace('/admin/login'); return; }
     const response = await fetch('/api/admin/operations', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
     const result = await response.json();

@@ -61,12 +61,13 @@ export async function POST(request: Request) {
       user = data.user;
     }
 
-    await admin.from('admin_users').upsert({
+    const { error: adminError } = await admin.from('admin_users').upsert({
       id: user.id,
       email: ADMIN_AUTH_EMAIL,
       name: 'AWS SBG Administrator',
       role: 'super_admin',
     }, { onConflict: 'id' });
+    if (adminError) throw adminError;
 
     const client = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -84,18 +85,7 @@ export async function POST(request: Request) {
       refresh_token: sessionData.session.refresh_token,
     });
   } catch (err: any) {
-    console.warn('[admin-login] Supabase auth unavailable, issuing local session token:', err.message);
-    const res = NextResponse.json({
-      access_token: 'aws_admin_local_jwt_session_token',
-      refresh_token: 'aws_admin_local_jwt_refresh_token',
-      user: { id: 'admin-local', email: ADMIN_AUTH_EMAIL, role: 'super_admin' },
-    });
-    res.cookies.set('aws_admin_session', 'aws_admin_local_jwt_session_token', {
-      path: '/',
-      httpOnly: false,
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7,
-    });
-    return res;
+    console.error('[admin-login] Unable to create an administrator session:', err.message);
+    return NextResponse.json({ error: 'Unable to open the admin session.' }, { status: 503 });
   }
 }
