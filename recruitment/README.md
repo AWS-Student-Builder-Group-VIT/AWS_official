@@ -49,6 +49,8 @@ Profile completion collects registration number, phone number, year, and branch.
 
 Saving domain choices routes directly to `/dashboard/round-1`.
 
+Round 1 opens as a card hub: one card for each selected non-Technical domain and one entry card for each selected Technical subdomain. Written domains save and submit independently, and submitting one domain locks only that domain. Technical cards open the relevant question tab inside the candidate's single combined timed assessment.
+
 Every selected non-Technical domain receives these required prompts once per domain:
 
 1. Why do you want to join this club?
@@ -67,6 +69,8 @@ Technical selections use the scored assessment component of Round 1: five questi
 ## Admin testing and operations
 
 While running `npm run dev`, open `/admin/login` and choose **Enter local admin**. This development-only shortcut is unavailable in production builds.
+
+All `/admin` routes, including login and the Operations Console, use Josefin Sans while candidate pages retain the existing Inter and Space Mono type system.
 
 The operations console at `/admin/operations` provides:
 
