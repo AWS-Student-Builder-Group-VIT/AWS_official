@@ -1,0 +1,92 @@
+{
+  "questions": [
+    {
+      "id": "q-web-01",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "In modern JavaScript (ES6+), what is the primary operational difference between 'Promise.all()' and 'Promise.allSettled()'?",
+      "question_type": "mcq",
+      "options": [
+        { "id": "A", "text": "Promise.all() rejects immediately if any promise rejects, while Promise.allSettled() waits for all promises to resolve or reject." },
+        { "id": "B", "text": "Promise.allSettled() runs promises in sequential order, while Promise.all() runs in parallel." },
+        { "id": "C", "text": "Promise.all() only accepts synchronous functions, whereas Promise.allSettled() accepts async functions." },
+        { "id": "D", "text": "There is no difference; Promise.allSettled() is just an alias for Promise.all()." }
+      ],
+      "correct_answers": ["A"],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:30:00.000Z"
+    },
+    {
+      "id": "q-web-02",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "What HTTP status code should a REST API return when a request is syntactically valid and authenticated, but the authenticated user lacks permission to access the resource?",
+      "question_type": "mcq",
+      "options": [
+        { "id": "A", "text": "401 Unauthorized" },
+        { "id": "B", "text": "403 Forbidden" },
+        { "id": "C", "text": "400 Bad Request" },
+        { "id": "D", "text": "404 Not Found" }
+      ],
+      "correct_answers": ["B"],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T22:31:00.000Z"
+    },
+    {
+      "id": "q-web-03",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "In React, which hook is most appropriate for caching computationally expensive calculations between re-renders?",
+      "question_type": "mcq",
+      "options": [
+        { "id": "A", "text": "useCallback" },
+        { "id": "B", "text": "useMemo" },
+        { "id": "C", "text": "useRef" },
+        { "id": "D", "text": "useEffect" }
+      ],
+      "correct_answers": ["B"],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T22:32:00.000Z"
+    },
+    {
+      "id": "q-web-04",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "Which CSS property combination creates a new stacking context without using 'position: fixed' or 'z-index' on positioned elements?",
+      "question_type": "mcq",
+      "options": [
+        { "id": "A", "text": "opacity: 0.99" },
+        { "id": "B", "text": "display: flex" },
+        { "id": "C", "text": "margin: 0 auto" },
+        { "id": "D", "text": "overflow: visible" }
+      ],
+      "correct_answers": ["A"],
+      "marks": 2,
+      "difficulty": "hard",
+      "is_active": true,
+      "created_at": "2026-09-15T22:33:00.000Z"
+    },
+    {
+      "id": "q-web-05",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "Which AWS service is best suited for hosting static single-page web applications (SPA) with low latency global content delivery?",
+      "question_type": "mcq",
+      "options": [
+        { "id": "A", "text": "Amazon EC2 with EBS" },
+        { "id": "B", "text": "Amazon S3 + Amazon CloudFront" },
+        { "id": "C", "text": "Amazon RDS PostgreSQL" },
+        { "id": "D", "text": "AWS Glue + Athena" }
+      ],
+      "correct_answers": ["B"],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T22:34:00.000Z"
+    }
+  ],
+  "written_questions": [],
+  "guidelines": [],
+  "projects": []
+}
