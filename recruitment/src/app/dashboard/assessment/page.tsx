@@ -23,6 +23,7 @@ export default function AssessmentPage() {
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState('');
   const timerRef = useRef<NodeJS.Timeout>();
+  const trackHintApplied = useRef(false);
 
   const autosave = useCallback(async (qId: string, ans: string | string[], attemptId: string) => {
     await supabase.from('assessment_answers').upsert({
@@ -115,6 +116,15 @@ export default function AssessmentPage() {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (trackHintApplied.current || questions.length === 0) return;
+    trackHintApplied.current = true;
+    const trackId = new URLSearchParams(window.location.search).get('track');
+    if (!trackId) return;
+    const firstQuestion = questions.findIndex((question) => question.subdomain_id === trackId);
+    if (firstQuestion >= 0) setCurrentIdx(firstQuestion);
+  }, [questions]);
 
   // Timer
   useEffect(() => {

@@ -138,6 +138,7 @@ async function loadRoundOne(admin: AdminClient, candidateId: string) {
       technical: {
         required: technicalRequired,
         complete: technicalComplete,
+        status: attempt?.status ?? 'not_started',
       },
     },
   };
