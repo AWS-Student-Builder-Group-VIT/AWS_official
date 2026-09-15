@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "project": {
+    "name": "aws-sbg-recruitment",
+    "productType": null,
+    "stack": [
+      "nextjs",
+      "react",
+      "tailwind-v3"
+    ]
+  },
+  "sources": {
+    "tokens": [
+      "src/app/globals.css"
+    ],
+    "components": [],
+    "assets": [],
+    "instructions": []
+  },
+  "design": {
+    "colorMode": "dark",
+    "colors": {
+      "--border": {
+        "value": "#1E2D3D",
+        "source": "src/app/globals.css"
+      },
+      "--accent": {
+        "value": "#FF9900",
+        "source": "src/app/globals.css"
+      },
+      "--muted": {
+        "value": "#AAB2BF",
+        "source": "src/app/globals.css"
+      }
+    },
+    "typography": {
+      "--text": {
+        "value": "#FFFFFF",
+        "source": "src/app/globals.css"
+      }
+    },
+    "spacing": {},
+    "radius": {},
+    "shadows": {},
+    "motion": {},
+    "density": "unknown"
+  },
+  "components": {
+    "installed": [],
+    "preferredPrimitives": [],
+    "patterns": []
+  },
+  "constraints": {
+    "must": ["Use AWS-SBG warm dark surfaces, Space Mono labels, orange accents, thin borders, clipped corners, and restrained grid motion"],
+    "avoid": ["Generic rounded SaaS cards", "white dashboard surfaces", "heavy 3D effects in recruitment flows"]
+  },
+  "decisions": ["Treat the recruitment product as a structured, task-oriented extension of the cinematic AWS-SBG main site", "Represent recruitment taxonomy as administrator-managed parent domains with nested subdomains", "Use a dense, sharp-edged Kinetic Console layout for the standalone recruitment operations view, with a filter rail, high-throughput candidate grid, and contextual dossier inspector"],
+  "evidence": [
+    {
+      "fact": "design.colorMode:light",
+      "source": "src/app/globals.css"
+    },
+    {
+      "fact": "design.tokens",
+      "source": "src/app/globals.css"
+    },
+    {
+      "fact": "project.stack:nextjs",
+      "source": "package.json"
+    },
+    {
+      "fact": "project.stack:react",
+      "source": "package.json"
+    },
+    {
+      "fact": "project.stack:tailwind-v3",
+      "source": "package.json"
+    }
+  ],
+  "generatedAt": "2026-09-14T06:06:23.162Z"
+}

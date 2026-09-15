@@ -146,7 +146,10 @@ function Dashboard({ token, onLogout }) {
     setLoading(false);
   };
 
-  useEffect(() => { loadQuizData(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadQuizData();
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleStatusChange = async (action) => {
     if (action === 'terminate') { setTerminateQuizModalOpen(true); return; }

@@ -25,9 +25,15 @@ dist-ssr
 **/node_modules/
 **/dist/
 **/.vite/
+**/.next/
+**/.next-dev/
+**/.next-build/
 *.log
+*.tsbuildinfo
 tmp/
 .env
 .env.local
 .env.*.local
 .claude/
+AWS_official 3/
+

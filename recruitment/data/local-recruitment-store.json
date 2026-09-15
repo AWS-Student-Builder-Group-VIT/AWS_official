@@ -1,0 +1,1464 @@
+{
+  "questions": [
+    {
+      "id": "q-web-01",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "What will be logged to the console and displayed in the DOM after the button is clicked once?\n\nfunction Counter() {\n  const [count, setCount] = React.useState(0);\n  const handleClick = () => {\n    setCount(count + 1);\n    setCount((prev) => prev + 2);\n    setCount(count + 1);\n    console.log(count);\n  };\n  return <button onClick={handleClick}>{count}</button>;\n}",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Console logs 0, DOM displays 1"
+        },
+        {
+          "id": "B",
+          "text": "Console logs 1, DOM displays 1"
+        },
+        {
+          "id": "C",
+          "text": "Console logs 0, DOM displays 3"
+        },
+        {
+          "id": "D",
+          "text": "Console logs 1, DOM displays 3"
+        }
+      ],
+      "correct_answers": [
+        "A"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:30:00.000Z"
+    },
+    {
+      "id": "q-web-02",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "An API response returns the following header: Cache-Control: no-cache. What does the browser do on a subsequent request for this resource?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Serves the cached version immediately without hitting the network until it expires."
+        },
+        {
+          "id": "B",
+          "text": "Bypasses the cache entirely and downloads the resource afresh without sending validation headers."
+        },
+        {
+          "id": "C",
+          "text": "Sends a conditional request (with If-None-Match or If-Modified-Since) to the origin server to revalidate before using the cached copy."
+        },
+        {
+          "id": "D",
+          "text": "Stores the asset only in volatile session memory and deletes it when the browser tab closes."
+        }
+      ],
+      "correct_answers": [
+        "C"
+      ],
+      "marks": 1,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:31:00.000Z"
+    },
+    {
+      "id": "q-web-03",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "What is the exact console output order of this script?\n\nasync function test() {\n  console.log('1');\n  await null;\n  console.log('2');\n}\nconsole.log('3');\ntest();\nconsole.log('4');",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "3 1 2 4"
+        },
+        {
+          "id": "B",
+          "text": "3 1 4 2"
+        },
+        {
+          "id": "C",
+          "text": "1 3 4 2"
+        },
+        {
+          "id": "D",
+          "text": "1 2 3 4"
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:32:00.000Z"
+    },
+    {
+      "id": "q-web-04",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "Consider the following markup and styles:\n\n<div class=\"box-a\" style=\"position: relative; z-index: 10;\">\n  <div class=\"child-a\" style=\"position: absolute; z-index: 9999;\">A</div>\n</div>\n<div class=\"box-b\" style=\"position: relative; z-index: 20;\">\n  <div class=\"child-b\" style=\"position: absolute; z-index: 1;\">B</div>\n</div>\n\nIf .child-a and .child-b physically overlap on screen, which element renders on top, and why?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": ".child-a, because its z-index: 9999 is higher than .child-b's z-index: 1."
+        },
+        {
+          "id": "B",
+          "text": ".child-a, because opacity: 0.99 disables stacking context restrictions."
+        },
+        {
+          "id": "C",
+          "text": ".child-b, because its parent .box-b (z-index: 20) forms a higher stacking context than .box-a (z-index: 10)."
+        },
+        {
+          "id": "D",
+          "text": ".child-b, because elements declared later in the DOM tree always override previous elements regardless of parent indices."
+        }
+      ],
+      "correct_answers": [
+        "C"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:33:00.000Z"
+    },
+    {
+      "id": "q-web-05",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "What HTTP status code and response payload will a client receive from GET /api?\n\napp.get('/api', (req, res, next) => {\n  next(new Error('Failed'));\n});\napp.use((err, req, res, next) => {\n  console.error(err.message);\n  next();\n});\napp.use((req, res, next) => {\n  res.status(200).send('Recovered');\n});",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "200 with body 'Recovered'"
+        },
+        {
+          "id": "B",
+          "text": "500 with Express default HTML error page"
+        },
+        {
+          "id": "C",
+          "text": "404 Cannot GET /api"
+        },
+        {
+          "id": "D",
+          "text": "The request hangs indefinitely until timeout"
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 2,
+      "difficulty": "hard",
+      "is_active": true,
+      "created_at": "2026-09-15T22:34:00.000Z"
+    },
+    {
+      "id": "q-web-06",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "A developer wants to prevent Cross-Site Scripting (XSS) tokens from being stolen, so they store the JWT in an HttpOnly, Secure cookie with SameSite=Strict. Which vulnerability does this configuration NOT protect against if the application contains an XSS flaw?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Reading the JWT value via document.cookie from injected JavaScript."
+        },
+        {
+          "id": "B",
+          "text": "An injected script issuing authenticated fetch('/api/transfer-funds') calls directly within the victim's open browser session."
+        },
+        {
+          "id": "C",
+          "text": "Stealing the cookie over unencrypted HTTP network snooping."
+        },
+        {
+          "id": "D",
+          "text": "Sending the cookie on cross-site link clicks originating from an external malicious domain."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:35:00.000Z"
+    },
+    {
+      "id": "q-web-07",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "A list of items rendered with <input /> fields uses the array index as its key:\n\n{items.map((item, index) => ( <input key={index} defaultValue={item.name} /> ))}\n\nIf the user types text into the first item's input field and then clicks a button that runs items.shift() (removing the first item), what happens to the typed text?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "The typed text disappears because the first item was deleted from the state array."
+        },
+        {
+          "id": "B",
+          "text": "The typed text remains inside the new first item's input field because React reuses the DOM node at index 0."
+        },
+        {
+          "id": "C",
+          "text": "React throws a key mutation reconciliation warning and resets all inputs."
+        },
+        {
+          "id": "D",
+          "text": "The whole list unmounts and remounts from scratch with empty values."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:36:00.000Z"
+    },
+    {
+      "id": "q-web-08",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "Given a nested structure <div id=\"parent\"><button id=\"child\">Click Me</button></div> with the following listeners:\n\nparent.addEventListener('click', () => console.log('P1'), true);\nchild.addEventListener('click', () => console.log('C1'), false);\nparent.addEventListener('click', () => console.log('P2'), false);\nchild.addEventListener('click', () => console.log('C2'), true);\n\nWhen the #child button is clicked, what is the output sequence?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "P1 C2 C1 P2"
+        },
+        {
+          "id": "B",
+          "text": "P1 P2 C2 C1"
+        },
+        {
+          "id": "C",
+          "text": "C2 C1 P1 P2"
+        },
+        {
+          "id": "D",
+          "text": "P1 C1 C2 P2"
+        }
+      ],
+      "correct_answers": [
+        "A"
+      ],
+      "marks": 2,
+      "difficulty": "hard",
+      "is_active": true,
+      "created_at": "2026-09-15T22:37:00.000Z"
+    },
+    {
+      "id": "q-web-09",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "A PostgreSQL/MySQL table has 5 rows where the role column contains values: ['admin', 'editor', 'viewer', NULL, 'viewer']. What will this query return?\n\nSELECT COUNT(*) FROM users WHERE role != 'admin';",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "4"
+        },
+        {
+          "id": "B",
+          "text": "3"
+        },
+        {
+          "id": "C",
+          "text": "2"
+        },
+        {
+          "id": "D",
+          "text": "5"
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:38:00.000Z"
+    },
+    {
+      "id": "q-web-10",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "question_text": "Which of the following client-side fetch() calls will trigger an automated browser CORS preflight (OPTIONS) request?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "fetch('/api', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })"
+        },
+        {
+          "id": "B",
+          "text": "fetch('/api', { method: 'GET', headers: { 'Accept': 'application/json' } })"
+        },
+        {
+          "id": "C",
+          "text": "fetch('/api', { method: 'POST', headers: { 'Content-Type': 'application/json' } })"
+        },
+        {
+          "id": "D",
+          "text": "fetch('/api', { method: 'HEAD', headers: { 'Accept-Language': 'en-US' } })"
+        }
+      ],
+      "correct_answers": [
+        "C"
+      ],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T22:39:00.000Z"
+    },
+    {
+      "id": "q-app-01",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "question_text": "In modern React Native architecture (New Architecture / TurboModules & Fabric), what replaces the asynchronous JSON serialization bridge?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "JavaScript Interface (JSI) enabling direct C++ host object method invocation and synchronous communication."
+        },
+        {
+          "id": "B",
+          "text": "WebSockets over local localhost port 8080."
+        },
+        {
+          "id": "C",
+          "text": "Base64 encoded URL parameters."
+        },
+        {
+          "id": "D",
+          "text": "SQLite temporary memory tables."
+        }
+      ],
+      "correct_answers": [
+        "A"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:40:00.000Z"
+    },
+    {
+      "id": "q-app-02",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "question_text": "When an app is moved from the foreground to the background on iOS/Android, what happens to ongoing network and CPU tasks if background execution permissions are not requested?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "The OS allows tasks to run indefinitely at maximum CPU frequency."
+        },
+        {
+          "id": "B",
+          "text": "The OS pauses/suspends the process within seconds to preserve battery, and may terminate it if memory is constrained."
+        },
+        {
+          "id": "C",
+          "text": "The OS restarts the phone kernel."
+        },
+        {
+          "id": "D",
+          "text": "The app automatically uploads its entire memory snapshot to the cloud."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 1,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:41:00.000Z"
+    },
+    {
+      "id": "q-app-03",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "question_text": "Why is state immutability crucial in mobile state management frameworks like Redux, Zustand, or Riverpod?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "It allows efficient shallow equality checks for re-rendering UI components and prevents unexpected side effects."
+        },
+        {
+          "id": "B",
+          "text": "It reduces APK file size by 50%."
+        },
+        {
+          "id": "C",
+          "text": "It makes network requests 10x faster."
+        },
+        {
+          "id": "D",
+          "text": "It eliminates the need for garbage collection in mobile engines."
+        }
+      ],
+      "correct_answers": [
+        "A"
+      ],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T22:42:00.000Z"
+    },
+    {
+      "id": "q-app-04",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "question_text": "In an offline-first mobile application, what strategy is recommended for resolving write conflicts when sync resumes with the remote backend?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Delete all local user data and keep only server data."
+        },
+        {
+          "id": "B",
+          "text": "CRDTs (Conflict-free Replicated Data Types) or Last-Write-Wins (LWW) with timestamp vector clocks and revision IDs."
+        },
+        {
+          "id": "C",
+          "text": "Abort the network connection and prompt the user to reinstall the app."
+        },
+        {
+          "id": "D",
+          "text": "Block the UI thread until all conflicts resolve manually."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 2,
+      "difficulty": "hard",
+      "is_active": true,
+      "created_at": "2026-09-15T22:43:00.000Z"
+    },
+    {
+      "id": "q-app-05",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "question_text": "What is the most common cause of memory leaks in mobile component lifecycles (e.g. React useEffect or Flutter StatefulWidget)?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Unsubscribed event listeners, active interval timers, or persistent singleton callbacks retaining unmounted component references."
+        },
+        {
+          "id": "B",
+          "text": "Using SVG icons instead of PNG."
+        },
+        {
+          "id": "C",
+          "text": "Declaring constant string variables."
+        },
+        {
+          "id": "D",
+          "text": "Using async/await functions."
+        }
+      ],
+      "correct_answers": [
+        "A"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:44:00.000Z"
+    },
+    {
+      "id": "q-app-06",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "question_text": "When sending silent background push notifications (content-available: 1 on iOS or data-only messages on FCM), what is the intended behavior?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Display a high-priority heads-up banner and play a custom ringtone."
+        },
+        {
+          "id": "B",
+          "text": "Wake the app in the background to fetch new content and update local cache without presenting a visible alert to the user."
+        },
+        {
+          "id": "C",
+          "text": "Force immediate device reboot."
+        },
+        {
+          "id": "D",
+          "text": "Open the App Store to check for app updates."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:45:00.000Z"
+    },
+    {
+      "id": "q-app-07",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "question_text": "What is the main security advantage of Universal Links (iOS) and Android App Links over custom URL schemes (e.g. myapp://)?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Universal Links verify domain ownership via hosted digital asset links / apple-app-site-association files, preventing malicious apps from hijacking the scheme."
+        },
+        {
+          "id": "B",
+          "text": "Universal Links do not require an internet connection."
+        },
+        {
+          "id": "C",
+          "text": "Custom schemes only work on tablet devices."
+        },
+        {
+          "id": "D",
+          "text": "Universal links bypass mobile operating system permissions."
+        }
+      ],
+      "correct_answers": [
+        "A"
+      ],
+      "marks": 2,
+      "difficulty": "hard",
+      "is_active": true,
+      "created_at": "2026-09-15T22:46:00.000Z"
+    },
+    {
+      "id": "q-app-08",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "question_text": "When displaying a list of 500 high-resolution images in a mobile flatlist/recycler view, what is essential to prevent Out-Of-Memory (OOM) crashes?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Load all 500 full-resolution bitmaps into RAM on app start."
+        },
+        {
+          "id": "B",
+          "text": "Downsample/decode images to target render dimensions, use view recycling, and implement disk + LRU memory caching."
+        },
+        {
+          "id": "C",
+          "text": "Convert images to raw base64 strings in local storage."
+        },
+        {
+          "id": "D",
+          "text": "Disable hardware acceleration on the device."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 1,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:47:00.000Z"
+    },
+    {
+      "id": "q-app-09",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "question_text": "Where should sensitive tokens like OAuth refresh tokens or API keys be stored securely on mobile devices?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "In plain text AsyncStorage / UserDefaults."
+        },
+        {
+          "id": "B",
+          "text": "In hardware-backed secure storage (iOS Keychain / Android Keystore & EncryptedSharedPreferences)."
+        },
+        {
+          "id": "C",
+          "text": "In the public Downloads folder."
+        },
+        {
+          "id": "D",
+          "text": "In an open unencrypted SQLite database."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T22:48:00.000Z"
+    },
+    {
+      "id": "q-app-10",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "question_text": "If a heavy synchronous JSON parsing loop runs on the JavaScript thread in React Native, what is the user-visible effect?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Native scroll views might continue at 60 FPS, but JS-driven touches, state updates, and animations will freeze or stutter."
+        },
+        {
+          "id": "B",
+          "text": "The phone battery drains immediately to 0%."
+        },
+        {
+          "id": "C",
+          "text": "The camera flashlight turns on automatically."
+        },
+        {
+          "id": "D",
+          "text": "The screen resolution drops to 720p."
+        }
+      ],
+      "correct_answers": [
+        "A"
+      ],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T22:49:00.000Z"
+    },
+    {
+      "id": "q-game-01",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "question_text": "What is the primary function of a game loop in game development, and why is it essential?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "It runs once on startup to compile all shader code and initialize database connections."
+        },
+        {
+          "id": "B",
+          "text": "It is a continuous loop that repeatedly processes user input, updates game simulation state, and renders the current frame at a consistent interval."
+        },
+        {
+          "id": "C",
+          "text": "It handles garbage collection and memory reallocation during idle frames."
+        },
+        {
+          "id": "D",
+          "text": "It is an event listener that triggers only when physical keyboard or mouse events are fired."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T22:50:00.000Z"
+    },
+    {
+      "id": "q-game-02",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "question_text": "What is the fundamental distinction between updating a game object's position and rendering it on screen?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Updating calculates mathematical state/kinematics in memory (logic tick), while rendering draws the graphical visual representation to the screen buffer."
+        },
+        {
+          "id": "B",
+          "text": "Rendering modifies the x/y coordinates in the physics engine, while updating changes color palettes."
+        },
+        {
+          "id": "C",
+          "text": "Updating only applies to 3D games, whereas rendering applies strictly to 2D canvas games."
+        },
+        {
+          "id": "D",
+          "text": "Rendering is always executed asynchronously in a web worker, while updating is synchronous."
+        }
+      ],
+      "correct_answers": [
+        "A"
+      ],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T22:51:00.000Z"
+    },
+    {
+      "id": "q-game-03",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "question_text": "How do you mathematically detect a collision between two circular objects in a 2D game?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Check if (x1 - x2) + (y1 - y2) < radius1 + radius2."
+        },
+        {
+          "id": "B",
+          "text": "Check if the Euclidean distance between their center points is less than the sum of their radii: sqrt((x2 - x1)^2 + (y2 - y1)^2) < (r1 + r2)."
+        },
+        {
+          "id": "C",
+          "text": "Check if their bounding boxes have identical aspect ratios."
+        },
+        {
+          "id": "D",
+          "text": "Check if the dot product of their velocities is negative."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:52:00.000Z"
+    },
+    {
+      "id": "q-game-04",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "question_text": "Suppose a fast-moving projectile passes completely through a thin obstacle in a single frame without triggering collision (tunneling). What is the standard programmatic solution?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Increase the canvas resolution and double the monitor refresh rate."
+        },
+        {
+          "id": "B",
+          "text": "Implement Continuous Collision Detection (CCD) using raycasting or multiple sub-step physics simulation steps per frame."
+        },
+        {
+          "id": "C",
+          "text": "Render the obstacle on a higher z-index layer."
+        },
+        {
+          "id": "D",
+          "text": "Reduce the projectile's mass to zero so it registers instant overlaps."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 2,
+      "difficulty": "hard",
+      "is_active": true,
+      "created_at": "2026-09-15T22:53:00.000Z"
+    },
+    {
+      "id": "q-game-05",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "question_text": "What is the difference between frame rate (FPS) and game logic/physics update rate, and why is a fixed timestep recommended?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "FPS determines physics accuracy; variable timestep is always more deterministic than fixed timestep."
+        },
+        {
+          "id": "B",
+          "text": "Frame rate is how often the GPU renders frames to the screen (can fluctuate), while fixed logic updates ensure deterministic physics calculations regardless of hardware performance."
+        },
+        {
+          "id": "C",
+          "text": "Frame rate cannot exceed 30 FPS on web browsers, whereas update rate is always 120 Hz."
+        },
+        {
+          "id": "D",
+          "text": "There is no difference; rendering and logic updates must always execute in lockstep on the main thread."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:54:00.000Z"
+    },
+    {
+      "id": "q-game-06",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "question_text": "How should gravitational acceleration be implemented for a character in a 2D kinematic game loop?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Set y_pos = gravity * delta_time directly every frame."
+        },
+        {
+          "id": "B",
+          "text": "Increment vertical velocity by gravity (vy += gravity * dt), and then update vertical position by velocity (y += vy * dt)."
+        },
+        {
+          "id": "C",
+          "text": "Invert the horizontal velocity vector whenever the jump key is released."
+        },
+        {
+          "id": "D",
+          "text": "Decrement y position by a constant integer regardless of elapsed frame time."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T22:55:00.000Z"
+    },
+    {
+      "id": "q-game-07",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "question_text": "If a 2D game has 1,000 objects on screen and experiences severe lag during collision checks (O(N^2)), what is the most effective optimization technique?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Spatial partitioning using Quadtrees, Spatial Hashing, or Grid Buckets to only test collisions between nearby objects (broad-phase pruning)."
+        },
+        {
+          "id": "B",
+          "text": "Removing all collision detection entirely and replacing it with random timers."
+        },
+        {
+          "id": "C",
+          "text": "Increasing CPU clock speed in browser settings."
+        },
+        {
+          "id": "D",
+          "text": "Converting all vector coordinates from float to string data types."
+        }
+      ],
+      "correct_answers": [
+        "A"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:56:00.000Z"
+    },
+    {
+      "id": "q-game-08",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "question_text": "How should code for a player character be structured so that movement, health, combat states, and abilities are modular and easy to modify?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Put all logic in a single monolithic 5,000-line global update function with nested if-else statements."
+        },
+        {
+          "id": "B",
+          "text": "Use Component-based architecture (Entity-Component System) or a Finite State Machine (FSM) separating state logic (Idle, Running, Jumping, Attacking)."
+        },
+        {
+          "id": "C",
+          "text": "Store all player state variables directly in the DOM as custom data attributes."
+        },
+        {
+          "id": "D",
+          "text": "Hardcode player coordinates into CSS transition properties."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 1,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T22:57:00.000Z"
+    },
+    {
+      "id": "q-game-09",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "question_text": "When building a canvas-based game loop in JavaScript using requestAnimationFrame(), what step is required at the beginning of each render pass?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "ctx.clearRect(0, 0, canvas.width, canvas.height) or filling a background rect to clear previous frame artifacts."
+        },
+        {
+          "id": "B",
+          "text": "document.location.reload() to refresh the canvas buffer."
+        },
+        {
+          "id": "C",
+          "text": "Re-attaching all event listeners to canvas window elements."
+        },
+        {
+          "id": "D",
+          "text": "Deleting the HTML5 canvas element and appending a new DOM node."
+        }
+      ],
+      "correct_answers": [
+        "A"
+      ],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T22:58:00.000Z"
+    },
+    {
+      "id": "q-game-10",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "question_text": "In a 2D platformer, when a player moving at high downward velocity jumps onto a thin platform, how does swept AABB / raycast collision prevent falling through?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "It computes the bounding box encompassing the movement trajectory between old and new positions and calculates the exact time of impact (TOI 0 to 1)."
+        },
+        {
+          "id": "B",
+          "text": "It instantly teleports the player to y=0 whenever velocity exceeds a threshold."
+        },
+        {
+          "id": "C",
+          "text": "It freezes the game clock until the user presses spacebar."
+        },
+        {
+          "id": "D",
+          "text": "It disables gravity when the player reaches terminal velocity."
+        }
+      ],
+      "correct_answers": [
+        "A"
+      ],
+      "marks": 2,
+      "difficulty": "hard",
+      "is_active": true,
+      "created_at": "2026-09-15T22:59:00.000Z"
+    },
+    {
+      "id": "q-aiml-01",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "question_text": "A data scientist trains a Random Forest model on a dataset predicting housing prices. The model achieves an R2 score of 0.98 on the training set but an R2 score of 0.45 on the unseen test set. What is the most likely diagnosis, and what is a standard solution?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "The model is underfitting; we should decrease the depth of the trees."
+        },
+        {
+          "id": "B",
+          "text": "The model is overfitting; we should limit the maximum tree depth or increase the minimum samples per leaf."
+        },
+        {
+          "id": "C",
+          "text": "The data has high bias; we should add more features to the dataset without changing hyperparameters."
+        },
+        {
+          "id": "D",
+          "text": "The model converged properly; we should deploy the model as is."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T23:00:00.000Z"
+    },
+    {
+      "id": "q-aiml-02",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "question_text": "A credit card fraud detection system processes 10,000 transactions, where exactly 10 are fraudulent. A deployed Logistic Regression model simply predicts “Not Fraud” for every single transaction. What is the approximate Accuracy and the Recall for the “Fraud” class?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Accuracy: 100%, Recall: 100%"
+        },
+        {
+          "id": "B",
+          "text": "Accuracy: 99.9%, Recall: 100%"
+        },
+        {
+          "id": "C",
+          "text": "Accuracy: 99.9%, Recall: 0%"
+        },
+        {
+          "id": "D",
+          "text": "Accuracy: 0%, Recall: 99.9%"
+        }
+      ],
+      "correct_answers": [
+        "C"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T23:01:00.000Z"
+    },
+    {
+      "id": "q-aiml-03",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "question_text": "A data scientist is building a linear regression model with 500 candidate features, many of which are believed to be irrelevant. They want a regularization technique that not only shrinks the coefficients but also performs automatic feature selection by driving some coefficients to exactly zero. Which technique should they choose?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "L2 (Ridge) Regularization, because it evenly shrinks the weights of all correlated features toward zero without eliminating any."
+        },
+        {
+          "id": "B",
+          "text": "L1 (Lasso) Regularization, because its penalty geometry can force less important feature coefficients to become exactly zero."
+        },
+        {
+          "id": "C",
+          "text": "Elastic Net with the L1 ratio set to 0, which behaves identically to Lasso Regression."
+        },
+        {
+          "id": "D",
+          "text": "Dropout Regularization, since it is the standard technique for feature selection in linear models."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T23:02:00.000Z"
+    },
+    {
+      "id": "q-aiml-04",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "question_text": "A developer is training a 50-layer deep neural network using the standard Sigmoid activation function for all hidden layers. They notice that the weights in the earliest layers are barely updating during backpropagation. What is the primary cause of this issue?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "The Exploding Gradient problem caused by large initial weights."
+        },
+        {
+          "id": "B",
+          "text": "The Vanishing Gradient problem, as the derivative of the Sigmoid function shrinks gradients exponentially across many layers."
+        },
+        {
+          "id": "C",
+          "text": "Overfitting due to the large number of layers memorizing the training data."
+        },
+        {
+          "id": "D",
+          "text": "The learning rate is set too high, causing the optimizer to skip the global minimum."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T23:03:00.000Z"
+    },
+    {
+      "id": "q-aiml-05",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "question_text": "A deep learning engineer inserts Batch Normalization layers between the linear/convolutional layers and the activation functions throughout a deep network. What is the primary practical benefit during training?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "It permanently removes the need for any activation function in the network."
+        },
+        {
+          "id": "B",
+          "text": "It normalizes activations within each mini-batch, helping stabilize training and often allowing faster and more reliable optimization."
+        },
+        {
+          "id": "C",
+          "text": "It increases the number of trainable parameters, which by itself guarantees higher validation accuracy."
+        },
+        {
+          "id": "D",
+          "text": "It replaces the need for a train/test split by normalizing the entire dataset in a single pass."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 1,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T23:04:00.000Z"
+    },
+    {
+      "id": "q-aiml-06",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "question_text": "During the training of a neural network using Stochastic Gradient Descent (SGD), the training loss decreases rapidly at first but then begins to oscillate wildly without ever converging to a stable minimum. What is the most appropriate adjustment to resolve this?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Increase the learning rate so the optimizer can jump out of the oscillation."
+        },
+        {
+          "id": "B",
+          "text": "Decrease the learning rate to allow the optimizer to take smaller, more precise steps toward the minimum."
+        },
+        {
+          "id": "C",
+          "text": "Change the loss function from Mean Squared Error to Cross-Entropy."
+        },
+        {
+          "id": "D",
+          "text": "Remove all dropout layers from the network architecture."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T23:05:00.000Z"
+    },
+    {
+      "id": "q-aiml-07",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "question_text": "An AI algorithm is navigating a maze. It can either choose the path it currently knows yields the highest reward, or it can try a completely new path that might lead to a shorter route. In Reinforcement Learning, what is this dilemma known as?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "The Bias-Variance Tradeoff"
+        },
+        {
+          "id": "B",
+          "text": "The Markov Decision Process"
+        },
+        {
+          "id": "C",
+          "text": "The Exploration vs. Exploitation Tradeoff"
+        },
+        {
+          "id": "D",
+          "text": "The Vanishing Reward Problem"
+        }
+      ],
+      "correct_answers": [
+        "C"
+      ],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T23:06:00.000Z"
+    },
+    {
+      "id": "q-aiml-08",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "question_text": "In the Q-Learning algorithm, the Bellman equation utilizes a discount factor (γ). If the discount factor is set precisely to 0, how will the Reinforcement Learning agent behave?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "The agent will value future rewards equally to immediate rewards, acting completely long-term."
+        },
+        {
+          "id": "B",
+          "text": "The agent will only consider the immediate, short-term reward of its next action and ignore all future rewards."
+        },
+        {
+          "id": "C",
+          "text": "The agent will take actions entirely at random to maximize environment exploration."
+        },
+        {
+          "id": "D",
+          "text": "The agent’s Q-values will grow to infinity, causing numerical instability during training."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 2,
+      "difficulty": "medium",
+      "is_active": true,
+      "created_at": "2026-09-15T23:07:00.000Z"
+    },
+    {
+      "id": "q-aiml-09",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "question_text": "A team compares two RL algorithms: Q-Learning, which updates its value estimate using the maximum possible reward of the next state regardless of which action the agent actually takes, and SARSA, which updates using the action the agent's current policy actually selects. What key distinction does this illustrate?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "Q-Learning is off-policy, learning the value of the optimal policy independent of the agent’s behavior, while SARSA is on-policy, learning the value of the policy it is currently following."
+        },
+        {
+          "id": "B",
+          "text": "Q-Learning is model-based while SARSA is model-free, meaning SARSA cannot use a discount factor."
+        },
+        {
+          "id": "C",
+          "text": "Q-Learning applies only to continuous action spaces, while SARSA applies only to discrete action spaces."
+        },
+        {
+          "id": "D",
+          "text": "Q-Learning and SARSA are mathematically identical and always converge to the same Q-values in the same number of steps."
+        }
+      ],
+      "correct_answers": [
+        "A"
+      ],
+      "marks": 2,
+      "difficulty": "hard",
+      "is_active": true,
+      "created_at": "2026-09-15T23:08:00.000Z"
+    },
+    {
+      "id": "q-aiml-10",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "question_text": "Modern LLMs typically use Byte-Pair Encoding (BPE) or similar subword tokenization instead of splitting text strictly into whole words by whitespace. What is the main advantage of subword tokenization over whole-word tokenization?",
+      "question_type": "mcq",
+      "options": [
+        {
+          "id": "A",
+          "text": "It guarantees every token corresponds to exactly one whole English word, which improves grammatical accuracy."
+        },
+        {
+          "id": "B",
+          "text": "It lets the model represent rare or unseen words by breaking them into familiar subword units, keeping the vocabulary manageable while avoiding out-of-vocabulary issues."
+        },
+        {
+          "id": "C",
+          "text": "It converts all input text into a fixed set of 26 possible characters to simplify preprocessing."
+        },
+        {
+          "id": "D",
+          "text": "It eliminates the need for any tokenizer at inference time, since the model reads raw bytes directly."
+        }
+      ],
+      "correct_answers": [
+        "B"
+      ],
+      "marks": 1,
+      "difficulty": "easy",
+      "is_active": true,
+      "created_at": "2026-09-15T23:09:00.000Z"
+    }
+  ],
+  "written_questions": [],
+  "guidelines": [
+    {
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "round_number": 2,
+      "guidelines": "### Round 2 — Web Development Technical Project Guidelines\n\nCandidates must select **exactly one** project option from the problem statements below to design, build, and present during the technical defense.\n\n#### Submission Requirements & Evaluation Criteria:\n1. **Public GitHub Repository**: Submit a clean public repository with a well-structured `README.md` containing local setup instructions, database migrations/bootstrap scripts, environment variables template (`.env.example`), and execution steps.\n2. **Full-Stack Architecture**: Implement complete client-server interactions with robust data validation, error handling, and visual feedback for loading, empty, and submitted states.\n3. **Modern UI/UX**: Ensure responsive mobile/desktop layouts, accessible design tokens, and smooth user flows.\n4. **Technical Defense**: Be prepared to explain code architecture, database schemas, state management decisions, and security best practices during the technical interview.",
+      "updated_at": "2026-09-15T22:45:00.000Z",
+      "updated_by": "admin-local"
+    },
+    {
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "round_number": 2,
+      "guidelines": "### Round 2 — App Development Project Guidelines\n\nCandidates must choose **one** mobile application problem statement to design and implement using React Native, Flutter, Kotlin, or Swift.\n\n#### Submission Guidelines:\n1. **Repository & Documentation**: Provide a GitHub repository with an architecture overview diagram, APK / preview build links, emulator setup steps, and state management flow.\n2. **Core Functionality**: Deliver functional navigation, state persistence, clean UI components, and offline-first or caching patterns.\n3. **Code Quality**: Follow standard mobile design patterns (MVVM, Clean Architecture, BLoC, or Redux) with clear separation of business logic and UI layers.",
+      "updated_at": "2026-09-15T22:45:00.000Z",
+      "updated_by": "admin-local"
+    },
+    {
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "round_number": 2,
+      "guidelines": "### Round 2 — Game Development Project Guidelines\n\nCandidates must select **one** of the 4 game development tasks. The goal is to evaluate foundational game loops, kinematic physics, collision algorithms, and state management.\n\n#### Strict Technical Constraints:\n• **No External Physics Engines**: Do NOT use Matter.js, Box2D, Phaser, or physics libraries. Calculate gravitational acceleration, kinematics, and collision detection/resolution manually.\n• **Pure Logic & Canvas API**: Implement clean 60 FPS animation loops using `requestAnimationFrame()`.\n• **Submission**: Public GitHub repository with a detailed `README.md` explaining controls, physics algorithms, and execution instructions.",
+      "updated_at": "2026-09-15T22:45:00.000Z",
+      "updated_by": "admin-local"
+    },
+    {
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "round_number": 2,
+      "guidelines": "### Round 2 — AI & Machine Learning Project Guidelines\n\nCandidates must select **one** problem statement from the AI/ML task list.\n\n#### Submission Guidelines:\n1. **Reproducible Codebase**: Public GitHub repository containing modular Python scripts or documented Jupyter Notebooks, `requirements.txt` / `environment.yml`, and clean evaluation pipelines.\n2. **Methodology & Documentation**: A comprehensive `README.md` detailing EDA findings, data preprocessing, model selection rationale, hyperparameter tuning, and metric comparisons.\n3. **Evaluation**: Provide evaluation metrics (Accuracy, Precision, Recall, F1-Score, ROC-AUC, or custom reward curves) with visualizations.",
+      "updated_at": "2026-09-15T22:45:00.000Z",
+      "updated_by": "admin-local"
+    }
+  ],
+  "projects": [
+    {
+      "id": "proj-web-01",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "title": "VIT Campus Lost & Found Recovery Portal",
+      "details": "Overview:\nDesign and build a full-stack recovery platform specifically tailored for the VIT campus community to replace messy WhatsApp groups. The platform must allow students to report missing or recovered items across campus venues, verify legitimate ownership through a private claim-check process, and coordinate secure on-campus returns without publicly exposing student mobile numbers.\n\nKey Features Required:\n• VIT Campus Venues & Category Tagging: Separate feeds for 'Lost' and 'Found'. Location tagging restricted to official VIT campus landmarks: Academic Blocks (SJT, TT, PRP, SMV, MB, GDN, CDMM), Men's Hostel Blocks (MH-A through MH-T), Ladies' Hostel Blocks (LH-A through LH-J), Food Courts (Gazebo, Food Mall, DC), Central Library, and Sports Complex. Category tags: ID Cards, Room Keys, Calculators, Lab Equipment, Earphones, Wallets.\n• Student Authentication & Privacy: Public listings must mask the finder's personal registration number, email, and phone number to prevent spam and unsolicited contact.\n• Ownership Verification Workflow: A student claiming an item cannot view the finder's identity. Claimants must submit a 'Claim Verification Request' answering a custom verification challenge set by the finder (e.g., 'What name/branch is on the ID tag?'). The finder evaluates claims in a private dashboard to 'Approve' or 'Reject'.\n• Safe In-App Handoff Coordination: Approved claims generate an in-app private communication thread or coordinate relay to agree on a physical campus meetup checkpoint (e.g., SJT Ground Floor Reception or Central Library Security Desk).\n• Lifecycle Management: Returned items can be marked as 'Resolved' by either party, automatically removing them from active campus boards.",
+      "aws_services": [
+        "Amazon S3",
+        "Amazon Cognito",
+        "Amazon DynamoDB"
+      ],
+      "created_at": "2026-09-15T22:50:00.000Z"
+    },
+    {
+      "id": "proj-web-02",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "title": "Live Collaborative Workspace and Code Pad",
+      "details": "Overview:\nBuild a multi-user real-time web workspace where students can join persistent virtual rooms, collaborate on code or technical notes simultaneously, and track participant presence without data collisions or UI freezing.\n\nKey Features Required:\n• Synchronized Editor Interface: Split layout featuring a synchronized code/text editor, an active room participant list, and a live activity audit feed.\n• Room Management & Security: Custom room IDs with optional passcodes. Credentials must be validated prior to admitting a client into an active room session.\n• Real-Time Broadcast Protocol: Synchronize character insertions, deletions, cursor positions, and line highlights across all active peers. Real-time indicator badges displaying typing/presence status.\n• Connection & Spam Throttling: Throttle broadcast traffic from any individual connection emitting rapid update bursts (e.g., >5 updates/second) to prevent socket flooding.\n• Dynamic Role Reassignment: The room creator serves as host. If the host disconnects, administrative privileges transfer automatically to the oldest active remaining member.",
+      "aws_services": [
+        "Amazon API Gateway (WebSockets)",
+        "AWS Lambda",
+        "Amazon ElastiCache"
+      ],
+      "created_at": "2026-09-15T22:51:00.000Z"
+    },
+    {
+      "id": "proj-web-03",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "title": "Campus Placement & Internship Portal (Three-Tier Multi-Page System)",
+      "details": "Overview:\nDevelop a role-based recruitment platform modeling an institutional campus placement portal. The platform must implement distinct interfaces and permission boundaries for Student Applicants, Company Recruiters, and Placement Cell Administrators.\n\nKey Features Required:\n• Three Distinct Role Workflows:\n  - Student Applicant: Browses approved company openings, manages a student profile (branch, CGPA, graduation year, resume link), submits job applications, and tracks progress.\n  - Company Recruiter: Creates company profiles, publishes job postings with eligibility criteria (minimum CGPA, allowed departments), reviews candidate profiles, and updates hiring status.\n  - Placement Cell Admin: Dedicated portal where newly registered companies and job postings must be approved or rejected before becoming visible to students.\n• Server-Side Eligibility Gating: The backend must evaluate applicant profiles against posting eligibility criteria (e.g., CGPA thresholds). Ineligible candidates are blocked from submission with a clear explanatory notice.\n• Application Tracking Pipeline: Multi-page candidate view allowing students to monitor application status in real time. Recruiter interface supporting single and batch applicant status transitions.\n• Administrative Action Logs: Audit records of admin approvals/rejections with timestamps and reviewer IDs.",
+      "aws_services": [
+        "Amazon RDS PostgreSQL",
+        "Amazon S3",
+        "Amazon SES"
+      ],
+      "created_at": "2026-09-15T22:52:00.000Z"
+    },
+    {
+      "id": "proj-web-04",
+      "subdomain_id": "10000000-0000-4000-8000-000000000001",
+      "title": "Event Ticketing System with Automated Mailer and QR Entry Check-In",
+      "details": "Overview:\nBuild a multi-page event ticketing and check-in system for campus events. Students register for an event, receive an automated confirmation email containing a cryptographically signed QR ticket, and event organizers scan the QR code using a dedicated portal to verify check-in in real time.\n\nKey Features Required:\n• Participant Registration Portal: Event browsing interface with capacity limits (rejecting submissions once maximum venue capacity is reached).\n• Transactional Email Dispatch Engine: Generates and dispatches a dynamic HTML email to the participant's inbox using a real email service provider (e.g., Resend, SendGrid, Brevo, or Nodemailer with SMTP) with an embedded unique QR code representing a cryptographically signed ticket token.\n• Organizer Scan & Verification Portal: Dedicated organizer interface featuring an integrated webcam QR scanner (with a manual token input fallback for testing) that issues instant backend verification requests.\n• Check-In & Anti-Duplication Security: Validates attendee against database. First valid scan marks attendee as 'CHECKED-IN'. Subsequent scans flag the ticket as 'ALREADY USED' with original check-in timestamp. Counterfeit/malformed QR codes trigger an 'INVALID TICKET' alert.",
+      "aws_services": [
+        "Amazon SES",
+        "Amazon DynamoDB",
+        "AWS Lambda"
+      ],
+      "created_at": "2026-09-15T22:53:00.000Z"
+    },
+    {
+      "id": "proj-app-01",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "title": "Campus Ride & Shuttle Live Tracker App",
+      "details": "Overview:\nBuild a real-time mobile app for tracking campus shuttles and student ride-sharing across campus zones.\n\nKey Features Required:\n• Real-time GPS location tracking and route mapping on dynamic map views.\n• ETA calculation and arrival push notifications.\n• Dual role interfaces for Drivers (broadcasting location) and Students (tracking).\n• Offline route caching and low-battery background optimization.",
+      "aws_services": [
+        "Amazon Location Service",
+        "Amazon SNS",
+        "AWS AppSync"
+      ],
+      "created_at": "2026-09-15T22:54:00.000Z"
+    },
+    {
+      "id": "proj-app-02",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "title": "Offline-First Student Resource & Audio Note Companion",
+      "details": "Overview:\nCreate a mobile audio note-taking and lecture companion app that operates completely offline and syncs when online.\n\nKey Features Required:\n• High quality audio recording with live waveform visualization.\n• Offline-first local database (SQLite/WatermelonDB) with conflict-free cloud sync.\n• Categorization with tags, search, and audio playback speed controls.\n• Biometric authentication (FaceID/Fingerprint) for private notes.",
+      "aws_services": [
+        "Amazon S3",
+        "Amazon Cognito",
+        "AWS Amplify DataStore"
+      ],
+      "created_at": "2026-09-15T22:55:00.000Z"
+    },
+    {
+      "id": "proj-app-03",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "title": "Smart Campus QR Pass & Event Check-in Wallet",
+      "details": "Overview:\nDesign an institutional mobile wallet application for event ticketing, campus club passes, and verification.\n\nKey Features Required:\n• Cryptographically signed dynamic QR passes with anti-screenshot watermarks.\n• Camera-based scanner for club organizers with instant offline caching and online batch sync.\n• Event history, real-time push reminders, and calendar export integration.\n• Dark mode UI adhering to iOS Human Interface and Material 3 design guidelines.",
+      "aws_services": [
+        "Amazon KMS",
+        "Amazon DynamoDB",
+        "Amazon SNS"
+      ],
+      "created_at": "2026-09-15T22:56:00.000Z"
+    },
+    {
+      "id": "proj-app-04",
+      "subdomain_id": "10000000-0000-4000-8000-000000000002",
+      "title": "Peer-to-Peer Campus Skill & Textbook Marketplace App",
+      "details": "Overview:\nDevelop a student-to-student mobile marketplace for buying/selling used academic books, calculators, lab coats, and offering peer tutoring.\n\nKey Features Required:\n• Multi-photo listing creation with image downsampling and thumbnail generation.\n• Real-time in-app buyer-seller messaging with push notifications.\n• Keyword search, category filters, and campus pickup point selector.\n• User trust badges and report/moderation tools.",
+      "aws_services": [
+        "Amazon S3",
+        "Amazon SNS",
+        "AWS AppSync"
+      ],
+      "created_at": "2026-09-15T22:57:00.000Z"
+    },
+    {
+      "id": "proj-game-01",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "title": "Build a 2D Fruit Merge Game (Suika Game Clone)",
+      "details": "Objective:\nDesign and implement a basic 2D Fruit Merge (Suika Game clone) inside a single HTML file using pure JavaScript and the HTML5 Canvas API. This task evaluates your understanding of circle-to-circle physics, impulse/overlap resolution, state updating, and array manipulation.\n\nCore Requirements & Gameplay Rules:\n• Fruit Spawning: Clicking on the canvas drops a new fruit from the mouse's horizontal (X) position at the top boundary. Each spawned fruit should randomly pick from the lowest entry-level fruit types.\n• Circle Physics & Boundaries: Implement gravity pulling fruits downward. Fruits must collide and bounce off the left, right, and bottom edges of the canvas without clipping outside.\n• Fruit Collision Handling: Implement explicit circle-to-circle collision detection and position resolution so fruits rest against each other naturally without overlapping or phasing through.\n• Fruit Merging Mechanics: When two fruits of the same level/type collide, remove both fruits and instantiate a single, larger fruit of the next level at their collision midpoint (Level 1 + Level 1 = Level 2).\n• Progressive Sizes: Each successive fruit level must have a noticeably larger collision radius than the previous level.\n• Scoring & UI: Award points whenever two fruits merge (larger merges yield higher points). Display the live score prominently on screen.\n• Game Loop & Controls: Run updates and rendering cleanly via requestAnimationFrame(). Include a restart button to clear the board and reset score.\n\nStrict Restrictions: Do NOT use physics engines (Matter.js, Box2D, etc.). Calculate gravitational acceleration, velocity updates, and circle overlap resolution manually.",
+      "aws_services": [
+        "Amazon S3",
+        "Amazon CloudFront"
+      ],
+      "created_at": "2026-09-15T22:58:00.000Z"
+    },
+    {
+      "id": "proj-game-02",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "title": "Build a 2D Flappy Bird Game",
+      "details": "Objective:\nDesign and implement a basic 2D Flappy Bird clone to demonstrate your understanding of fundamental game development concepts, including collision detection, basic physics, state management, and user input.\n\nCore Requirements & Gameplay Rules:\n• Player Physics: Create a bird sprite that falls automatically due to gravity. Pressing a designated key (e.g., Spacebar or Mouse Click) must apply an upward force (jump/flap).\n• Obstacles & Movement: Generate vertical pipe pairs with a playable gap in between. Pipes must spawn at regular intervals on the right side of the screen, move continuously to the left, and disappear when off-screen.\n• Collision Detection: End the game immediately if the bird touches any pipe, the ground, or moves beyond the top ceiling boundary.\n• Scoring System: Increase the player's score by +1 every time the bird successfully passes between a pair of pipes.\n• Game States: Implement three clear game states: Start Screen, Gameplay, and Game Over Screen with a prompt to restart.\n\nTechnical Guidelines: Avoid complex physics engines; calculate velocity, gravity, and position directly using kinematic variables.",
+      "aws_services": [
+        "Amazon S3",
+        "Amazon CloudFront"
+      ],
+      "created_at": "2026-09-15T22:59:00.000Z"
+    },
+    {
+      "id": "proj-game-03",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "title": "Build a Grid-Based Connect Four Game",
+      "details": "Objective:\nDesign and implement a functional, two-player Connect Four game operating on a standard grid (6 rows * 7 columns). This task evaluates your understanding of 2D matrix manipulation, turn-based state management, column placement logic, and multi-directional search algorithms.\n\nCore Requirements & Gameplay Rules:\n• Turn-Based System: Alternate turns between Player 1 (Red) and Player 2 (Yellow). Clearly display whose turn it currently is above or next to the board.\n• Disc Drop Mechanics: Players select a target column (0 through 6) via mouse click or keyboard input (1-7). The disc must automatically drop to the lowest available unoccupied row in that specific column. If a column is already full (6 discs), ignore the input.\n• Win Detection Algorithm: Automatically evaluate the board after every move to check if the current player has aligned 4 consecutive discs (Horizontally, Vertically, Diagonally ascending, and Diagonally descending).\n• Game Over & Reset States: If a player connects 4 discs, freeze input, declare the winner, and provide a prompt to restart. If all 42 cells fill up with no winner, declare a Draw.",
+      "aws_services": [
+        "Amazon S3",
+        "Amazon CloudFront"
+      ],
+      "created_at": "2026-09-15T23:00:00.000Z"
+    },
+    {
+      "id": "proj-game-04",
+      "subdomain_id": "10000000-0000-4000-8000-000000000003",
+      "title": "Build a 2D Single-Player Pong Game with AI Opponent",
+      "details": "Objective:\nDesign and implement a classic 2D single-player Pong game inside a single HTML file using pure JavaScript and the HTML5 Canvas API. This task evaluates your understanding of basic kinematic physics, vector reflection, automated AI movement, paddle clamping, and continuous input handling.\n\nCore Requirements & Gameplay Rules:\n• Player Paddle Controls: Allow the human player to control a vertical paddle moving up and down using designated keyboard keys (e.g., W / S or Up / Down Arrow keys). Clamp paddle movement so it cannot exit the top or bottom screen boundaries.\n• Ball Movement & Wall Physics: Move a ball continuously across the screen using horizontal and vertical velocity increments (dx, dy). The ball must bounce accurately off the top and bottom walls (dy = -dy).\n• Paddle Collision Detection: Implement rectangle-to-circle collision detection so the ball bounces off the front face of both paddles. Adjust bounce trajectory angle based on impact point on paddle.\n• AI Opponent: Create an automated computer paddle on the opposite side that tracks the ball's vertical position with a playable speed threshold.\n• Scoring & Ball Reset: Display live score. When the ball passes a paddle's goal line, award +1 to opponent and reset the ball to center.",
+      "aws_services": [
+        "Amazon S3",
+        "Amazon CloudFront"
+      ],
+      "created_at": "2026-09-15T23:01:00.000Z"
+    },
+    {
+      "id": "proj-aiml-01",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "title": "Hospital Readmission Prediction (Machine Learning)",
+      "details": "Scenario:\nA hospital wants to identify patients who are likely to be readmitted within 30 days so that additional post-discharge care can be provided proactively.\n\nObjective:\nBuild a classification model to predict whether a patient will be readmitted.\n\nDataset:\nDiabetes 130-US Hospitals (Kaggle / UCI Machine Learning Repository)\n\nRequirements:\n1. Perform thorough exploratory data analysis (EDA) and data preprocessing.\n2. Handle missing values, outliers, and categorical encoding.\n3. Train suitable classification models (e.g. Logistic Regression, Random Forest, XGBoost, LightGBM).\n4. Evaluate using Precision, Recall, F1-score, and ROC-AUC curve.\n5. Analyze false positives and false negatives to identify clinical implications.\n6. Identify important features affecting prediction using feature importances / SHAP.\nBonus: Compare two classification algorithms and handle class imbalance using SMOTE or class weighting.",
+      "aws_services": [
+        "Amazon SageMaker",
+        "Amazon S3"
+      ],
+      "created_at": "2026-09-15T23:02:00.000Z"
+    },
+    {
+      "id": "proj-aiml-02",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "title": "Customer Segmentation & Behavioral Analysis (Unsupervised Learning)",
+      "details": "Scenario:\nAn e-commerce company wants to divide its customers into meaningful groups based on their purchasing behavior to drive personalized marketing campaigns.\n\nObjective:\nUse unsupervised machine learning to discover distinct customer segments.\n\nDataset:\nOnline Retail Dataset (Kaggle / UCI)\n\nRequirements:\n1. Clean and preprocess transaction data (handling cancellations, negative values, and anomalies).\n2. Create meaningful customer-level features using RFM (Recency, Frequency, Monetary) analysis.\n3. Apply clustering algorithms such as K-Means, Hierarchical Clustering, or DBSCAN.\n4. Determine the appropriate number of clusters using Elbow Method and Silhouette Score.\n5. Visualize and interpret customer personas / segments for business decision-making.\nBonus: Compare K-Means with another clustering technique and suggest automated campaign strategies.",
+      "aws_services": [
+        "Amazon SageMaker",
+        "Amazon Athena",
+        "Amazon QuickSight"
+      ],
+      "created_at": "2026-09-15T23:03:00.000Z"
+    },
+    {
+      "id": "proj-aiml-03",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "title": "Traffic Sign Recognition using Deep Neural Networks (Deep Learning)",
+      "details": "Scenario:\nAn autonomous vehicle navigation subsystem needs to classify road traffic signs from camera-captured imagery in real time.\n\nObjective:\nBuild an Artificial Neural Network (ANN) / Convolutional Neural Network (CNN) to classify different types of traffic signs.\n\nDataset:\nGerman Traffic Sign Recognition Benchmark (GTSRB, Kaggle)\n\nRequirements:\n1. Preprocess, resize, and normalize input images.\n2. Convert image data into suitable tensor representations.\n3. Design and train a multi-layer deep neural network (PyTorch or TensorFlow/Keras).\n4. Experiment with different hidden layers, neurons, dropout rates, and activation functions.\n5. Evaluate model performance using accuracy, classification report, and confusion matrix.\n6. Analyze misclassified images and discuss visual distortion/lighting edge cases.\nBonus: Experiment with Batch Normalization, Data Augmentation, or Transfer Learning architectures.",
+      "aws_services": [
+        "Amazon SageMaker",
+        "Amazon Rekognition",
+        "Amazon S3"
+      ],
+      "created_at": "2026-09-15T23:04:00.000Z"
+    },
+    {
+      "id": "proj-aiml-04",
+      "subdomain_id": "10000000-0000-4000-8000-000000000004",
+      "title": "AI Incident Response & Root Cause Analysis Agent (Agentic AI)",
+      "details": "Scenario:\nA company's monitoring system reports a sudden 300% increase in API response time and error spikes. An engineer needs to investigate logs, metrics, and system reports to determine the possible root cause.\n\nObjective:\nBuild an AI agent that autonomously investigates the incident using available toolkits and multi-step reasoning.\n\nRequirements:\n1. Read and analyze provided incident logs, error traces, and telemetry datasets.\n2. Dynamically decide which analytical tool or data source is required at each reasoning step.\n3. Perform a multi-step investigation using ReAct / Tool calling workflows.\n4. Gather corroborating evidence across logs, CPU/memory metrics, and recent deployments.\n5. Generate a structured incident post-mortem report containing problem summary, evidence timeline, probable root cause, and recommended remediations.\n6. Handle edge cases where evidence is insufficient or contradictory.\nBonus: Implement multiple specialized subagents (e.g., Log Analyst, Metric Inspector, Root Cause Reasoner, Report Generator).",
+      "aws_services": [
+        "Amazon Bedrock",
+        "AWS Lambda",
+        "Amazon CloudWatch"
+      ],
+      "created_at": "2026-09-15T23:05:00.000Z"
+    }
+  ]
+}

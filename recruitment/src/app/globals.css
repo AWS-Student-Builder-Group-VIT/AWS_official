@@ -1,0 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Josefin+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root{--bg:#0A0C10;--surface:#1A120A;--panel:#231A11;--panel-high:#32281F;--border:#554434;--accent:#FF9900;--accent-soft:#FFC082;--text:#F1DFD1;--muted:#DBC2AD;--dim:#A38D7A;--blue:#8ED5FF}
+*{box-sizing:border-box}html{background:var(--bg);scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:80px 80px;mask-image:linear-gradient(to bottom,#000,transparent 78%)}
+h1,h2,h3,.font-display{font-family:'Space Mono',monospace}a,button,input,select,textarea{font:inherit}button,a{touch-action:manipulation}::selection{background:var(--accent);color:var(--bg)}*:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.admin-font,.admin-font *{font-family:'Josefin Sans',sans-serif!important}
+::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border)}
+@layer components{
+ .shell{@apply mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-10}
+ .eyebrow{@apply font-mono text-[11px] uppercase tracking-[.2em] text-accent}
+ .technical-panel{@apply relative border border-border bg-surface/90;clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%)}
+ .technical-panel::after{content:"";position:absolute;right:0;bottom:0;width:20px;height:1px;background:var(--accent);transform:rotate(-45deg);transform-origin:right}
+ .action{@apply inline-flex min-h-12 items-center justify-center gap-3 bg-accent px-6 font-mono text-xs font-bold uppercase tracking-[.14em] text-bg transition hover:bg-[#ffc082] disabled:cursor-not-allowed disabled:opacity-50;clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%)}
+ .action-secondary{@apply inline-flex min-h-12 items-center justify-center border border-border px-6 font-mono text-xs uppercase tracking-[.14em] text-muted transition hover:border-accent hover:text-accent}
+ .field{@apply w-full border border-border bg-bg/70 px-4 py-3 text-sm text-text transition placeholder:text-dim focus:border-accent}
+ .label{@apply mb-2 block font-mono text-[11px] uppercase tracking-[.16em] text-muted}
+ .status-chip{@apply inline-flex items-center gap-2 border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-[.14em]}
+}
+@keyframes scan{0%{transform:translateY(-10vh)}100%{transform:translateY(110vh)}}.scanline{position:fixed;inset-inline:0;top:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.22;animation:scan 9s linear infinite;pointer-events:none}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}.scanline{display:none}}

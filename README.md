@@ -11,6 +11,17 @@ Welcome to the official web application for the **AWS Student Builder Group at V
 ---
 *Build, Learn, Deploy.*
 
+## Local development
+
+Run `npm install`, then `npm run dev`. This starts the main Vite site, API, and
+the recruitment portal together. Open the recruitment portal directly at
+`http://localhost:3001/recruitment`, or visit `http://localhost:5173/recruitment`
+to be forwarded there.
+
+The recruitment app reads Supabase credentials from `recruitment/.env.local`.
+For production, deploy the `recruitment` directory as its own Next.js app and set
+`VITE_RECRUITMENT_URL` on the main site to that deployment's `/recruitment` URL.
+
 #RET=...
 ```
 
