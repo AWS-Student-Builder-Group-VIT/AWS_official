@@ -171,6 +171,19 @@ export default function ProjectPage() {
             <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Requirements</h3>
             <pre className="whitespace-pre-wrap text-sm text-text leading-relaxed font-sans">{project.requirements}</pre>
           </section>
+          {project.task_document_url && (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Project Task Document</h3>
+              <a
+                href={project.task_document_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex rounded-lg border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent hover:bg-accent/20"
+              >
+                Open Task Document ↗
+              </a>
+            </section>
+          )}
           <section>
             <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">AWS Services</h3>
             <div className="flex flex-wrap gap-2">

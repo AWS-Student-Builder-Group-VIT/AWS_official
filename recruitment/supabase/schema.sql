@@ -110,6 +110,7 @@ CREATE TABLE projects (
   problem_statement TEXT NOT NULL,
   requirements TEXT NOT NULL,
   aws_services TEXT[] NOT NULL,
+  task_document_url TEXT CHECK (task_document_url IS NULL OR task_document_url ~ '^https?://'),
   optional_features TEXT,
   free_execution_path TEXT NOT NULL DEFAULT 'Develop locally first; deploy the frontend on Vercel and use AWS Free Tier or an AWS Educate sandbox. Ask the team for an approved alternative before enabling billing.',
   evaluation_rubric JSONB,

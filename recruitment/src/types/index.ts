@@ -163,6 +163,7 @@ export interface Project {
   problem_statement: string;
   requirements: string;
   aws_services: string[];
+  task_document_url?: string | null;
   optional_features?: string;
   evaluation_rubric?: Record<string, number>;
   deadline_days: number;

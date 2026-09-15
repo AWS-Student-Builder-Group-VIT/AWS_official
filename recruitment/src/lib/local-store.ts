@@ -7,6 +7,7 @@ export interface LocalProject {
   subdomain_id: string;
   title: string;
   details: string;
+  task_document_url?: string | null;
   aws_services?: string[];
   created_at: string;
 }

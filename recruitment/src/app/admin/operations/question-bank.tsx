@@ -35,7 +35,8 @@ type StoredProject = {
   id: string;
   subdomain_id: string;
   title: string;
-  details: string;
+  problem_statement: string;
+  task_document_url?: string | null;
   aws_services?: string[];
   created_at: string;
 };
@@ -67,6 +68,7 @@ export default function QuestionBank({ domains, onClose }: { domains: Domain[]; 
   const [projects, setProjects] = useState<StoredProject[]>([]);
   const [projectTitle, setProjectTitle] = useState('');
   const [projectDetails, setProjectDetails] = useState('');
+  const [projectDocumentUrl, setProjectDocumentUrl] = useState('');
   const [savingProject, setSavingProject] = useState(false);
   const [loadingContent, setLoadingContent] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -322,7 +324,12 @@ export default function QuestionBank({ domains, onClose }: { domains: Domain[]; 
       const response = await fetch('/api/admin/projects', {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subdomain_id: subdomainId, title: projectTitle, details: projectDetails }),
+        body: JSON.stringify({
+          subdomain_id: subdomainId,
+          title: projectTitle,
+          details: projectDetails,
+          task_document_url: projectDocumentUrl,
+        }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -332,6 +339,7 @@ export default function QuestionBank({ domains, onClose }: { domains: Domain[]; 
         setMessage(`Problem Statement "${projectTitle}" added to ${activeSubdomain?.name}.`);
         setProjectTitle('');
         setProjectDetails('');
+        setProjectDocumentUrl('');
       }
     } catch (err: any) {
       setError(err.message || 'Error saving problem statement.');
@@ -418,8 +426,10 @@ export default function QuestionBank({ domains, onClose }: { domains: Domain[]; 
             projects={projects}
             projectTitle={projectTitle}
             projectDetails={projectDetails}
+            projectDocumentUrl={projectDocumentUrl}
             onChangeProjectTitle={setProjectTitle}
             onChangeProjectDetails={setProjectDetails}
+            onChangeProjectDocumentUrl={setProjectDocumentUrl}
             onSaveProject={saveProjectStatement}
             onDeleteProject={deleteProjectStatement}
             onDeleteAllProjects={deleteAllProjectStatements}
@@ -563,8 +573,10 @@ function GuidelineEditor({
   projects,
   projectTitle,
   projectDetails,
+  projectDocumentUrl,
   onChangeProjectTitle,
   onChangeProjectDetails,
+  onChangeProjectDocumentUrl,
   onSaveProject,
   onDeleteProject,
   onDeleteAllProjects,
@@ -584,8 +596,10 @@ function GuidelineEditor({
   projects?: StoredProject[];
   projectTitle?: string;
   projectDetails?: string;
+  projectDocumentUrl?: string;
   onChangeProjectTitle?: (val: string) => void;
   onChangeProjectDetails?: (val: string) => void;
+  onChangeProjectDocumentUrl?: (val: string) => void;
   onSaveProject?: () => void;
   onDeleteProject?: (id: string) => void;
   onDeleteAllProjects?: () => void;
@@ -683,6 +697,16 @@ function GuidelineEditor({
                 className="field resize-y"
               />
             </Field>
+            <Field label="Task Document Link (Word, OneDrive, SharePoint or Drive)">
+              <input
+                type="url"
+                disabled={disabled || loading}
+                value={projectDocumentUrl || ''}
+                onChange={(e) => onChangeProjectDocumentUrl?.(e.target.value)}
+                placeholder="https://..."
+                className="field"
+              />
+            </Field>
             <button
               type="button"
               onClick={onSaveProject}
@@ -729,8 +753,18 @@ function GuidelineEditor({
                       )}
                     </div>
                     <div className="mt-3 text-xs leading-6 text-muted whitespace-pre-wrap border-t border-border/40 pt-3">
-                      {proj.details}
+                      {proj.problem_statement}
                     </div>
+                    {proj.task_document_url && (
+                      <a
+                        href={proj.task_document_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-flex text-xs font-semibold text-accent hover:underline"
+                      >
+                        Open task document ↗
+                      </a>
+                    )}
                   </article>
                 ))}
               </div>

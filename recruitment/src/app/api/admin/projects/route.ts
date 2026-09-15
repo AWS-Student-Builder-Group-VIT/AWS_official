@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authorizeAdmin } from '@/lib/admin-authorization';
+import { parseProjectDocumentLink } from '@/lib/project-document-link.mjs';
 
 const projectSchema = z.object({
   subdomain_id: z.string().min(1),
   title: z.string().trim().min(3).max(500),
   details: z.string().trim().min(10).max(30000),
   aws_services: z.array(z.string()).optional().default([]),
+  task_document_url: z.unknown().optional(),
 });
 
 export async function GET(request: Request) {
@@ -26,6 +28,13 @@ export async function POST(request: Request) {
   const parsed = projectSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid project statement.' }, { status: 400 });
 
+  let taskDocumentUrl: string | null;
+  try {
+    taskDocumentUrl = parseProjectDocumentLink(parsed.data.task_document_url);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid document link.' }, { status: 400 });
+  }
+
   const { data, error } = await authorization.admin.from('projects').insert({
     subdomain_id: parsed.data.subdomain_id,
     code: `PRJ-${Date.now().toString().slice(-6)}`,
@@ -33,6 +42,7 @@ export async function POST(request: Request) {
     problem_statement: parsed.data.details,
     requirements: parsed.data.details,
     aws_services: parsed.data.aws_services,
+    task_document_url: taskDocumentUrl,
     deadline_days: 7,
   }).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
