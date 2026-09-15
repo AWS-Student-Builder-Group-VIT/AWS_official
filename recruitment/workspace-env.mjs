@@ -14,5 +14,7 @@ const { loadEnvConfig } = nextEnv;
 export function loadWorkspaceEnv(configUrl, dev = process.env.NODE_ENV !== 'production') {
   const recruitmentDirectory = path.dirname(fileURLToPath(configUrl));
   const workspaceDirectory = path.resolve(recruitmentDirectory, '..');
-  return loadEnvConfig(workspaceDirectory, dev);
+  // Next loads the app directory before evaluating next.config.mjs. Force a
+  // second pass so the workspace root is not skipped by @next/env's cache.
+  return loadEnvConfig(workspaceDirectory, dev, console, true);
 }
