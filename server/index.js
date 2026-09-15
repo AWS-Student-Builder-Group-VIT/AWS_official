@@ -104,7 +104,12 @@ async function initDb() {
   });
   console.log(result.migrated ? 'Database tables ready (migrated to v10)' : 'Database schema already ready');
 }
-export const dbReady = initDb();
+// An unhandled module-scope rejection kills the whole serverless function before
+// any handler runs, taking the Supabase-only recruitment routes down with it —
+// so a Postgres outage must not be fatal to the rest of the API.
+export const dbReady = initDb().catch((error) => {
+  console.error('Database initialisation failed:', error);
+});
 
 // ── Register ─────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
