@@ -17,6 +17,7 @@ import ProfileComplete from './pages/ProfileComplete.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import SubdomainSelection from './pages/SubdomainSelection.jsx';
 import RoundOne from './pages/RoundOne.jsx';
+import Assessment from './pages/Assessment.jsx';
 import CandidateInterview from './pages/CandidateInterview.jsx';
 import CandidateResult from './pages/CandidateResult.jsx';
 
@@ -47,6 +48,7 @@ export default function Recruitment() {
           <Route path="subdomain" element={<SubdomainSelection />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="dashboard/round-1" element={<RoundOne />} />
+          <Route path="dashboard/assessment" element={<Assessment />} />
           <Route path="round-1" element={<RoundOne />} />
           <Route path="interview" element={<CandidateInterview />} />
           <Route path="result" element={<CandidateResult />} />
