@@ -1,0 +1,129 @@
+/* =====================================================
+   RECRUITMENT MODULE – scoped CSS variables & utilities
+   Wraps all recruitment content inside .rct-root
+   ===================================================== */
+
+.rct-root {
+  --bg:      #0a0b0e;
+  --surface: #111318;
+  --panel:   #161a21;
+  --border:  rgba(255,255,255,.08);
+  --text:    #e8eaf0;
+  --muted:   #7d8494;
+  --dim:     #4a5060;
+  --accent:  #FF9900;
+  --accent-muted: #cc7a00;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error:   #ef4444;
+  --info:    #60a5fa;
+  --blue:    #60a5fa;
+  font-family: 'Inter', 'Geist', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+}
+
+/* ── Typography tokens ─────────────────────────────── */
+.rct-root .eyebrow {
+  font-family: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: .625rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.rct-root .label {
+  display: block;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: .6875rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: .375rem;
+}
+
+/* ── Layout helpers ────────────────────────────────── */
+.rct-root .shell {
+  width: 100%;
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+/* ── Interactive elements ──────────────────────────── */
+.rct-root .action {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  min-height: 2.75rem;
+  padding: .625rem 1.375rem;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: .8125rem;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border: none;
+  cursor: pointer;
+  transition: background .15s, opacity .15s;
+}
+.rct-root .action:hover:not(:disabled) { background: var(--accent-muted); }
+.rct-root .action:disabled { opacity: .5; cursor: not-allowed; }
+
+.rct-root .action-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  min-height: 2.75rem;
+  padding: .625rem 1.375rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: .8125rem;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.rct-root .action-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.rct-root .field {
+  display: block;
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: .625rem .875rem;
+  font-size: .875rem;
+  outline: none;
+  transition: border-color .15s;
+}
+.rct-root .field:focus { border-color: var(--accent); }
+.rct-root .field::placeholder { color: var(--dim); }
+
+.rct-root .technical-panel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.rct-root .status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: .25rem .625rem;
+  border: 1px solid;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: .6875rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* ── Scrollbar ─────────────────────────────────────── */
+.rct-root ::-webkit-scrollbar { width: 4px; height: 4px; }
+.rct-root ::-webkit-scrollbar-track { background: var(--bg); }
+.rct-root ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }

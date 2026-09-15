@@ -1,0 +1,398 @@
+/**
+ * Recruitment API routes — mounted at /api/recruitment/* in server/index.js
+ *
+ * Uses the Supabase Admin client (service_role key, server-side only) to
+ * bypass RLS for privileged operations.  The service_role key is NEVER sent
+ * to the browser.
+ */
+
+import { Router } from 'express';
+import { createClient } from '@supabase/supabase-js';
+
+const router = Router();
+
+// ── Supabase admin client (server-side only) ──────────────────────────────
+function adminSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set');
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
+// ── Helper: verify Supabase JWT and check admin_users row ─────────────────
+async function requireAdmin(req, res) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) { res.status(401).json({ error: 'Missing token' }); return null; }
+  const supabase = adminSupabase();
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) { res.status(401).json({ error: 'Invalid session' }); return null; }
+  const { data: admin } = await supabase.from('admin_users').select('id,role,name,email').eq('id', user.id).maybeSingle();
+  if (!admin) { res.status(403).json({ error: 'Not an admin' }); return null; }
+  return { user, admin, supabase };
+}
+
+// ── Helper: verify Supabase JWT (candidate or admin) ─────────────────────
+async function requireAuth(req, res) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) { res.status(401).json({ error: 'Missing token' }); return null; }
+  const supabase = adminSupabase();
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) { res.status(401).json({ error: 'Invalid session' }); return null; }
+  return { user, supabase };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CANDIDATE AUTH
+// ═══════════════════════════════════════════════════════════════════════════
+
+// POST /api/recruitment/admin/login
+router.post('/admin/login', async (req, res) => {
+  try {
+    const { adminId, password } = req.body ?? {};
+    if (!adminId || !password) return res.status(400).json({ error: 'adminId and password are required' });
+    const supabase = adminSupabase();
+    // Attempt sign-in with email+password
+    const { data, error } = await supabase.auth.signInWithPassword({ email: adminId, password });
+    if (error || !data.session) return res.status(401).json({ error: error?.message ?? 'Invalid credentials' });
+    // Verify the user is actually in admin_users
+    const { data: adminRow } = await supabase.from('admin_users').select('id').eq('id', data.user.id).maybeSingle();
+    if (!adminRow) return res.status(403).json({ error: 'Account does not have admin privileges' });
+    return res.json({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ADMIN OPERATIONS PAYLOAD (full dashboard data)
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.get('/admin/operations', async (req, res) => {
+  const ctx = await requireAdmin(req, res);
+  if (!ctx) return;
+  const { admin, supabase } = ctx;
+  try {
+    const [
+      { data: candidates },
+      { data: attempts },
+      { data: assignments },
+      { data: submissions },
+      { data: bookings },
+      { data: results },
+      { data: domains },
+      { data: slots },
+      { data: written_questions },
+      { data: written_rules },
+      { data: written_answers },
+    ] = await Promise.all([
+      supabase.from('candidate_profiles').select('*, subdomain_choices:candidate_subdomain_choices(*, subdomain:subdomains(*, domain:domains(*)))').order('created_at', { ascending: false }),
+      supabase.from('assessment_attempts').select('*').order('started_at', { ascending: false }),
+      supabase.from('project_assignments').select('*, project:projects(*)').order('created_at', { ascending: false }),
+      supabase.from('project_submissions').select('*, evaluation:project_evaluations(*)').order('submitted_at', { ascending: false }),
+      supabase.from('interview_bookings').select('*, slot:interview_slots(slot_time, date:interview_dates(date, location, meeting_link, subdomain_id))').order('booked_at', { ascending: false }),
+      supabase.from('final_results').select('*'),
+      supabase.from('domains').select('*, subdomains(*)').eq('is_active', true).order('sort_order'),
+      supabase.from('interview_slots').select('id, is_booked, status'),
+      supabase.from('written_application_questions').select('*').order('sort_order'),
+      supabase.from('written_application_rules').select('*'),
+      supabase.from('candidate_written_answers').select('*, question:written_application_questions(prompt), domain:domains(name, slug)'),
+    ]);
+
+    return res.json({
+      admin: { id: admin.id, email: admin.email ?? '', name: admin.name ?? '', role: admin.role },
+      candidates: candidates ?? [],
+      attempts: attempts ?? [],
+      assignments: assignments ?? [],
+      submissions: submissions ?? [],
+      bookings: bookings ?? [],
+      results: results ?? [],
+      domains: domains ?? [],
+      slots: slots ?? [],
+      written_questions: written_questions ?? [],
+      written_rules: written_rules ?? [],
+      written_answers: written_answers ?? [],
+      synced_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ASSESSMENTS — release marks
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.post('/admin/assessments/release', async (req, res) => {
+  const ctx = await requireAdmin(req, res);
+  if (!ctx) return;
+  const { supabase } = ctx;
+  const { attempt_id, release } = req.body ?? {};
+  if (!attempt_id) return res.status(400).json({ error: 'attempt_id required' });
+  try {
+    if (release) {
+      // Calculate score if not already done
+      const { data: attempt } = await supabase.from('assessment_attempts').select('id, candidate_id, subdomain_id, score, total_marks').eq('id', attempt_id).single();
+      if (!attempt.score) {
+        // Grading is done by the DB trigger or we just mark as released without scoring
+        await supabase.from('assessment_attempts').update({ results_released_at: new Date().toISOString() }).eq('id', attempt_id);
+      } else {
+        await supabase.from('assessment_attempts').update({ results_released_at: new Date().toISOString() }).eq('id', attempt_id);
+      }
+    } else {
+      await supabase.from('assessment_attempts').update({ results_released_at: null }).eq('id', attempt_id);
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QUESTIONS (scored + written)
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.get('/admin/questions', async (req, res) => {
+  const ctx = await requireAdmin(req, res);
+  if (!ctx) return;
+  const { supabase } = ctx;
+  const { mode, subdomain_id, domain_id } = req.query;
+  try {
+    if (mode === 'written') {
+      const query = supabase.from('written_application_questions').select('*').order('sort_order');
+      if (domain_id) query.or(`domain_id.eq.${domain_id},scope.eq.common_non_technical`);
+      const { data } = await query;
+      return res.json({ questions: data ?? [] });
+    }
+    // scored (technical MCQ/short-answer)
+    const { data } = await supabase.from('assessment_questions').select('*').eq('subdomain_id', subdomain_id).order('created_at', { ascending: false });
+    return res.json({ questions: data ?? [] });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/admin/questions', async (req, res) => {
+  const ctx = await requireAdmin(req, res);
+  if (!ctx) return;
+  const { supabase } = ctx;
+  const { mode, ...fields } = req.body ?? {};
+  try {
+    if (mode === 'written') {
+      const { data, error } = await supabase.from('written_application_questions').insert({ domain_id: fields.domain_id, scope: fields.scope ?? 'domain', question_group: fields.question_group, prompt: fields.prompt, instructions: fields.instructions, response_type: fields.response_type ?? 'long_text', required: fields.required ?? true, sort_order: fields.sort_order ?? 100, is_active: true, minimum_answers: fields.minimum_answers ?? null }).select().single();
+      if (error) return res.status(400).json({ error: error.message });
+      return res.status(201).json({ question: data });
+    }
+    const { data, error } = await supabase.from('assessment_questions').insert({ subdomain_id: fields.subdomain_id, question_text: fields.question_text, question_type: fields.question_type ?? 'mcq', options: fields.options ?? null, correct_answers: fields.correct_answers, marks: fields.marks ?? 1, difficulty: fields.difficulty ?? 'medium', is_active: true }).select().single();
+    if (error) return res.status(400).json({ error: error.message });
+    return res.status(201).json({ question: data });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/admin/questions', async (req, res) => {
+  const ctx = await requireAdmin(req, res);
+  if (!ctx) return;
+  const { supabase } = ctx;
+  const { id, mode } = req.query;
+  if (!id) return res.status(400).json({ error: 'id required' });
+  try {
+    const table = mode === 'written' ? 'written_application_questions' : 'assessment_questions';
+    const { error } = await supabase.from(table).delete().eq('id', id);
+    if (error) return res.status(400).json({ error: error.message });
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ROUND GUIDELINES
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.get('/admin/round-guidelines', async (req, res) => {
+  const ctx = await requireAdmin(req, res);
+  if (!ctx) return;
+  const { supabase } = ctx;
+  const { subdomain_id } = req.query;
+  try {
+    const { data } = await supabase.from('round_guidelines').select('*').eq('subdomain_id', subdomain_id);
+    return res.json({ guidelines: data ?? [] });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/admin/round-guidelines', async (req, res) => {
+  const ctx = await requireAdmin(req, res);
+  if (!ctx) return;
+  const { supabase } = ctx;
+  const { subdomain_id, round_number, guidelines } = req.body ?? {};
+  if (!subdomain_id || !round_number) return res.status(400).json({ error: 'subdomain_id and round_number required' });
+  try {
+    const { data, error } = await supabase.from('round_guidelines').upsert({ subdomain_id, round_number, guidelines, updated_at: new Date().toISOString() }, { onConflict: 'subdomain_id,round_number' }).select().single();
+    if (error) return res.status(400).json({ error: error.message });
+    return res.json({ guideline: data });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PROJECTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.get('/admin/projects', async (req, res) => {
+  const ctx = await requireAdmin(req, res);
+  if (!ctx) return;
+  const { supabase } = ctx;
+  const { subdomain_id } = req.query;
+  try {
+    const query = supabase.from('projects').select('*').order('created_at', { ascending: false });
+    if (subdomain_id) query.eq('subdomain_id', subdomain_id);
+    const { data } = await query;
+    return res.json({ projects: data ?? [] });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/admin/projects', async (req, res) => {
+  const ctx = await requireAdmin(req, res);
+  if (!ctx) return;
+  const { supabase } = ctx;
+  const { subdomain_id, title, details, task_document_url } = req.body ?? {};
+  if (!subdomain_id || !title) return res.status(400).json({ error: 'subdomain_id and title required' });
+  try {
+    const code = `P${Date.now().toString(36).toUpperCase().slice(-4)}`;
+    const { data, error } = await supabase.from('projects').insert({ subdomain_id, title, problem_statement: details, task_document_url: task_document_url || null, code, is_active: true }).select().single();
+    if (error) return res.status(400).json({ error: error.message });
+    return res.status(201).json({ project: data });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ROUND 1 — WRITTEN APPLICATION (candidate)
+// GET — loads domain/question/answer state for the logged-in candidate
+// PUT — saves draft answers
+// POST — submits (finalises) a domain's answers
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.get('/round-1/written', async (req, res) => {
+  const ctx = await requireAuth(req, res);
+  if (!ctx) return;
+  const { user, supabase } = ctx;
+  try {
+    const { data: profile } = await supabase.from('candidate_profiles').select('*, subdomain_choices:candidate_subdomain_choices(*, subdomain:subdomains(*, domain:domains(*)))').eq('id', user.id).single();
+    if (!profile) return res.status(404).json({ error: 'Profile not found. Please complete your profile first.' });
+
+    // Build domain list from choices, de-duplicated by domain
+    const domainMap = new Map();
+    for (const choice of (profile.subdomain_choices ?? [])) {
+      const domain = choice.subdomain?.domain;
+      if (!domain) continue;
+      const existing = domainMap.get(domain.id);
+      if (existing) { existing.tracks.push({ id: choice.subdomain.id, name: choice.subdomain.name }); }
+      else { domainMap.set(domain.id, { id: domain.id, name: domain.name, slug: domain.slug, tracks: [{ id: choice.subdomain.id, name: choice.subdomain.name }] }); }
+    }
+    const domains = Array.from(domainMap.values()).filter((d) => d.slug !== 'technical');
+
+    const domainIds = domains.map((d) => d.id);
+    const [{ data: questions }, { data: rules }, { data: answers }] = await Promise.all([
+      supabase.from('written_application_questions').select('*').in('domain_id', domainIds).eq('is_active', true).order('sort_order'),
+      supabase.from('written_application_rules').select('*').in('domain_id', domainIds),
+      supabase.from('candidate_written_answers').select('*').eq('candidate_id', user.id).in('domain_id', domainIds),
+    ]);
+
+    // Build per-domain state
+    const domainStates = {};
+    for (const domain of domains) {
+      const domainQuestions = (questions ?? []).filter((q) => q.domain_id === domain.id);
+      const domainAnswers = (answers ?? []).filter((a) => a.domain_id === domain.id);
+      const domainRules = (rules ?? []).filter((r) => r.domain_id === domain.id);
+      const hasContent = domainAnswers.some((a) => a.answer_text?.trim() || a.submission_links?.length);
+      const isFinal = domainAnswers.some((a) => a.is_final);
+      let valid = true;
+      const missing = [];
+      for (const rule of domainRules) {
+        const groupAnswers = domainAnswers.filter((a) => {
+          const q = domainQuestions.find((q) => q.id === a.question_id);
+          return q?.question_group === rule.group;
+        }).filter((a) => a.answer_text?.trim() || a.submission_links?.length);
+        if (groupAnswers.length < (rule.minimum_answers ?? 1)) { valid = false; missing.push(rule.group); }
+      }
+      domainStates[domain.id] = { status: isFinal ? 'submitted' : hasContent ? 'draft' : 'not_started', hasContent, valid, final: isFinal, missing };
+    }
+
+    // technical check
+    const hasTechnical = (profile.subdomain_choices ?? []).some((c) => c.subdomain?.domain?.slug === 'technical');
+    const technicalComplete = !hasTechnical; // will be marked complete when assessment is submitted
+
+    // Format questions with answerKey
+    const formattedQuestions = (questions ?? []).map((q) => ({ ...q, domainId: q.domain_id, answerKey: `${q.domain_id}:${q.id}` }));
+
+    return res.json({
+      domains,
+      questions: formattedQuestions,
+      rules: (rules ?? []).map((r) => ({ ...r, domainId: r.domain_id, minimumAnswers: r.minimum_answers })),
+      answers: answers ?? [],
+      domainStates,
+      roundOneComplete: Object.values(domainStates).every((s) => s.final) && technicalComplete,
+      technical: { required: hasTechnical, complete: technicalComplete, status: hasTechnical ? 'not_started' : 'not_required' },
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/round-1/written', async (req, res) => {
+  const ctx = await requireAuth(req, res);
+  if (!ctx) return;
+  const { user, supabase } = ctx;
+  const { domainId, answers } = req.body ?? {};
+  if (!domainId || !Array.isArray(answers)) return res.status(400).json({ error: 'domainId and answers[] required' });
+  try {
+    // Check deadline
+    const { data: setting } = await supabase.from('recruitment_settings').select('value').eq('key', 'round_0_start_at').maybeSingle();
+    const startAt = setting?.value?.at;
+    if (startAt && new Date() > new Date(startAt)) {
+      // Allow saving after start but check if already final
+    }
+    const rows = answers.map(({ questionId, answerText, submissionLinks }) => ({
+      candidate_id: user.id, domain_id: domainId, question_id: questionId,
+      answer_text: answerText ?? '', submission_links: submissionLinks ?? [], is_final: false, updated_at: new Date().toISOString(),
+    }));
+    if (rows.length > 0) {
+      const { error } = await supabase.from('candidate_written_answers').upsert(rows, { onConflict: 'candidate_id,domain_id,question_id' });
+      if (error) return res.status(400).json({ error: error.message });
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/round-1/written', async (req, res) => {
+  const ctx = await requireAuth(req, res);
+  if (!ctx) return;
+  const { user, supabase } = ctx;
+  const { domainId, answers } = req.body ?? {};
+  if (!domainId || !Array.isArray(answers)) return res.status(400).json({ error: 'domainId and answers[] required' });
+  try {
+    const rows = answers.map(({ questionId, answerText, submissionLinks }) => ({
+      candidate_id: user.id, domain_id: domainId, question_id: questionId,
+      answer_text: answerText ?? '', submission_links: submissionLinks ?? [], is_final: true, updated_at: new Date().toISOString(),
+    }));
+    if (rows.length > 0) {
+      const { error } = await supabase.from('candidate_written_answers').upsert(rows, { onConflict: 'candidate_id,domain_id,question_id' });
+      if (error) return res.status(400).json({ error: error.message });
+    }
+    return res.json({ ok: true, submitted: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;

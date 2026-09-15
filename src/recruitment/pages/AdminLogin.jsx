@@ -1,0 +1,77 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { createClient } from '../lib/supabase.js';
+
+export default function AdminLogin() {
+  const navigate = useNavigate();
+  const [adminId, setAdminId] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function login(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+    const response = await fetch('/api/recruitment/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminId, password }),
+    });
+    const result = await response.json();
+    if (!response.ok) { setError(result.error ?? 'Unable to sign in.'); setLoading(false); return; }
+    const { error: sessionError } = await createClient().auth.setSession({
+      access_token: result.access_token,
+      refresh_token: result.refresh_token,
+    });
+    if (sessionError) { setError(sessionError.message); setLoading(false); return; }
+    navigate('/recruitment/admin/operations', { replace: true });
+  }
+
+  return (
+    <main className="shell grid min-h-screen place-items-center py-12">
+      <section className="technical-panel w-full max-w-lg p-7 sm:p-9">
+        <p className="eyebrow">ADMIN_SECURE_ACCESS</p>
+        <h1 className="mt-4 text-3xl font-bold">Admin operations console</h1>
+        <p className="mt-4 text-sm leading-6" style={{ color: 'var(--muted)' }}>
+          Sign in with the administrator credentials configured for this portal.
+        </p>
+        {error && (
+          <p role="alert" className="mt-6 border p-3 text-sm" style={{ borderColor: 'rgba(239,68,68,.4)', color: 'var(--error)' }}>
+            {error}
+          </p>
+        )}
+        <form onSubmit={login} className="mt-7 space-y-5">
+          <label className="block">
+            <span className="eyebrow">ADMIN ID</span>
+            <input
+              type="text"
+              autoComplete="username"
+              required
+              value={adminId}
+              onChange={(e) => setAdminId(e.target.value)}
+              className="mt-2 w-full border px-4 py-3 outline-none focus:border-[var(--accent)]"
+              style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
+            />
+          </label>
+          <label className="block">
+            <span className="eyebrow">PASSWORD</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mt-2 w-full border px-4 py-3 outline-none focus:border-[var(--accent)]"
+              style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
+            />
+          </label>
+          <button type="submit" disabled={loading} className="action w-full">
+            <ShieldCheck size={16} />{loading ? 'Signing in…' : 'Sign in as admin'}<ArrowRight size={16} />
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
