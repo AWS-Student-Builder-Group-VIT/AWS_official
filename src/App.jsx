@@ -86,6 +86,37 @@ function RouteLoading() {
   );
 }
 
+function RecruitmentRedirect() {
+  useEffect(() => {
+    const configuredUrl = import.meta.env.VITE_RECRUITMENT_URL?.trim();
+    const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const target = configuredUrl || (isLocal
+      ? `${window.location.protocol}//${window.location.hostname}:3001/recruitment`
+      : null);
+
+    if (target) window.location.replace(target);
+  }, []);
+
+  const hasProductionUrl = Boolean(import.meta.env.VITE_RECRUITMENT_URL?.trim());
+  const isLocal = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+  if (!hasProductionUrl && !isLocal) {
+    return (
+      <main className="min-h-screen bg-[#080b11] text-white grid place-items-center p-6">
+        <div className="max-w-lg border border-white/10 bg-white/5 p-8">
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[#ff9900]">Recruitment portal</p>
+          <h1 className="mt-4 text-2xl font-semibold">Portal URL is not configured</h1>
+          <p className="mt-3 text-sm leading-6 text-white/65">
+            Set VITE_RECRUITMENT_URL to the deployed recruitment application URL and rebuild the main site.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  return <RouteLoading />;
+}
+
 export default function App() {
   const location = useLocation();
   const isHomePage = location.pathname === '/';
@@ -249,6 +280,7 @@ export default function App() {
             <Route path="/blog/google-maps-traffic" element={<BlogGoogleMaps />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/account" element={<AccountPage />} />
+            <Route path="/recruitment/*" element={<RecruitmentRedirect />} />
             <Route path="/games" element={<GamesPage />} />
             <Route path="/games/:gameSlug" element={<GamePageRoute />} />
           </Routes>
