@@ -17,9 +17,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const check = async () => {
       if (isLoginPage) { setChecking(false); return; }
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push('/login'); return; }
+      if (!user) { router.push('/admin/login'); return; }
       const { data: admin } = await supabase.from('admin_users').select('id, role').eq('id', user.id).single();
-      if (!admin) { router.push('/recruitment'); return; }
+      if (!admin) { router.push('/admin/login'); return; }
       setChecking(false);
     };
     check();
@@ -70,7 +70,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
         <div className="border-t border-border p-4">
           <button
-            onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }}
+            onClick={async () => { await supabase.auth.signOut(); router.push('/admin/login'); }}
             className="w-full rounded-lg px-3 py-2 text-left text-sm text-muted hover:bg-panel hover:text-error transition"
           >
             Sign Out

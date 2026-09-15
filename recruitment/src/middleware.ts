@@ -5,7 +5,19 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  const path = request.nextUrl.pathname;
+  const isAuthPage = path === '/login';
+  const isAdminLoginPage = path === '/admin/login';
+  const isAdminPage = path.startsWith('/admin');
+  const isProtected = path.startsWith('/recruitment') ||
+    path.startsWith('/profile') ||
+    path.startsWith('/dashboard') ||
+    (isAdminPage && !isAdminLoginPage);
+
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (isAdminPage && !isAdminLoginPage) {
+      return NextResponse.redirect(new URL('/admin/login', request.url));
+    }
     return response;
   }
 
@@ -27,18 +39,8 @@ export async function middleware(request: NextRequest) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  const path = request.nextUrl.pathname;
-
-  const isAuthPage = path === '/login';
-  const isAdminLoginPage = path === '/admin/login';
-  const isAdminPage = path.startsWith('/admin');
-  const isProtected = path.startsWith('/recruitment') ||
-    path.startsWith('/profile') ||
-    path.startsWith('/dashboard') ||
-    (isAdminPage && !isAdminLoginPage);
-
   if (!user && isProtected) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL(isAdminPage ? '/admin/login' : '/login', request.url));
   }
 
   if (user && isAuthPage) {
@@ -52,7 +54,7 @@ export async function middleware(request: NextRequest) {
       .eq('id', user.id)
       .single();
     if (!adminUser) {
-      return NextResponse.redirect(new URL('/recruitment', request.url));
+      return NextResponse.redirect(new URL('/admin/login', request.url));
     }
   }
 

@@ -68,7 +68,7 @@ Technical selections use the scored assessment component of Round 1: five questi
 
 ## Admin testing and operations
 
-While running `npm run dev`, open `/admin/login` and choose **Enter local admin**. This development-only shortcut is unavailable in production builds.
+Set `ADMIN_ID` and `ADMIN_PASSWORD` in `.env.local`, then open `/admin/login` and sign in with those credentials. Admin credentials are server-only and must never use the `NEXT_PUBLIC_` prefix.
 
 All `/admin` routes, including login and the Operations Console, use Josefin Sans while candidate pages retain the existing Inter and Space Mono type system.
 
