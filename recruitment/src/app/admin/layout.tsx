@@ -25,13 +25,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     check();
   }, [isLoginPage]);
 
-  if (isLoginPage) return children;
+  if (isLoginPage) return <div className="admin-font min-h-screen">{children}</div>;
 
   if (checking) {
-    return <div className="flex h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-accent" /></div>;
+    return <div className="admin-font flex h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-accent" /></div>;
   }
 
-  if (isOperationsPage) return children;
+  if (isOperationsPage) return <div className="admin-font min-h-screen">{children}</div>;
 
   const navItems = [
     { href: '/admin', label: 'Overview', icon: '⊞' },
@@ -47,7 +47,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   ];
 
   return (
-    <div className="flex min-h-screen bg-bg">
+    <div className="admin-font flex min-h-screen bg-bg">
       <aside className="hidden w-56 flex-col border-r border-border bg-surface lg:flex">
         <div className="flex h-16 items-center gap-3 border-b border-border px-5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-bg text-xs font-bold">AWS</div>
