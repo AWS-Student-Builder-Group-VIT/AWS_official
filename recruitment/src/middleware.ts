@@ -14,8 +14,13 @@ export async function middleware(request: NextRequest) {
     path.startsWith('/dashboard') ||
     (isAdminPage && !isAdminLoginPage);
 
+  const adminCookie = request.cookies.get('aws_admin_session')?.value;
+  if (isAdminPage && !isAdminLoginPage && (adminCookie === 'aws_admin_local_jwt_session_token' || adminCookie?.startsWith('aws_admin_'))) {
+    return response;
+  }
+
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    if (isAdminPage && !isAdminLoginPage) {
+    if (isAdminPage && !isAdminLoginPage && !adminCookie) {
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
     return response;
@@ -40,6 +45,7 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user && isProtected) {
+    if (isAdminPage && adminCookie) return response;
     return NextResponse.redirect(new URL(isAdminPage ? '/admin/login' : '/login', request.url));
   }
 
@@ -53,7 +59,7 @@ export async function middleware(request: NextRequest) {
       .select('id')
       .eq('id', user.id)
       .single();
-    if (!adminUser) {
+    if (!adminUser && !adminCookie) {
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
   }

@@ -64,9 +64,16 @@ export default function AdminOperationsPage() {
   async function load(silent = false) {
     if (silent) setRefreshing(true); else setLoading(true);
     setError('');
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { router.replace('/admin/login'); return; }
-    const response = await fetch('/api/admin/operations', { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' });
+    let token = '';
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.access_token || '';
+    } catch {}
+    if (!token && typeof window !== 'undefined') {
+      token = sessionStorage.getItem('aws_admin_token') || localStorage.getItem('aws_admin_token') || '';
+    }
+    if (!token) { router.replace('/admin/login'); return; }
+    const response = await fetch('/api/admin/operations', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
     const result = await response.json();
     if (!response.ok) setError(result.error ?? 'Unable to load operations data.');
     else setPayload(result as OperationsPayload);

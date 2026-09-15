@@ -390,11 +390,10 @@ if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
 }
 
 if (!process.env.VERCEL) {
-  dbReady.then(() => {
+  const startServer = () => {
     const server = app.listen(PORT, () => {
       console.log('\n┌──────────────────────────────────────────┐');
       console.log(`│  ✅ Backend running  →  http://localhost:${PORT}  │`);
-      console.log('│  📡 Database        →  Neon PostgreSQL    │');
       console.log('│  🔑 Admin login     →  /admin              │');
       console.log('│  ❤️  Health check   →  /api/health         │');
       console.log('└──────────────────────────────────────────┘\n');
@@ -405,11 +404,14 @@ if (!process.env.VERCEL) {
       } else {
         console.error('❌ Server error:', err);
       }
-      process.exit(1);
     });
+  };
+
+  dbReady.then(() => {
+    startServer();
   }).catch((error) => {
-    console.error('❌ Database initialization failed:', error);
-    process.exitCode = 1;
+    console.warn('⚠️ Database connection deferred/offline:', error.message || error);
+    startServer();
   });
 }
 

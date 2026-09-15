@@ -65,8 +65,15 @@ export default function QuestionBank({ domains, onClose }: { domains: Domain[]; 
   const validOptions = useMemo(() => options.filter((option) => option.text.trim()), [options]);
 
   async function authHeaders() {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session ? { Authorization: `Bearer ${session.access_token}` } : null;
+    let token = '';
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.access_token || '';
+    } catch {}
+    if (!token && typeof window !== 'undefined') {
+      token = sessionStorage.getItem('aws_admin_token') || localStorage.getItem('aws_admin_token') || '';
+    }
+    return token ? { Authorization: `Bearer ${token}` } : null;
   }
 
   async function loadContent() {
@@ -174,6 +181,100 @@ export default function QuestionBank({ domains, onClose }: { domains: Domain[]; 
     setSaving(false);
   }
 
+  async function deleteScoredQuestion(id: string) {
+    if (!confirm('Are you sure you want to delete this technical question?')) return;
+    setError('');
+    setMessage('');
+    const headers = await authHeaders();
+    if (!headers) { setError('Administrator session expired.'); return; }
+    try {
+      const response = await fetch(`/api/admin/questions?id=${encodeURIComponent(id)}&mode=scored`, {
+        method: 'DELETE',
+        headers,
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setError(result.error ?? 'Failed to delete question.');
+      } else {
+        setQuestions((current) => current.filter((q) => q.id !== id));
+        setMessage('Question deleted successfully.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error deleting question.');
+    }
+  }
+
+  async function deleteAllScoredQuestions() {
+    if (!subdomainId) return;
+    if (!confirm(`Are you sure you want to delete ALL questions for ${activeSubdomain?.name || 'this subdomain'}? This cannot be undone.`)) return;
+    setError('');
+    setMessage('');
+    const headers = await authHeaders();
+    if (!headers) { setError('Administrator session expired.'); return; }
+    try {
+      const response = await fetch(`/api/admin/questions?all=true&subdomain_id=${encodeURIComponent(subdomainId)}&mode=scored`, {
+        method: 'DELETE',
+        headers,
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setError(result.error ?? 'Failed to clear questions.');
+      } else {
+        setQuestions([]);
+        setMessage(`All questions cleared for ${activeSubdomain?.name || 'subdomain'}.`);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error clearing questions.');
+    }
+  }
+
+  async function deleteWrittenQuestion(id: string) {
+    if (!confirm('Are you sure you want to delete this written question?')) return;
+    setError('');
+    setMessage('');
+    const headers = await authHeaders();
+    if (!headers) { setError('Administrator session expired.'); return; }
+    try {
+      const response = await fetch(`/api/admin/questions?id=${encodeURIComponent(id)}&mode=written`, {
+        method: 'DELETE',
+        headers,
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setError(result.error ?? 'Failed to delete question.');
+      } else {
+        setWrittenQuestions((current) => current.filter((q) => q.id !== id));
+        setMessage('Written question deleted.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error deleting question.');
+    }
+  }
+
+  async function deleteAllWrittenQuestions() {
+    if (!domainId) return;
+    if (!confirm(`Are you sure you want to delete ALL written questions for ${activeDomain?.name || 'this domain'}? This cannot be undone.`)) return;
+    setError('');
+    setMessage('');
+    const headers = await authHeaders();
+    if (!headers) { setError('Administrator session expired.'); return; }
+    try {
+      const response = await fetch(`/api/admin/questions?all=true&domain_id=${encodeURIComponent(domainId)}&mode=written`, {
+        method: 'DELETE',
+        headers,
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setError(result.error ?? 'Failed to clear written questions.');
+      } else {
+        setWrittenQuestions([]);
+        setMessage(`All written questions cleared for ${activeDomain?.name || 'domain'}.`);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error clearing written questions.');
+    }
+  }
+
   async function saveGuidelines() {
     setError(''); setMessage('');
     if (!subdomainId || activeRound === 1) { setError('Select a domain, subdomain, and guideline round.'); return; }
@@ -204,21 +305,130 @@ export default function QuestionBank({ domains, onClose }: { domains: Domain[]; 
         <div className="border-b border-border p-5 sm:p-7"><div className="grid gap-4 sm:grid-cols-2"><Field label="Domain group"><select value={domainId} onChange={(event) => { setDomainId(event.target.value); setSubdomainId(''); }} className="field"><option value="">Select domain</option>{selectableDomains.map((domain) => <option key={domain.id} value={domain.id}>{domain.name}</option>)}</select></Field>{!(activeRound === 1 && questionMode === 'written') && <Field label="Subdomain specialization"><select value={subdomainId} disabled={!domainId} onChange={(event) => setSubdomainId(event.target.value)} className="field disabled:opacity-50"><option value="">Select subdomain</option>{activeDomain?.subdomains?.map((subdomain) => <option key={subdomain.id} value={subdomain.id}>{subdomain.name}</option>)}</select></Field>}</div></div>
 
         {activeRound === 1 ? questionMode === 'scored' ? (
-          <div className="grid lg:grid-cols-[minmax(0,1fr)_380px]"><main className="border-r border-border p-5 sm:p-7"><section className="border border-border bg-surface p-5"><div className="grid gap-4 sm:grid-cols-[1fr_11rem_7rem]"><Field label="Question type"><select value={questionType} onChange={(event) => { setQuestionType(event.target.value as EditorQuestionType); setCorrectAnswers([]); }} className="field"><option value="mcq">Single choice</option><option value="multiple_select">Multiple select</option><option value="short_answer">Short answer</option></select></Field><Field label="Difficulty"><select value={difficulty} onChange={(event) => setDifficulty(event.target.value as typeof difficulty)} className="field"><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></Field><Field label="Marks"><input type="number" min="1" max="20" value={marks} onChange={(event) => setMarks(Number(event.target.value))} className="field" /></Field></div><Field label="Question"><textarea rows={4} value={questionText} onChange={(event) => setQuestionText(event.target.value)} className="field resize-y" placeholder="Enter the complete question…" /></Field>{questionType === 'short_answer' ? <Field label="Accepted answers / keywords"><input value={shortAnswers} onChange={(event) => setShortAnswers(event.target.value)} className="field" /></Field> : <div><div className="mb-2 flex items-center justify-between"><span className="label !mb-0">Answer options</span><button type="button" onClick={addOption} disabled={options.length >= 10} className="inline-flex items-center gap-1 font-mono text-[10px] text-accent"><Plus size={13} />ADD OPTION</button></div><div className="space-y-2">{options.map((option) => { const checked = correctAnswers.includes(option.id); return <div key={option.id} className="grid grid-cols-[2.5rem_1fr_2.5rem] items-center border border-border"><button type="button" onClick={() => toggleCorrect(option.id)} className={`grid h-full min-h-12 place-items-center border-r border-border ${checked ? 'bg-success text-bg' : 'text-muted'}`}>{checked ? <Check size={15} /> : option.id}</button><input value={option.text} onChange={(event) => setOptions((current) => current.map((item) => item.id === option.id ? { ...item, text: event.target.value } : item))} className="min-w-0 bg-transparent px-3 py-3 text-sm outline-none" /><button type="button" onClick={() => removeOption(option.id)} className="grid h-full place-items-center border-l border-border text-dim hover:text-error"><Trash2 size={14} /></button></div>; })}</div></div>}<Feedback error={error} message={message} /><button onClick={saveScoredQuestion} disabled={saving || !subdomainId} className="action mt-5"><Save size={15} />Save Technical question</button></section></main><ScoredQuestionList questions={questions} loading={loadingContent} /></div>
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_420px]"><main className="border-r border-border p-5 sm:p-7"><section className="border border-border bg-surface p-5"><div className="grid gap-4 sm:grid-cols-[1fr_11rem_7rem]"><Field label="Question type"><select value={questionType} onChange={(event) => { setQuestionType(event.target.value as EditorQuestionType); setCorrectAnswers([]); }} className="field"><option value="mcq">Single choice</option><option value="multiple_select">Multiple select</option><option value="short_answer">Short answer</option></select></Field><Field label="Difficulty"><select value={difficulty} onChange={(event) => setDifficulty(event.target.value as typeof difficulty)} className="field"><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></Field><Field label="Marks"><input type="number" min="1" max="20" value={marks} onChange={(event) => setMarks(Number(event.target.value))} className="field" /></Field></div><Field label="Question"><textarea rows={4} value={questionText} onChange={(event) => setQuestionText(event.target.value)} className="field resize-y" placeholder="Enter the complete question…" /></Field>{questionType === 'short_answer' ? <Field label="Accepted answers / keywords"><input value={shortAnswers} onChange={(event) => setShortAnswers(event.target.value)} className="field" /></Field> : <div><div className="mb-2 flex items-center justify-between"><span className="label !mb-0">Answer options</span><button type="button" onClick={addOption} disabled={options.length >= 10} className="inline-flex items-center gap-1 font-mono text-[10px] text-accent"><Plus size={13} />ADD OPTION</button></div><div className="space-y-2">{options.map((option) => { const checked = correctAnswers.includes(option.id); return <div key={option.id} className="grid grid-cols-[2.5rem_1fr_2.5rem] items-center border border-border"><button type="button" onClick={() => toggleCorrect(option.id)} className={`grid h-full min-h-12 place-items-center border-r border-border ${checked ? 'bg-success text-bg' : 'text-muted'}`}>{checked ? <Check size={15} /> : option.id}</button><input value={option.text} onChange={(event) => setOptions((current) => current.map((item) => item.id === option.id ? { ...item, text: event.target.value } : item))} className="min-w-0 bg-transparent px-3 py-3 text-sm outline-none" /><button type="button" onClick={() => removeOption(option.id)} className="grid h-full place-items-center border-l border-border text-dim hover:text-error"><Trash2 size={14} /></button></div>; })}</div></div>}<Feedback error={error} message={message} /><button onClick={saveScoredQuestion} disabled={saving || !subdomainId} className="action mt-5"><Save size={15} />Save Technical question</button></section></main><ScoredQuestionList questions={questions} loading={loadingContent} onDeleteQuestion={deleteScoredQuestion} onDeleteAll={deleteAllScoredQuestions} subdomainSelected={Boolean(subdomainId)} /></div>
         ) : (
-          <div className="grid lg:grid-cols-[minmax(0,1fr)_380px]"><main className="border-r border-border p-5 sm:p-7"><section className="border border-border bg-surface p-5"><div className="grid gap-4 sm:grid-cols-2"><Field label="Scope"><select value={writtenScope} onChange={(event) => setWrittenScope(event.target.value as typeof writtenScope)} className="field"><option value="domain">Selected domain</option><option value="common_non_technical">All non-Technical domains</option></select></Field><Field label="Question group"><input value={writtenGroup} onChange={(event) => setWrittenGroup(event.target.value)} className="field" /></Field></div><Field label="Prompt"><textarea rows={3} value={questionText} onChange={(event) => setQuestionText(event.target.value)} className="field resize-y" /></Field><Field label="Instructions"><textarea rows={4} value={writtenInstructions} onChange={(event) => setWrittenInstructions(event.target.value)} className="field resize-y" /></Field><div className="grid gap-4 sm:grid-cols-3"><Field label="Response"><select value={writtenResponseType} onChange={(event) => setWrittenResponseType(event.target.value as typeof writtenResponseType)} className="field"><option value="long_text">Long text</option><option value="long_text_with_links">Text + links</option></select></Field><Field label="Sort order"><input type="number" min="0" value={writtenSortOrder} onChange={(event) => setWrittenSortOrder(Number(event.target.value))} className="field" /></Field><Field label="Minimum in group"><input type="number" min="1" value={minimumAnswers} onChange={(event) => setMinimumAnswers(event.target.value ? Number(event.target.value) : '')} className="field" placeholder="Optional" /></Field></div><label className="flex items-center gap-2 text-sm text-muted"><input type="checkbox" checked={writtenRequired} onChange={(event) => setWrittenRequired(event.target.checked)} className="accent-[#FF9900]" />Required individually</label><Feedback error={error} message={message} /><button onClick={saveWrittenQuestion} disabled={saving || (writtenScope === 'domain' && !domainId)} className="action mt-5"><Save size={15} />Save written question</button></section></main><WrittenQuestionList questions={writtenQuestions} loading={loadingContent} /></div>
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_420px]"><main className="border-r border-border p-5 sm:p-7"><section className="border border-border bg-surface p-5"><div className="grid gap-4 sm:grid-cols-2"><Field label="Scope"><select value={writtenScope} onChange={(event) => setWrittenScope(event.target.value as typeof writtenScope)} className="field"><option value="domain">Selected domain</option><option value="common_non_technical">All non-Technical domains</option></select></Field><Field label="Question group"><input value={writtenGroup} onChange={(event) => setWrittenGroup(event.target.value)} className="field" /></Field></div><Field label="Prompt"><textarea rows={3} value={questionText} onChange={(event) => setQuestionText(event.target.value)} className="field resize-y" /></Field><Field label="Instructions"><textarea rows={4} value={writtenInstructions} onChange={(event) => setWrittenInstructions(event.target.value)} className="field resize-y" /></Field><div className="grid gap-4 sm:grid-cols-3"><Field label="Response"><select value={writtenResponseType} onChange={(event) => setWrittenResponseType(event.target.value as typeof writtenResponseType)} className="field"><option value="long_text">Long text</option><option value="long_text_with_links">Text + links</option></select></Field><Field label="Sort order"><input type="number" min="0" value={writtenSortOrder} onChange={(event) => setWrittenSortOrder(Number(event.target.value))} className="field" /></Field><Field label="Minimum in group"><input type="number" min="1" value={minimumAnswers} onChange={(event) => setMinimumAnswers(event.target.value ? Number(event.target.value) : '')} className="field" placeholder="Optional" /></Field></div><label className="flex items-center gap-2 text-sm text-muted"><input type="checkbox" checked={writtenRequired} onChange={(event) => setWrittenRequired(event.target.checked)} className="accent-[#FF9900]" />Required individually</label><Feedback error={error} message={message} /><button onClick={saveWrittenQuestion} disabled={saving || (writtenScope === 'domain' && !domainId)} className="action mt-5"><Save size={15} />Save written question</button></section></main><WrittenQuestionList questions={writtenQuestions} loading={loadingContent} onDeleteQuestion={deleteWrittenQuestion} onDeleteAll={deleteAllWrittenQuestions} domainSelected={Boolean(domainId)} /></div>
         ) : <GuidelineEditor round={activeRound} value={guidelineDraft} onChange={setGuidelineDraft} onSave={saveGuidelines} saving={saving} loading={loadingContent} disabled={!subdomainId} existing={guidelines[activeRound]} error={error} message={message} subdomainName={activeSubdomain?.name} />}
       </div>
     </div>
   );
 }
 
-function ScoredQuestionList({ questions, loading }: { questions: StoredQuestion[]; loading: boolean }) {
-  return <aside className="bg-[#060709] p-5"><p className="font-mono text-[10px] font-bold">TECHNICAL QUESTION BANK · {questions.length}</p>{loading ? <p className="py-8 text-xs text-muted">Loading…</p> : <div className="mt-3 space-y-2">{questions.map((question) => <article key={question.id} className="border border-border bg-surface p-3"><p className="font-mono text-[9px] text-accent">{question.difficulty.toUpperCase()} · {question.marks} MARKS</p><p className="mt-2 text-xs leading-5">{question.question_text}</p></article>)}</div>}</aside>;
+function ScoredQuestionList({ questions, loading, onDeleteQuestion, onDeleteAll, subdomainSelected }: { questions: StoredQuestion[]; loading: boolean; onDeleteQuestion: (id: string) => void; onDeleteAll: () => void; subdomainSelected: boolean }) {
+  return (
+    <aside className="bg-[#060709] p-5 flex flex-col h-full border-l border-border">
+      <div className="flex items-center justify-between pb-3 border-b border-border">
+        <div>
+          <p className="font-mono text-[10px] font-bold text-accent">TECHNICAL QUESTION BANK</p>
+          <p className="font-mono text-[10px] text-muted">{questions.length} QUESTION{questions.length === 1 ? '' : 'S'}</p>
+        </div>
+        {questions.length > 0 && (
+          <button
+            type="button"
+            onClick={onDeleteAll}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 border border-error/50 bg-error/10 hover:bg-error/20 text-error text-[10px] font-mono font-bold tracking-wider transition"
+            title="Delete all questions for this subdomain"
+          >
+            <Trash2 size={12} />
+            CLEAR ALL
+          </button>
+        )}
+      </div>
+      {loading ? (
+        <p className="py-8 text-xs text-muted font-mono">Loading questions…</p>
+      ) : !subdomainSelected ? (
+        <p className="py-8 text-xs text-dim font-mono">Select a domain &amp; subdomain to view and manage questions.</p>
+      ) : questions.length === 0 ? (
+        <p className="py-8 text-xs text-muted font-mono">No questions found in this subdomain.</p>
+      ) : (
+        <div className="mt-3 space-y-2 overflow-y-auto max-h-[calc(100vh-280px)] pr-1">
+          {questions.map((question, idx) => (
+            <article key={question.id} className="group relative border border-border bg-surface p-3 hover:border-border/80 transition">
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-mono text-[9px] text-accent font-bold">
+                  #{idx + 1} · {question.difficulty.toUpperCase()} · {question.marks} MARKS
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onDeleteQuestion(question.id)}
+                  className="p-1 text-dim hover:text-error hover:bg-error/10 border border-transparent hover:border-error/30 transition rounded"
+                  title="Delete this question"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs leading-5 text-text">{question.question_text}</p>
+              {question.options && question.options.length > 0 && (
+                <div className="mt-2 space-y-1 pl-2 border-l border-border/50">
+                  {question.options.map((opt) => {
+                    const isCorrect = Boolean(question.correct_answers?.includes(opt.id));
+                    return (
+                      <p key={opt.id} className={`text-[10px] ${isCorrect ? 'text-success font-medium' : 'text-muted'}`}>
+                        {opt.id}) {opt.text} {isCorrect && '✓'}
+                      </p>
+                    );
+                  })}
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+    </aside>
+  );
 }
 
-function WrittenQuestionList({ questions, loading }: { questions: StoredWrittenQuestion[]; loading: boolean }) {
-  return <aside className="bg-[#060709] p-5"><p className="font-mono text-[10px] font-bold">WRITTEN QUESTION BANK · {questions.length}</p>{loading ? <p className="py-8 text-xs text-muted">Loading…</p> : <div className="mt-3 space-y-2">{questions.map((question) => <article key={question.id} className="border border-border bg-surface p-3"><p className="font-mono text-[9px] text-accent">{question.scope.replaceAll('_', ' ')} · {question.question_group}</p><p className="mt-2 text-xs font-semibold leading-5">{question.prompt}</p>{question.instructions && <p className="mt-2 text-[10px] leading-4 text-muted">{question.instructions}</p>}</article>)}</div>}</aside>;
+function WrittenQuestionList({ questions, loading, onDeleteQuestion, onDeleteAll, domainSelected }: { questions: StoredWrittenQuestion[]; loading: boolean; onDeleteQuestion: (id: string) => void; onDeleteAll: () => void; domainSelected: boolean }) {
+  return (
+    <aside className="bg-[#060709] p-5 flex flex-col h-full border-l border-border">
+      <div className="flex items-center justify-between pb-3 border-b border-border">
+        <div>
+          <p className="font-mono text-[10px] font-bold text-accent">WRITTEN QUESTION BANK</p>
+          <p className="font-mono text-[10px] text-muted">{questions.length} QUESTION{questions.length === 1 ? '' : 'S'}</p>
+        </div>
+        {questions.length > 0 && (
+          <button
+            type="button"
+            onClick={onDeleteAll}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 border border-error/50 bg-error/10 hover:bg-error/20 text-error text-[10px] font-mono font-bold tracking-wider transition"
+            title="Delete all written questions for this domain"
+          >
+            <Trash2 size={12} />
+            CLEAR ALL
+          </button>
+        )}
+      </div>
+      {loading ? (
+        <p className="py-8 text-xs text-muted font-mono">Loading questions…</p>
+      ) : !domainSelected ? (
+        <p className="py-8 text-xs text-dim font-mono">Select a domain to view and manage questions.</p>
+      ) : questions.length === 0 ? (
+        <p className="py-8 text-xs text-muted font-mono">No written questions found.</p>
+      ) : (
+        <div className="mt-3 space-y-2 overflow-y-auto max-h-[calc(100vh-280px)] pr-1">
+          {questions.map((question, idx) => (
+            <article key={question.id} className="group relative border border-border bg-surface p-3 hover:border-border/80 transition">
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-mono text-[9px] text-accent font-bold">
+                  #{idx + 1} · {question.scope.replaceAll('_', ' ')} · {question.question_group}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onDeleteQuestion(question.id)}
+                  className="p-1 text-dim hover:text-error hover:bg-error/10 border border-transparent hover:border-error/30 transition rounded"
+                  title="Delete this question"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs font-semibold leading-5 text-text">{question.prompt}</p>
+              {question.instructions && <p className="mt-1.5 text-[10px] leading-4 text-muted">{question.instructions}</p>}
+            </article>
+          ))}
+        </div>
+      )}
+    </aside>
+  );
 }
 
 function GuidelineEditor({ round, value, onChange, onSave, saving, loading, disabled, existing, error, message, subdomainName }: { round: 2 | 3; value: string; onChange: (value: string) => void; onSave: () => void; saving: boolean; loading: boolean; disabled: boolean; existing: SubdomainRoundGuideline | null; error: string; message: string; subdomainName?: string }) {
@@ -229,3 +439,4 @@ function GuidelineEditor({ round, value, onChange, onSave, saving, loading, disa
 
 function Feedback({ error, message }: { error: string; message: string }) { return <>{error && <p role="alert" className="mt-4 border border-error/50 bg-error/10 p-3 text-sm text-error">{error}</p>}{message && <p role="status" className="mt-4 border border-success/50 bg-success/10 p-3 text-sm text-success">{message}</p>}</>; }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="mb-4 block"><span className="label">{label}</span>{children}</label>; }
+
