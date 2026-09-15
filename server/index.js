@@ -8,6 +8,7 @@ import { isAllowedOrigin } from './corsOrigins.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import recruitmentRouter from './recruitmentRoutes.js';
 
 dotenv.config();
 
@@ -37,6 +38,10 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '35mb' }));
 app.use(express.urlencoded({ extended: true, limit: '35mb' }));
+
+// ── Recruitment API ───────────────────────────────────────────
+app.use('/api/recruitment', recruitmentRouter);
+
 
 // ── Auth middleware ───────────────────────────────────────────
 function authMiddleware(req, res, next) {

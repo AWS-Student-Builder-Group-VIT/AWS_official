@@ -26,6 +26,7 @@ const BlogPredictiveAnalytics = lazy(() => import('./pages/BlogPredictiveAnalyti
 const BlogGoogleMaps = lazy(() => import('./pages/BlogGoogleMaps'));
 const GamesPage = lazy(() => import('./pages/GamesPage'));
 const GridScanIntro = lazy(() => import('./components/GridScanIntro'));
+const RecruitmentApp = lazy(() => import('./recruitment/Recruitment.jsx'));
 
 const gameComponents = {
   'flappy-bird': lazy(() => import('./pages/games/FlappyBird/FlappyBird.jsx')),
@@ -280,7 +281,7 @@ export default function App() {
             <Route path="/blog/google-maps-traffic" element={<BlogGoogleMaps />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/account" element={<AccountPage />} />
-            <Route path="/recruitment/*" element={<RecruitmentRedirect />} />
+            <Route path="/recruitment/*" element={<RecruitmentApp />} />
             <Route path="/games" element={<GamesPage />} />
             <Route path="/games/:gameSlug" element={<GamePageRoute />} />
           </Routes>
