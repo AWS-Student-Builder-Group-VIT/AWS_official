@@ -18,9 +18,15 @@ the recruitment portal together. Open the recruitment portal directly at
 `http://localhost:3001/recruitment`, or visit `http://localhost:5173/recruitment`
 to be forwarded there.
 
-The recruitment app reads Supabase credentials from `recruitment/.env.local`.
-For production, deploy the `recruitment` directory as its own Next.js app and set
-`VITE_RECRUITMENT_URL` on the main site to that deployment's `/recruitment` URL.
+All local applications read configuration from the single `.env.local` file at
+the repository root. Do not create a second `recruitment/.env.local`; the
+recruitment Next.js configuration loads the workspace-level file automatically.
+
+For production, deploy the `recruitment` directory as its own Next.js app. Each
+Vercel project must still receive its required environment variables in the
+Vercel dashboard because local `.env.local` files are not deployed. Set
+`VITE_RECRUITMENT_URL` on the main site to the recruitment deployment's
+`/recruitment` URL.
 
 #RET=...
 ```
