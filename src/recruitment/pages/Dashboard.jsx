@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { createClient } from '../lib/supabase.js';
 import { statusLabel, statusColor, formatDate } from '../lib/utils.js';
 
@@ -50,7 +50,8 @@ export default function Dashboard() {
       </div>
     </div>
   );
-  if (!profile) return null;
+  // No profile row means completion never succeeded; showing an empty page hides that.
+  if (!profile) return <Navigate to="/recruitment/profile/complete" replace />;
 
   const statusFor = (key) => {
     if (key === 'round_0') return profile.round_0_status;
