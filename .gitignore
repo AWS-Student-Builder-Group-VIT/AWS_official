@@ -26,7 +26,10 @@ dist-ssr
 **/dist/
 **/.vite/
 **/.next/
+**/.next-dev/
+**/.next-build/
 *.log
+*.tsbuildinfo
 tmp/
 .env
 .env.local
