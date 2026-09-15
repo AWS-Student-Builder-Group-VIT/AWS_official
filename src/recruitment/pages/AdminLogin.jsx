@@ -14,19 +14,25 @@ export default function AdminLogin() {
     event.preventDefault();
     setLoading(true);
     setError('');
-    const response = await fetch('/api/recruitment/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adminId, password }),
-    });
-    const result = await response.json();
-    if (!response.ok) { setError(result.error ?? 'Unable to sign in.'); setLoading(false); return; }
-    const { error: sessionError } = await createClient().auth.setSession({
-      access_token: result.access_token,
-      refresh_token: result.refresh_token,
-    });
-    if (sessionError) { setError(sessionError.message); setLoading(false); return; }
-    navigate('/recruitment/admin/operations', { replace: true });
+    try {
+      const response = await fetch('/api/recruitment/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminId, password }),
+      });
+      // A crashed serverless function replies with HTML, not JSON.
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error ?? `Sign-in failed (HTTP ${response.status}).`);
+      const { error: sessionError } = await createClient().auth.setSession({
+        access_token: result.access_token,
+        refresh_token: result.refresh_token,
+      });
+      if (sessionError) throw new Error(sessionError.message);
+      navigate('/recruitment/admin/operations', { replace: true });
+    } catch (err) {
+      setError(err.message ?? 'Unable to sign in.');
+      setLoading(false);
+    }
   }
 
   return (
