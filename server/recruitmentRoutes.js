@@ -70,31 +70,53 @@ router.post('/admin/login', async (req, res) => {
 
     // The dashboard's routes and every RLS policy key off auth.uid(), so the env
     // credentials are exchanged for a real Supabase session. The account behind it
-    // is derived from ADMIN_ID and never typed or emailed: a magiclink creates the
-    // user when missing and returns a token redeemed here, server-side.
+    // is derived from ADMIN_ID and is never typed or emailed; its password is kept
+    // in step with ADMIN_PASSWORD so a plain password grant is all that's needed.
     const adminEmail = `${ADMIN_ID.replace(/[^a-z0-9._-]/gi, '')}@admin.local`;
     const supabase = adminSupabase();
-    const { data: link, error: linkError } = await supabase.auth.admin.generateLink({
-      type: 'magiclink',
-      email: adminEmail,
-    });
-    if (linkError) return res.status(500).json({ error: linkError.message });
 
-    const { data: verified, error: verifyError } = await supabase.auth.verifyOtp({
-      token_hash: link.properties.hashed_token,
-      type: 'magiclink',
+    const { data: created, error: createError } = await supabase.auth.admin.createUser({
+      email: adminEmail,
+      password: ADMIN_PASSWORD,
+      email_confirm: true,
     });
-    if (verifyError || !verified.session) {
-      return res.status(500).json({ error: verifyError?.message ?? 'Could not create an admin session' });
+    let adminUserId = created?.user?.id;
+
+    if (createError) {
+      // Already registered: find it and re-apply the current ADMIN_PASSWORD, so
+      // rotating the env variable keeps working without manual cleanup.
+      const { data: list, error: listError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (listError) return res.status(500).json({ error: listError.message });
+      const existing = list?.users?.find((user) => user.email === adminEmail);
+      if (!existing) return res.status(500).json({ error: createError.message });
+      const { error: updateError } = await supabase.auth.admin.updateUserById(existing.id, {
+        password: ADMIN_PASSWORD,
+        email_confirm: true,
+      });
+      if (updateError) return res.status(500).json({ error: updateError.message });
+      adminUserId = existing.id;
     }
 
-    // Keep admin_users in step so requireAdmin and the RLS policies accept this session.
-    await supabase.from('admin_users').upsert(
-      { id: verified.user.id, email: adminEmail, name: 'Admin', role: 'super_admin' },
+    const { data: signedIn, error: signInError } = await supabase.auth.signInWithPassword({
+      email: adminEmail,
+      password: ADMIN_PASSWORD,
+    });
+    if (signInError || !signedIn.session) {
+      return res.status(500).json({ error: signInError?.message ?? 'Could not create an admin session' });
+    }
+
+    // Keep admin_users in step so requireAdmin and the RLS policies accept this
+    // session. Swallowing a failure here yields a confusing 403 on the next
+    // request instead, so it is reported directly.
+    const { error: upsertError } = await supabase.from('admin_users').upsert(
+      { id: adminUserId ?? signedIn.user.id, email: adminEmail, name: 'Admin', role: 'super_admin' },
       { onConflict: 'id' },
     );
+    if (upsertError) {
+      return res.status(500).json({ error: `Admin record could not be saved: ${upsertError.message}` });
+    }
 
-    return res.json({ access_token: verified.session.access_token, refresh_token: verified.session.refresh_token });
+    return res.json({ access_token: signedIn.session.access_token, refresh_token: signedIn.session.refresh_token });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
