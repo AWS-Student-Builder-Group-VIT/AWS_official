@@ -12,6 +12,10 @@ export const createClient = () => {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
+        // auth-js defaults to the implicit flow, which returns the session in the
+        // URL hash. AuthCallback reads ?code= and calls exchangeCodeForSession,
+        // both of which require PKCE.
+        flowType: 'pkce',
       },
     });
   }
