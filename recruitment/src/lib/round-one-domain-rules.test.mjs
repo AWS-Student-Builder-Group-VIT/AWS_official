@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   domainSubmissionState,
   overallRoundOneComplete,
+  validateDomainWriteTarget,
 } from './round-one-domain-rules.mjs';
 
 const questions = [
@@ -53,4 +54,52 @@ test('requires every written domain and the combined technical attempt', () => {
   assert.equal(overallRoundOneComplete([{ final: true }, { final: true }], true), true);
   assert.equal(overallRoundOneComplete([{ final: true }, { final: false }], true), false);
   assert.equal(overallRoundOneComplete([{ final: true }], false), false);
+});
+
+const domains = [
+  { id: 'finance', slug: 'finance' },
+  { id: 'design', slug: 'design' },
+  { id: 'technical', slug: 'technical' },
+];
+
+test('accepts answers only for the selected non-Technical target domain', () => {
+  assert.deepEqual(validateDomainWriteTarget({
+    domainId: 'finance',
+    domains,
+    questions,
+    answers: [{ domainId: 'finance', questionId: 'q1' }],
+    domainFinal: false,
+  }), { valid: true });
+});
+
+test('rejects a cross-domain answer', () => {
+  assert.equal(validateDomainWriteTarget({
+    domainId: 'finance',
+    domains,
+    questions,
+    answers: [{ domainId: 'design', questionId: 'q3' }],
+    domainFinal: false,
+  }).code, 'CROSS_DOMAIN_ANSWER');
+});
+
+test('rejects an answer whose question is outside the target domain', () => {
+  assert.equal(validateDomainWriteTarget({
+    domainId: 'finance',
+    domains,
+    questions,
+    answers: [{ domainId: 'finance', questionId: 'q3' }],
+    domainFinal: false,
+  }).code, 'QUESTION_NOT_APPLICABLE');
+});
+
+test('rejects Technical, unselected, and already-final targets', () => {
+  assert.equal(validateDomainWriteTarget({
+    domainId: 'technical', domains, questions, answers: [], domainFinal: false,
+  }).code, 'TECHNICAL_DOMAIN_NOT_WRITABLE');
+  assert.equal(validateDomainWriteTarget({
+    domainId: 'outreach', domains, questions, answers: [], domainFinal: false,
+  }).code, 'DOMAIN_NOT_SELECTED');
+  assert.equal(validateDomainWriteTarget({
+    domainId: 'finance', domains, questions, answers: [], domainFinal: true,
+  }).code, 'DOMAIN_ALREADY_SUBMITTED');
 });

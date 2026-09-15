@@ -32,3 +32,32 @@ export function domainSubmissionState(domainId, questions, rules, answers) {
 export function overallRoundOneComplete(domainStates, technicalComplete) {
   return domainStates.every((state) => state.final) && technicalComplete;
 }
+
+export function validateDomainWriteTarget({
+  domainId,
+  domains,
+  questions,
+  answers,
+  domainFinal,
+}) {
+  const domain = domains.find((item) => item.id === domainId);
+  if (!domain) return { valid: false, code: 'DOMAIN_NOT_SELECTED' };
+  if (domain.slug === 'technical') {
+    return { valid: false, code: 'TECHNICAL_DOMAIN_NOT_WRITABLE' };
+  }
+  if (domainFinal) return { valid: false, code: 'DOMAIN_ALREADY_SUBMITTED' };
+  if (answers.some((answer) => answer.domainId !== domainId)) {
+    return { valid: false, code: 'CROSS_DOMAIN_ANSWER' };
+  }
+
+  const questionIds = new Set(
+    questions
+      .filter((question) => question.domainId === domainId)
+      .map((question) => question.id),
+  );
+  if (answers.some((answer) => !questionIds.has(answer.questionId))) {
+    return { valid: false, code: 'QUESTION_NOT_APPLICABLE' };
+  }
+
+  return { valid: true };
+}

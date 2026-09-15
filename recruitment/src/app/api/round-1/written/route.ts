@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase-server';
+import { questionsForSelections } from '@/lib/written-question-rules.mjs';
 import {
-  questionsForSelections,
-  validateWrittenCompletion,
-} from '@/lib/written-question-rules.mjs';
+  domainSubmissionState,
+  overallRoundOneComplete,
+  validateDomainWriteTarget,
+} from '@/lib/round-one-domain-rules.mjs';
 
 const answerSchema = z.object({
   domainId: z.string().uuid(),
@@ -13,7 +15,10 @@ const answerSchema = z.object({
   submissionLinks: z.array(z.string().url()).max(10).default([]),
 });
 
-const payloadSchema = z.object({ answers: z.array(answerSchema).default([]) });
+const payloadSchema = z.object({
+  domainId: z.string().uuid(),
+  answers: z.array(answerSchema).default([]),
+});
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -113,17 +118,14 @@ async function loadRoundOne(admin: AdminClient, candidateId: string) {
     group: rule.question_group,
     minimumAnswers: rule.minimum_answers,
   }));
-  const answerMap = Object.fromEntries((answers || []).map((answer) => [
-    `${answer.domain_id}:${answer.question_id}`,
-    answer.answer_text?.trim() || ((answer.submission_links as string[] | null) || []).join('\n'),
-  ]));
-  const completion = validateWrittenCompletion(applicableQuestions, rules, answerMap);
-  const finalAnswerMap = Object.fromEntries((answers || []).filter((answer) => answer.is_final).map((answer) => [
-    `${answer.domain_id}:${answer.question_id}`,
-    answer.answer_text?.trim() || ((answer.submission_links as string[] | null) || []).join('\n'),
-  ]));
-  const finalCompletion = validateWrittenCompletion(applicableQuestions, rules, finalAnswerMap);
   const technicalRequired = domains.some((domain) => domain.slug === 'technical');
+  const writtenDomains = domains.filter((domain) => domain.slug !== 'technical');
+  const domainStates = Object.fromEntries(writtenDomains.map((domain) => [
+    domain.id,
+    domainSubmissionState(domain.id, applicableQuestions, rules, answers || []),
+  ]));
+  const technicalComplete = !technicalRequired || attempt?.status === 'submitted';
+  const roundOneComplete = overallRoundOneComplete(Object.values(domainStates), technicalComplete);
 
   return {
     data: {
@@ -131,11 +133,11 @@ async function loadRoundOne(admin: AdminClient, candidateId: string) {
       questions: applicableQuestions,
       rules,
       answers: answers || [],
-      completion,
-      writtenFinal: finalCompletion.valid,
+      domainStates,
+      roundOneComplete,
       technical: {
         required: technicalRequired,
-        complete: !technicalRequired || attempt?.status === 'submitted',
+        complete: technicalComplete,
       },
     },
   };
@@ -165,9 +167,27 @@ async function handleWrite(request: Request, finalize: boolean) {
     }, { status: needsMigration ? 503 : 500 });
   }
 
-  const allowed = new Set(loaded.data.questions.map((question) => question.answerKey));
-  if (parsed.data.answers.some((answer) => !allowed.has(`${answer.domainId}:${answer.questionId}`))) {
-    return NextResponse.json({ code: 'QUESTION_NOT_APPLICABLE', error: 'One or more answers do not belong to your selected domains.' }, { status: 400 });
+  const targetState = loaded.data.domainStates[parsed.data.domainId];
+  const targetValidation = validateDomainWriteTarget({
+    domainId: parsed.data.domainId,
+    domains: loaded.data.domains,
+    questions: loaded.data.questions,
+    answers: parsed.data.answers,
+    domainFinal: targetState?.final ?? false,
+  });
+  if (!targetValidation.valid) {
+    const code = targetValidation.code ?? 'INVALID_DOMAIN_SUBMISSION';
+    const messages: Record<string, string> = {
+      DOMAIN_NOT_SELECTED: 'The selected domain is not part of your application.',
+      TECHNICAL_DOMAIN_NOT_WRITABLE: 'Technical selections use the timed assessment.',
+      DOMAIN_ALREADY_SUBMITTED: 'This domain has already been submitted and is locked.',
+      CROSS_DOMAIN_ANSWER: 'Every answer must belong to the selected domain.',
+      QUESTION_NOT_APPLICABLE: 'One or more questions do not belong to the selected domain.',
+    };
+    return NextResponse.json({
+      code,
+      error: messages[code] ?? 'Invalid domain submission.',
+    }, { status: code === 'DOMAIN_ALREADY_SUBMITTED' ? 409 : 400 });
   }
 
   if (parsed.data.answers.length) {
@@ -186,32 +206,42 @@ async function handleWrite(request: Request, finalize: boolean) {
     if (error) return NextResponse.json({ code: 'WRITTEN_SAVE_FAILED', error: error.message }, { status: 500 });
   }
 
-  if (!finalize) return NextResponse.json({ saved: true });
+  if (!finalize) return NextResponse.json({ saved: true, domainId: parsed.data.domainId });
 
   const refreshed = await loadRoundOne(auth.admin, auth.candidateId);
   if ('error' in refreshed) return NextResponse.json({ code: 'ROUND_ONE_LOAD_FAILED', error: refreshed.error?.message ?? 'Unable to load Round 1.' }, { status: 500 });
-  if (!refreshed.data.completion.valid) {
+  const refreshedState = refreshed.data.domainStates[parsed.data.domainId];
+  if (!refreshedState?.valid) {
     return NextResponse.json({
       code: 'WRITTEN_ANSWERS_INCOMPLETE',
-      error: 'Complete all required written responses before submitting.',
-      missing: refreshed.data.completion.missing,
+      error: 'Complete all required responses for this domain before submitting.',
+      missing: refreshedState?.missing ?? [],
     }, { status: 400 });
   }
 
-  const domainIds = refreshed.data.domains.filter((domain) => domain.slug !== 'technical').map((domain) => domain.id);
-  if (domainIds.length) {
+  const targetQuestionIds = refreshed.data.questions
+    .filter((question) => question.domainId === parsed.data.domainId)
+    .map((question) => question.id);
+  if (targetQuestionIds.length) {
     const { error } = await auth.admin.from('candidate_written_answers')
       .update({ is_final: true, updated_at: new Date().toISOString() })
       .eq('candidate_id', auth.candidateId)
-      .in('domain_id', domainIds);
+      .eq('domain_id', parsed.data.domainId)
+      .in('question_id', targetQuestionIds);
     if (error) return NextResponse.json({ code: 'WRITTEN_SUBMIT_FAILED', error: error.message }, { status: 500 });
   }
 
-  if (refreshed.data.technical.complete) {
+  const finalized = await loadRoundOne(auth.admin, auth.candidateId);
+  if ('error' in finalized) return NextResponse.json({ code: 'ROUND_ONE_LOAD_FAILED', error: finalized.error?.message ?? 'Unable to load Round 1.' }, { status: 500 });
+  if (finalized.data.roundOneComplete) {
     await auth.admin.from('candidate_profiles').update({ round_0_status: 'submitted' }).eq('id', auth.candidateId);
   }
 
-  return NextResponse.json({ submitted: true, roundOneComplete: refreshed.data.technical.complete });
+  return NextResponse.json({
+    submitted: true,
+    domainId: parsed.data.domainId,
+    roundOneComplete: finalized.data.roundOneComplete,
+  });
 }
 
 export async function GET(request: Request) {
