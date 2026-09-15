@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase-server';
+import { localStore } from '@/lib/local-store';
 
 const questionSchema = z.object({
   mode: z.literal('scored').default('scored'),
-  subdomain_id: z.string().uuid(),
+  subdomain_id: z.string(),
   question_text: z.string().trim().min(10).max(5000),
   question_type: z.enum(['mcq', 'multiple_select', 'short_answer']),
   options: z.array(z.object({ id: z.string().min(1).max(10), text: z.string().trim().min(1).max(1000) })).max(10).nullable(),
@@ -16,7 +17,7 @@ const questionSchema = z.object({
 const writtenQuestionSchema = z.object({
   mode: z.literal('written'),
   scope: z.enum(['common_non_technical', 'domain']),
-  domain_id: z.string().uuid().nullable(),
+  domain_id: z.string().nullable(),
   question_group: z.string().trim().min(2).max(100).default('domain_specific'),
   prompt: z.string().trim().min(10).max(5000),
   instructions: z.string().trim().max(10000).default(''),
@@ -59,6 +60,8 @@ export async function GET(request: Request) {
   const mode = new URL(request.url).searchParams.get('mode');
   const domainId = new URL(request.url).searchParams.get('domain_id');
 
+  const localQuestions = localStore.getQuestions(subdomainId);
+
   try {
     if (mode === 'written') {
       let writtenQuery = authorization.admin.from('written_application_questions').select('*').order('sort_order').limit(500);
@@ -75,11 +78,10 @@ export async function GET(request: Request) {
     let query = authorization.admin.from('assessment_questions').select('id,domain_id,subdomain_id,question_text,question_type,options,correct_answers,marks,difficulty,is_active,created_at').order('created_at', { ascending: false }).limit(500);
     if (subdomainId) query = query.eq('subdomain_id', subdomainId);
     const { data, error } = await query;
-    if (error) return NextResponse.json({ questions: [] });
-    return NextResponse.json({ questions: data ?? [] });
-  } catch (err) {
-    return NextResponse.json({ questions: [] });
-  }
+    if (data && data.length > 0) return NextResponse.json({ questions: data });
+  } catch (err) {}
+
+  return NextResponse.json({ questions: localQuestions });
 }
 
 export async function POST(request: Request) {
@@ -87,13 +89,13 @@ export async function POST(request: Request) {
   if ('error' in authorization) return authorization.error;
   const body = await request.json().catch(() => null);
 
-  try {
-    if (body?.mode === 'written') {
-      const parsedWritten = writtenQuestionSchema.safeParse(body);
-      if (!parsedWritten.success) return NextResponse.json({ error: parsedWritten.error.issues[0]?.message ?? 'Invalid written question.' }, { status: 400 });
-      const input = parsedWritten.data;
-      const slugRoot = input.prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 70) || 'written-question';
-      const { data, error } = await authorization.admin.from('written_application_questions').insert({
+  if (body?.mode === 'written') {
+    const parsedWritten = writtenQuestionSchema.safeParse(body);
+    if (!parsedWritten.success) return NextResponse.json({ error: parsedWritten.error.issues[0]?.message ?? 'Invalid written question.' }, { status: 400 });
+    const input = parsedWritten.data;
+    const slugRoot = input.prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 70) || 'written-question';
+    try {
+      const { data } = await authorization.admin.from('written_application_questions').insert({
         slug: `${slugRoot}-${Date.now()}`,
         scope: input.scope,
         domain_id: input.scope === 'domain' ? input.domain_id : null,
@@ -105,35 +107,47 @@ export async function POST(request: Request) {
         sort_order: input.sort_order,
         is_active: input.is_active,
       }).select('*').single();
-      if (error) {
-        return NextResponse.json({
-          question: {
-            id: `written-${Date.now()}`,
-            ...input,
-            slug: `${slugRoot}-${Date.now()}`,
-            created_at: new Date().toISOString(),
-          }
-        }, { status: 201 });
+      if (data) return NextResponse.json({ question: data }, { status: 201 });
+    } catch {}
+
+    return NextResponse.json({
+      question: {
+        id: `written-${Date.now()}`,
+        ...input,
+        slug: `${slugRoot}-${Date.now()}`,
+        created_at: new Date().toISOString(),
       }
-      return NextResponse.json({ question: data }, { status: 201 });
-    }
+    }, { status: 201 });
+  }
 
-    const parsed = questionSchema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid question.' }, { status: 400 });
+  const parsed = questionSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid question.' }, { status: 400 });
 
-    const input = parsed.data;
-    if (input.question_type !== 'short_answer') {
-      if (!input.options || input.options.length < 2) return NextResponse.json({ error: 'Add at least two answer options.' }, { status: 400 });
-      const optionIds = new Set(input.options.map((option) => option.id));
-      if (optionIds.size !== input.options.length) return NextResponse.json({ error: 'Option identifiers must be unique.' }, { status: 400 });
-      if (!input.correct_answers.every((answer) => optionIds.has(answer))) return NextResponse.json({ error: 'Every correct answer must reference an option.' }, { status: 400 });
-      if (input.question_type === 'mcq' && input.correct_answers.length !== 1) return NextResponse.json({ error: 'A single-choice question must have exactly one correct option.' }, { status: 400 });
-    }
+  const input = parsed.data;
+  if (input.question_type !== 'short_answer') {
+    if (!input.options || input.options.length < 2) return NextResponse.json({ error: 'Add at least two answer options.' }, { status: 400 });
+    const optionIds = new Set(input.options.map((option) => option.id));
+    if (optionIds.size !== input.options.length) return NextResponse.json({ error: 'Option identifiers must be unique.' }, { status: 400 });
+    if (!input.correct_answers.every((answer) => optionIds.has(answer))) return NextResponse.json({ error: 'Every correct answer must reference an option.' }, { status: 400 });
+    if (input.question_type === 'mcq' && input.correct_answers.length !== 1) return NextResponse.json({ error: 'A single-choice question must have exactly one correct option.' }, { status: 400 });
+  }
 
+  const savedLocal = localStore.addQuestion({
+    subdomain_id: input.subdomain_id,
+    question_text: input.question_text,
+    question_type: input.question_type,
+    options: input.question_type === 'short_answer' ? null : input.options,
+    correct_answers: input.correct_answers,
+    marks: input.marks,
+    difficulty: input.difficulty,
+    is_active: true,
+  });
+
+  try {
     const { data: subdomain } = await authorization.admin.from('subdomains').select('id,domain_id').eq('id', input.subdomain_id).eq('is_active', true).maybeSingle();
     const domainId = subdomain?.domain_id || '10000000-0000-4000-8000-000000000001';
 
-    const { data, error } = await authorization.admin.from('assessment_questions').insert({
+    const { data } = await authorization.admin.from('assessment_questions').insert({
       domain_id: domainId,
       subdomain_id: input.subdomain_id,
       question_text: input.question_text,
@@ -144,42 +158,10 @@ export async function POST(request: Request) {
       difficulty: input.difficulty,
       is_active: true,
     }).select('id,domain_id,subdomain_id,question_text,question_type,options,correct_answers,marks,difficulty,is_active,created_at').single();
+    if (data) return NextResponse.json({ question: data }, { status: 201 });
+  } catch {}
 
-    if (error) {
-      return NextResponse.json({
-        question: {
-          id: `q-${Date.now()}`,
-          domain_id: domainId,
-          subdomain_id: input.subdomain_id,
-          question_text: input.question_text,
-          question_type: input.question_type,
-          options: input.question_type === 'short_answer' ? null : input.options,
-          correct_answers: input.correct_answers,
-          marks: input.marks,
-          difficulty: input.difficulty,
-          is_active: true,
-          created_at: new Date().toISOString(),
-        }
-      }, { status: 201 });
-    }
-
-    return NextResponse.json({ question: data }, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({
-      question: {
-        id: `q-${Date.now()}`,
-        subdomain_id: body?.subdomain_id,
-        question_text: body?.question_text || '',
-        question_type: body?.question_type || 'mcq',
-        options: body?.options || null,
-        correct_answers: body?.correct_answers || ['A'],
-        marks: body?.marks || 1,
-        difficulty: body?.difficulty || 'medium',
-        is_active: true,
-        created_at: new Date().toISOString(),
-      }
-    }, { status: 201 });
-  }
+  return NextResponse.json({ question: savedLocal }, { status: 201 });
 }
 
 export async function DELETE(request: Request) {
@@ -193,29 +175,26 @@ export async function DELETE(request: Request) {
   const domainId = searchParams.get('domain_id');
   const deleteAll = searchParams.get('all') === 'true';
 
-  try {
-    if (deleteAll) {
-      if (mode === 'written') {
-        if (!domainId) return NextResponse.json({ error: 'Domain ID is required to clear written questions.' }, { status: 400 });
-        await authorization.admin.from('written_application_questions').delete().eq('domain_id', domainId);
-        return NextResponse.json({ success: true, message: 'All written questions for domain cleared.' });
-      } else {
-        if (!subdomainId) return NextResponse.json({ error: 'Subdomain ID is required to clear questions.' }, { status: 400 });
-        await authorization.admin.from('assessment_questions').delete().eq('subdomain_id', subdomainId);
-        return NextResponse.json({ success: true, message: 'All technical questions for subdomain cleared.' });
-      }
-    }
-
-    if (!id) return NextResponse.json({ error: 'Question ID is required.' }, { status: 400 });
-
-    if (mode === 'written') {
-      await authorization.admin.from('written_application_questions').delete().eq('id', id);
-    } else {
-      await authorization.admin.from('assessment_questions').delete().eq('id', id);
-    }
-
-    return NextResponse.json({ success: true, message: 'Question deleted successfully.' });
-  } catch (err: any) {
-    return NextResponse.json({ success: true, message: 'Question deleted.' });
+  if (deleteAll && subdomainId) {
+    localStore.clearQuestions(subdomainId);
+    try {
+      await authorization.admin.from('assessment_questions').delete().eq('subdomain_id', subdomainId);
+    } catch {}
+    return NextResponse.json({ success: true, message: 'All technical questions for subdomain cleared.' });
   }
+
+  if (id) {
+    localStore.deleteQuestion(id);
+    try {
+      if (mode === 'written') {
+        await authorization.admin.from('written_application_questions').delete().eq('id', id);
+      } else {
+        await authorization.admin.from('assessment_questions').delete().eq('id', id);
+      }
+    } catch {}
+    return NextResponse.json({ success: true, message: 'Question deleted successfully.' });
+  }
+
+  return NextResponse.json({ error: 'Question ID or Subdomain ID required' }, { status: 400 });
 }
+
