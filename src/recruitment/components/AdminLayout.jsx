@@ -139,7 +139,7 @@ export default function AdminLayout() {
 
   // Full-width console: the menu is the only navigation, so it is always shown.
   if (isOperationsPage) return (
-    <div className="min-h-screen">
+    <div className="rct-admin min-h-screen">
       <div className="fixed left-4 top-4 z-50">{menuButton}</div>
       {drawer}
       <Outlet />
@@ -147,7 +147,7 @@ export default function AdminLayout() {
   );
 
   return (
-    <div className="flex min-h-screen" style={{ background: 'var(--bg)' }}>
+    <div className="rct-admin flex min-h-screen" style={{ background: 'var(--bg)' }}>
       <aside className="hidden w-56 flex-col border-r lg:flex" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
         {sidebarInner}
       </aside>

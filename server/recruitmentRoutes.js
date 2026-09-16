@@ -486,6 +486,57 @@ router.post('/admin/assessments/bulk-qualify', async (req, res) => {
   }
 });
 
+// DELETE /api/recruitment/admin/candidates?id=...
+// Removes a candidate and everything attached to them. Dependants are deleted
+// explicitly rather than relying on cascade rules, which differ per table.
+router.delete('/admin/candidates', async (req, res) => {
+  const ctx = await requireAdmin(req, res);
+  if (!ctx) return;
+  const { supabase } = ctx;
+  const candidateId = req.query.id;
+  if (!candidateId) return res.status(400).json({ error: 'id required' });
+  try {
+    const { data: profile } = await supabase.from('candidate_profiles')
+      .select('id,full_name,registration_number').eq('id', candidateId).maybeSingle();
+    if (!profile) return res.status(404).json({ error: 'Candidate not found.' });
+
+    const { data: attempts } = await supabase.from('assessment_attempts').select('id').eq('candidate_id', candidateId);
+    for (const attempt of attempts ?? []) {
+      await supabase.from('assessment_answers').delete().eq('attempt_id', attempt.id);
+    }
+    const { data: assignments } = await supabase.from('project_assignments').select('id').eq('candidate_id', candidateId);
+    for (const assignment of assignments ?? []) {
+      await supabase.from('project_evaluations').delete().eq('assignment_id', assignment.id);
+      await supabase.from('project_submissions').delete().eq('assignment_id', assignment.id);
+    }
+
+    for (const table of [
+      'assessment_attempts',
+      'candidate_written_answers',
+      'candidate_subdomain_choices',
+      'project_assignments',
+      'interview_bookings',
+      'final_results',
+      'notifications',
+    ]) {
+      const { error } = await supabase.from(table).delete().eq('candidate_id', candidateId);
+      // A table that does not exist in this project is not a failure to delete.
+      if (error && error.code !== 'PGRST205') return res.status(500).json({ error: `${table}: ${error.message}` });
+    }
+
+    const { error: profileError } = await supabase.from('candidate_profiles').delete().eq('id', candidateId);
+    if (profileError) return res.status(500).json({ error: profileError.message });
+
+    // Removing the auth user stops them signing back in and recreating a profile.
+    const { error: authError } = await supabase.auth.admin.deleteUser(candidateId);
+    if (authError) return res.status(500).json({ error: `Profile deleted, but the sign-in account remains: ${authError.message}` });
+
+    return res.json({ deleted: true, candidate: profile.full_name ?? profile.registration_number });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/admin/questions', async (req, res) => {
   const ctx = await requireAdmin(req, res);
   if (!ctx) return;

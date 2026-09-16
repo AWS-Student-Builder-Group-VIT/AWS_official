@@ -18,7 +18,7 @@
   --error:   #ef4444;
   --info:    #60a5fa;
   --blue:    #60a5fa;
-  font-family: 'Inter', 'Geist', system-ui, sans-serif;
+  font-family: 'Product Sans', 'Google Sans', 'Poppins', 'Inter', system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100dvh;
@@ -127,3 +127,37 @@
 .rct-root ::-webkit-scrollbar { width: 4px; height: 4px; }
 .rct-root ::-webkit-scrollbar-track { background: var(--bg); }
 .rct-root ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── Admin console typography ──────────────────────────
+   The admin screens are dense working surfaces, so they use a larger scale
+   than the candidate pages. Sizes are bumped rather than zoomed so layout,
+   borders and spacing stay crisp.
+   ──────────────────────────────────────────────────── */
+.rct-root .rct-admin {
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+}
+
+.rct-root .rct-admin .text-xs   { font-size: .8125rem; line-height: 1.35rem; }
+.rct-root .rct-admin .text-sm   { font-size: .9375rem; line-height: 1.55rem; }
+.rct-root .rct-admin .text-base { font-size: 1.0625rem; line-height: 1.7rem; }
+.rct-root .rct-admin .text-lg   { font-size: 1.1875rem; line-height: 1.8rem; }
+.rct-root .rct-admin .text-xl   { font-size: 1.375rem;  line-height: 1.9rem; }
+.rct-root .rct-admin .text-2xl  { font-size: 1.75rem;   line-height: 2.2rem; }
+.rct-root .rct-admin .text-3xl  { font-size: 2.125rem;  line-height: 2.5rem; }
+.rct-root .rct-admin .text-4xl  { font-size: 2.5rem;    line-height: 2.9rem; }
+
+/* The console's smallest mono labels were close to unreadable. */
+.rct-root .rct-admin .text-\[9px\],
+.rct-root .rct-admin .text-\[10px\] { font-size: .75rem; line-height: 1.15rem; }
+
+.rct-root .rct-admin .eyebrow { font-size: .75rem; letter-spacing: .15em; }
+.rct-root .rct-admin .label   { font-size: .8125rem; letter-spacing: .08em; }
+
+/* Give dense tables and controls room to breathe. */
+.rct-root .rct-admin th,
+.rct-root .rct-admin td { padding-block: .875rem; }
+.rct-root .rct-admin input,
+.rct-root .rct-admin select,
+.rct-root .rct-admin textarea { font-size: .9375rem; }
