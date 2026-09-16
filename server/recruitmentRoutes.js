@@ -293,6 +293,53 @@ router.post('/assessment/submit', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ROUND 2 — PROJECT
+// ═══════════════════════════════════════════════════════════════════════════
+
+// GET /api/recruitment/round-2
+// Round 2 is open when round_1_start_at holds a time that has passed; until
+// then every selected track simply reports that it starts shortly.
+router.get('/round-2', async (req, res) => {
+  const ctx = await requireAuth(req, res);
+  if (!ctx) return;
+  const { user, supabase } = ctx;
+  try {
+    const { data: setting } = await supabase.from('recruitment_settings').select('value').eq('key', 'round_1_start_at').maybeSingle();
+    const startsAt = setting?.value?.at ?? null;
+    const open = Boolean(startsAt) && Date.now() >= new Date(startsAt).getTime();
+
+    const { data: choices, error: choiceError } = await supabase
+      .from('candidate_subdomain_choices')
+      .select('subdomain_id,priority,subdomain:subdomains(id,name,domain:domains(name,slug))')
+      .eq('candidate_id', user.id)
+      .order('priority');
+    if (choiceError) return res.status(500).json({ error: choiceError.message });
+
+    const subdomainIds = (choices ?? []).map((c) => c.subdomain_id);
+    const [{ data: projects }, { data: guidelines }] = subdomainIds.length
+      ? await Promise.all([
+          supabase.from('projects').select('*').in('subdomain_id', subdomainIds).eq('is_active', true),
+          supabase.from('subdomain_round_guidelines').select('*').in('subdomain_id', subdomainIds).eq('round_number', 2),
+        ])
+      : [{ data: [] }, { data: [] }];
+
+    const tracks = (choices ?? []).map((choice) => ({
+      subdomainId: choice.subdomain_id,
+      name: choice.subdomain?.name ?? 'Track',
+      domainName: choice.subdomain?.domain?.name ?? '',
+      // Content stays hidden until the round opens.
+      project: open ? (projects ?? []).find((p) => p.subdomain_id === choice.subdomain_id) ?? null : null,
+      guidelines: open ? (guidelines ?? []).find((g) => g.subdomain_id === choice.subdomain_id)?.guidelines ?? '' : '',
+    }));
+
+    return res.json({ open, startsAt, tracks });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ADMIN OPERATIONS PAYLOAD (full dashboard data)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -467,7 +514,7 @@ router.get('/admin/round-guidelines', async (req, res) => {
   const { supabase } = ctx;
   const { subdomain_id } = req.query;
   try {
-    const { data } = await supabase.from('round_guidelines').select('*').eq('subdomain_id', subdomain_id);
+    const { data } = await supabase.from('subdomain_round_guidelines').select('*').eq('subdomain_id', subdomain_id);
     return res.json({ guidelines: data ?? [] });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -481,7 +528,7 @@ router.put('/admin/round-guidelines', async (req, res) => {
   const { subdomain_id, round_number, guidelines } = req.body ?? {};
   if (!subdomain_id || !round_number) return res.status(400).json({ error: 'subdomain_id and round_number required' });
   try {
-    const { data, error } = await supabase.from('round_guidelines').upsert({ subdomain_id, round_number, guidelines, updated_at: new Date().toISOString() }, { onConflict: 'subdomain_id,round_number' }).select().single();
+    const { data, error } = await supabase.from('subdomain_round_guidelines').upsert({ subdomain_id, round_number, guidelines, updated_at: new Date().toISOString() }, { onConflict: 'subdomain_id,round_number' }).select().single();
     if (error) return res.status(400).json({ error: error.message });
     return res.json({ guideline: data });
   } catch (err) {

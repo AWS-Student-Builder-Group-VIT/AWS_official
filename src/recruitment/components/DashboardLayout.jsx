@@ -34,7 +34,7 @@ export default function DashboardLayout() {
     { href: '/recruitment/dashboard', label: 'Overview', icon: '⊞' },
     { href: '/recruitment/subdomain', label: 'Domain', icon: '◈' },
     { href: '/recruitment/dashboard/round-1', label: 'Round 1 · Application', icon: '✍' },
-    { href: '/recruitment/round-1', label: 'Round 2 · Project', icon: '🔨' },
+    { href: '/recruitment/round-2', label: 'Round 2 · Project', icon: '🔨' },
     { href: '/recruitment/interview', label: 'Round 3 · Interview', icon: '💬' },
     { href: '/recruitment/result', label: 'Result', icon: '🏆' },
     ...(isAdmin ? [{ href: '/recruitment/admin/operations', label: 'Admin Console', icon: '▦' }] : []),
