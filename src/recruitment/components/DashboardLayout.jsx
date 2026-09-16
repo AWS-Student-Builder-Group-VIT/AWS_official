@@ -16,7 +16,7 @@ export default function DashboardLayout() {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { navigate('/recruitment/login', { replace: true }); return; }
       const [{ data: profileData }, { data: adminData }] = await Promise.all([
-        supabase.from('candidate_profiles').select('*, domain:domains(*)').eq('id', user.id).single(),
+        supabase.from('candidate_profiles').select('*').eq('id', user.id).maybeSingle(),
         supabase.from('admin_users').select('id').eq('id', user.id).maybeSingle(),
       ]);
       setProfile(profileData);

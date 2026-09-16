@@ -145,7 +145,13 @@ router.post('/profile/complete', async (req, res) => {
     ...parsed.data,
     profile_complete: true,
   }, { onConflict: 'id' }).select('*').single();
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    // 23505: another account already claimed this registration number.
+    if (error.code === '23505' && error.message.includes('registration_number')) {
+      return res.status(409).json({ error: 'That registration number is already registered to another account. Sign in with that account, or contact the recruitment team.' });
+    }
+    return res.status(500).json({ error: error.message });
+  }
   return res.json({ profile: data });
 });
 
