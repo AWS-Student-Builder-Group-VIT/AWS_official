@@ -5,7 +5,7 @@ import { createClient } from '../lib/supabase.js';
 const scheduleFields = [
   { key: 'application_deadline', label: 'Application deadline', help: 'Students can revise their subdomain choices until this time.' },
   { key: 'round_0_start_at', label: 'Round 1 · Assessment', help: 'The assessment Start now button appears at this time.' },
-  { key: 'round_1_start_at', label: 'Round 2 · Project', help: 'Qualified students can open their project tracks at this time.' },
+  { key: 'round_1_start_at', label: 'Round 2 · Project', help: 'Open releases each problem statement. Closed shows "Round 2 will start shortly".' },
   { key: 'round_2_start_at', label: 'Round 3 · Interview', help: 'Qualified students can open interview booking at this time.' },
 ];
 
@@ -36,6 +36,23 @@ export default function AdminSettings() {
       setLoading(false);
     })();
   }, []);
+
+  // Open/close a single round without touching the other dates: a set time in
+  // the past means open, an empty value means "starts shortly".
+  async function setRoundOpen(key, open) {
+    setSaving(true);
+    setError('');
+    setMessage('');
+    const value = { at: open ? new Date().toISOString() : null };
+    const { error: toggleError } = await supabase.from('recruitment_settings')
+      .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    if (toggleError) setError(toggleError.message);
+    else {
+      setSchedule((curr) => ({ ...curr, [key]: open ? toLocalInput(value.at) : '' }));
+      setMessage(open ? 'Round opened for candidates.' : 'Round closed. Candidates see "will start shortly".');
+    }
+    setSaving(false);
+  }
 
   async function save() {
     setSaving(true);
@@ -75,10 +92,12 @@ export default function AdminSettings() {
                   onChange={(e) => setSchedule((curr) => ({ ...curr, [field.key]: e.target.value }))}
                   className="min-w-0 flex-1 border px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text)' }} />
-                <button type="button" onClick={() => setSchedule((curr) => ({ ...curr, [field.key]: '' }))}
-                  disabled={!schedule[field.key] || saving}
-                  className="border px-3 transition hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-30"
-                  style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>×</button>
+                <button type="button" onClick={() => setRoundOpen(field.key, true)} disabled={saving}
+                  className="border px-3 font-mono text-[10px] uppercase transition hover:border-[var(--success)] hover:text-[var(--success)] disabled:opacity-30"
+                  style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>Open</button>
+                <button type="button" onClick={() => setRoundOpen(field.key, false)} disabled={saving}
+                  className="border px-3 font-mono text-[10px] uppercase transition hover:border-[var(--error)] hover:text-[var(--error)] disabled:opacity-30"
+                  style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>Close</button>
               </span>
             </label>
           ))}
