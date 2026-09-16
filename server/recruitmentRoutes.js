@@ -119,10 +119,16 @@ router.post('/admin/login', async (req, res) => {
       return res.status(500).json({ error: signInError?.message ?? 'Could not create an admin session' });
     }
 
+    // Signing in attaches that user's token to this client, so its later
+    // requests run as the user and RLS applies again. The admin_users write
+    // needs a clean service-role client, or the first admin can never be
+    // recorded: the policy only lets an existing super_admin write the table.
+    const serviceClient = adminSupabase();
+
     // Keep admin_users in step so requireAdmin and the RLS policies accept this
     // session. Swallowing a failure here yields a confusing 403 on the next
     // request instead, so it is reported directly.
-    const { error: upsertError } = await supabase.from('admin_users').upsert(
+    const { error: upsertError } = await serviceClient.from('admin_users').upsert(
       { id: adminUserId ?? signedIn.user.id, email: adminEmail, name: 'Admin', role: 'super_admin' },
       { onConflict: 'id' },
     );
