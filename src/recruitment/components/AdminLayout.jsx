@@ -80,7 +80,7 @@ export default function AdminLayout() {
       <div className="flex h-16 items-center gap-3 border-b px-5" style={{ borderColor: 'var(--border)' }}>
         <img src={awsIcon} alt="AWS" className="h-8 w-8 rounded object-contain border border-[var(--border)] p-1 bg-black/40" />
         <div>
-          <p className="text-xs font-semibold" style={{ color: 'var(--text)' }}>SBG Admin</p>
+          <p className="text-xs font-semibold" style={{ color: 'var(--text)' }}>AWS SBG Admin</p>
           <p className="text-xs" style={{ color: 'var(--muted)' }}>Recruitment</p>
         </div>
       </div>
@@ -155,7 +155,7 @@ export default function AdminLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-14 items-center gap-3 border-b px-4 lg:hidden" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
           {menuButton}
-          <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>SBG Admin</span>
+          <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>AWS SBG Admin</span>
         </div>
         <main className="flex-1 overflow-auto"><Outlet /></main>
       </div>

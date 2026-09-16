@@ -91,7 +91,7 @@ export default function Dashboard() {
             {profile.subdomain_choices?.length
               ? [...profile.subdomain_choices].sort((a, b) => a.priority - b.priority).map((choice) => (
                 <p key={choice.subdomain_id} className="mt-1 font-mono text-xs" style={{ color: 'var(--accent)' }}>
-                  {choice.subdomain?.domain?.slug === 'finance' || choice.subdomain?.domain?.slug === 'outreach'
+                  {choice.subdomain?.domain?.selection_mode === 'whole_domain'
                     ? choice.subdomain?.domain?.name
                     : `${choice.subdomain?.domain?.name} / ${choice.subdomain?.name}`}
                 </p>
@@ -175,7 +175,7 @@ export default function Dashboard() {
                     <div key={track.subdomain_id} className="border p-3" style={{ borderColor: 'var(--border)', background: 'rgba(0,0,0,.3)' }}>
                       <p className="font-mono text-[10px] uppercase tracking-widest" style={{ color: 'var(--accent)' }}>Selection</p>
                       <p className="mt-1 text-sm" style={{ color: 'var(--text)' }}>
-                        {track.subdomain?.domain?.slug === 'finance' || track.subdomain?.domain?.slug === 'outreach'
+                        {track.subdomain?.domain?.selection_mode === 'whole_domain'
                           ? track.subdomain?.domain?.name
                           : `${track.subdomain?.domain?.name} / ${track.subdomain?.name}`}
                       </p>

@@ -12,7 +12,7 @@ const stageOrder = { selected: 8, waitlisted: 7, round_2: 6, round_1: 5, round_0
 function humanize(value) { return value ? value.replaceAll('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase()) : 'Not started'; }
 function initials(name) { return name.split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase(); }
 function scorePercent(attempt) { if (attempt?.score == null || !attempt.total_marks) return null; return Math.round((attempt.score / attempt.total_marks) * 100); }
-function choiceLabel(choice) { const domain = choice.subdomain?.domain; return domain?.slug === 'finance' || domain?.slug === 'outreach' ? domain.name : `${domain?.name ?? 'Domain'} / ${choice.subdomain?.name ?? 'Track'}`; }
+function choiceLabel(choice) { const domain = choice.subdomain?.domain; return domain?.selection_mode === 'whole_domain' ? domain.name : `${domain?.name ?? 'Domain'} / ${choice.subdomain?.name ?? 'Track'}`; }
 
 export default function AdminOperations() {
   const navigate = useNavigate();
