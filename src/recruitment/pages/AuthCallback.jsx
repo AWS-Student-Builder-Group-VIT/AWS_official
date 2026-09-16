@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createClient } from '../lib/supabase.js';
+import { isAllowedEmail, parseAllowedDomains } from '../lib/email-domains.js';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -25,6 +26,14 @@ export default function AuthCallback() {
         if (error || !data.user) {
           const msg = encodeURIComponent(error?.message || 'Unable to create a Supabase session.');
           navigate(`/recruitment/login?error=oauth_failed&message=${msg}`, { replace: true });
+          return;
+        }
+
+        // An account outside the allow list must not get a session at all.
+        const allowedDomains = parseAllowedDomains(import.meta.env.VITE_ALLOWED_EMAIL_DOMAINS);
+        if (!isAllowedEmail(data.user.email, allowedDomains)) {
+          await supabase.auth.signOut();
+          navigate('/recruitment/login?error=unauthorized_email', { replace: true });
           return;
         }
 

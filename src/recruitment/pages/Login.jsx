@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createClient } from '../lib/supabase.js';
+import { parseAllowedDomains, allowedDomainsMessage } from '../lib/email-domains.js';
 import awsIcon from '../../assets/aws_icon.jpeg';
 
 export default function Login() {
@@ -8,6 +9,7 @@ export default function Login() {
   const [supabase] = useState(createClient);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const allowedDomains = parseAllowedDomains(import.meta.env.VITE_ALLOWED_EMAIL_DOMAINS);
 
   async function signInWithGoogle() {
     setLoading(true);
@@ -16,7 +18,13 @@ export default function Login() {
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/recruitment/auth/callback`,
-        queryParams: { access_type: 'offline', prompt: 'select_account' },
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account',
+          // Google's hosted-domain hint: the account chooser only offers
+          // institutional accounts. The callback still verifies the address.
+          ...(allowedDomains.length === 1 ? { hd: allowedDomains[0] } : {}),
+        },
       },
     });
     if (authError) {
@@ -69,7 +77,7 @@ export default function Login() {
             {loading ? 'Redirecting…' : '→ Continue with Google'}
           </button>
           <p className="mt-5 text-center text-xs text-[var(--dim)]">
-            Only authorised institutional email domains are accepted.
+            {allowedDomainsMessage(allowedDomains) || 'Only authorised institutional email domains are accepted.'}
           </p>
         </div>
       </div>

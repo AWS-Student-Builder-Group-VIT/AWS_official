@@ -11,6 +11,7 @@ import { createClient } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'node:crypto';
 import { validateProfilePayload } from '../src/recruitment/lib/profile-schema.js';
 import { isAssessmentAnswerCorrect } from '../src/recruitment/lib/assessment-grading.js';
+import { isAllowedEmail, parseAllowedDomains } from '../src/recruitment/lib/email-domains.js';
 
 const router = Router();
 
@@ -49,6 +50,17 @@ async function requireAuth(req, res) {
   const supabase = adminSupabase();
   const { data: { user }, error } = await supabase.auth.getUser(token);
   if (error || !user) { res.status(401).json({ error: 'Invalid session' }); return null; }
+
+  // Candidates must hold an institutional address when the gate is configured.
+  // Administrators sign in with a derived internal account, so they are exempt.
+  const allowedDomains = parseAllowedDomains(process.env.ALLOWED_EMAIL_DOMAINS);
+  if (allowedDomains.length && !isAllowedEmail(user.email, allowedDomains)) {
+    const { data: admin } = await supabase.from('admin_users').select('id').eq('id', user.id).maybeSingle();
+    if (!admin) {
+      res.status(403).json({ error: `Recruitment is open to ${allowedDomains.map((d) => '@' + d).join(' or ')} accounts only.` });
+      return null;
+    }
+  }
   return { user, supabase };
 }
 
