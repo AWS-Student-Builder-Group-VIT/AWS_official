@@ -1,21 +1,15 @@
 /**
  * Round 1 hub cards: one card per selected written domain, plus one card per
- * selected Technical specialisation. Technical tracks arrive separately from the
- * written domains because they are answered in the timed assessment instead.
+ * selected Technical specialisation. Each Technical track is its own timed
+ * assessment, so each carries its own status rather than a shared one.
  */
 export function roundOneCards(domains, domainStates, technical) {
-  const technicalStatus = technical.complete
-    ? 'submitted'
-    : technical.status === 'in_progress'
-      ? 'draft'
-      : 'not_started';
-
   const technicalCards = (technical.tracks ?? []).map((track) => ({
     key: `technical:${track.subdomainId}`,
     kind: 'technical',
     title: track.name,
     subtitle: 'Timed technical assessment',
-    status: technicalStatus,
+    status: track.status === 'submitted' ? 'submitted' : track.status === 'in_progress' ? 'draft' : 'not_started',
     subdomainId: track.subdomainId,
   }));
 

@@ -13,17 +13,22 @@ export default function SubdomainSelection() {
   const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [started, setStarted] = useState(false);
   const [popup, setPopup] = useState(null);
 
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate('/recruitment/login', { replace: true }); return; }
-      const [choiceResult, domainResult, settingResult] = await Promise.all([
+      const [choiceResult, domainResult, settingResult, attemptResult, writtenResult] = await Promise.all([
         supabase.from('candidate_subdomain_choices').select('subdomain_id,priority').eq('candidate_id', user.id).order('priority'),
         supabase.from('domains').select('*, subdomains(*)').eq('is_active', true).eq('subdomains.is_active', true).order('sort_order').order('sort_order', { referencedTable: 'subdomains' }),
         supabase.from('recruitment_settings').select('value').eq('key', 'application_deadline').maybeSingle(),
+        // Starting any part of Round 1 freezes the application.
+        supabase.from('assessment_attempts').select('id').eq('candidate_id', user.id).maybeSingle(),
+        supabase.from('candidate_written_answers').select('domain_id').eq('candidate_id', user.id).eq('is_final', true).limit(1),
       ]);
+      setStarted(Boolean(attemptResult.data) || Boolean(writtenResult.data?.length));
       if (choiceResult.error) setPopup({ title: 'Unable to load choices', message: choiceResult.error.message });
       else setSelected((choiceResult.data || []).map((c) => c.subdomain_id));
       if (domainResult.error) setPopup({ title: 'Unable to load domains', message: domainResult.error.message });
@@ -49,7 +54,9 @@ export default function SubdomainSelection() {
   const selectedDetails = useMemo(() =>
     selected.map((id) => allTracks.find((t) => t.id === id)).filter(Boolean), [allTracks, selected]);
 
-  const closed = Boolean(deadline && now >= new Date(deadline).getTime());
+  const deadlinePassed = Boolean(deadline && now >= new Date(deadline).getTime());
+  // Locked either by the deadline or by having started Round 1.
+  const closed = deadlinePassed || started;
   const technicalCount = selectedDetails.filter((t) => t.domainSlug === 'technical').length;
 
   function toggle(track) {
@@ -93,7 +100,7 @@ export default function SubdomainSelection() {
         </div>
         <div className="status-chip inline-flex items-center gap-2 self-start" style={{ color: closed ? 'var(--error)' : 'var(--accent)' }}>
           <Clock3 size={15} />
-          {deadline ? `${closed ? 'Closed' : 'Closes'} ${new Date(deadline).toLocaleString()}` : 'No deadline set'}
+          {started ? 'Locked — Round 1 started' : deadline ? `${deadlinePassed ? 'Closed' : 'Closes'} ${new Date(deadline).toLocaleString()}` : 'No deadline set'}
         </div>
       </div>
 
@@ -116,7 +123,13 @@ export default function SubdomainSelection() {
             </div>
           )}
         </div>
-        {closed && <p className="mt-4 border-l-2 pl-4 text-sm" style={{ borderColor: 'var(--error)', color: 'var(--muted)' }}>The deadline has passed. Your submitted choices are now locked.</p>}
+        {closed && (
+          <p className="mt-4 border-l-2 pl-4 text-sm" style={{ borderColor: 'var(--error)', color: 'var(--muted)' }}>
+            {started
+              ? 'You have started Round 1, so your domain choices are locked and can no longer be changed.'
+              : 'The deadline has passed. Your submitted choices are now locked.'}
+          </p>
+        )}
       </section>
 
       <div className="mt-8 space-y-8">

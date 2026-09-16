@@ -10,8 +10,7 @@ test('renders a card for every selected technical track alongside written domain
   const cards = roundOneCards(domains, states, {
     required: true,
     complete: false,
-    status: 'not_started',
-    tracks: [{ subdomainId: 's9', name: 'Web Development' }],
+    tracks: [{ subdomainId: 's9', name: 'Web Development', status: 'not_started' }],
   });
   assert.equal(cards.length, 2, 'one technical card + one written card');
   const technical = cards.find((card) => card.kind === 'technical');
@@ -20,15 +19,31 @@ test('renders a card for every selected technical track alongside written domain
   assert.equal(technical.status, 'not_started');
 });
 
-test('marks technical cards submitted once the assessment is complete', () => {
-  const [card] = roundOneCards([], {}, {
-    required: true, complete: true, status: 'submitted',
-    tracks: [{ subdomainId: 's9', name: 'Web Development' }],
+test('each technical track carries its own status', () => {
+  const cards = roundOneCards([], {}, {
+    required: true,
+    complete: false,
+    tracks: [
+      { subdomainId: 'web', name: 'Web Development', status: 'submitted' },
+      { subdomainId: 'app', name: 'App Development', status: 'not_started' },
+    ],
   });
-  assert.equal(card.status, 'submitted');
+  assert.deepEqual(
+    cards.map((card) => [card.title, card.status]),
+    [['Web Development', 'submitted'], ['App Development', 'not_started']],
+    'submitting one track must not mark the other submitted',
+  );
+});
+
+test('an in-progress track reads as a draft', () => {
+  const [card] = roundOneCards([], {}, {
+    required: true, complete: false,
+    tracks: [{ subdomainId: 'web', name: 'Web Development', status: 'in_progress' }],
+  });
+  assert.equal(card.status, 'draft');
 });
 
 test('omits technical cards when no technical track is selected', () => {
-  const cards = roundOneCards(domains, states, { required: false, complete: true, status: 'not_required', tracks: [] });
+  const cards = roundOneCards(domains, states, { required: false, complete: true, tracks: [] });
   assert.deepEqual(cards.map((card) => card.kind), ['written']);
 });

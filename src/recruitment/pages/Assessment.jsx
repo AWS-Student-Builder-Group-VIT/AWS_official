@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { createClient } from '../lib/supabase.js';
 import { cn, formatTime } from '../lib/utils.js';
 
 export default function Assessment() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Each Technical specialisation is its own timed paper.
+  const trackId = searchParams.get('track');
   const [supabase] = useState(createClient);
   const [phase, setPhase] = useState('loading');
   const [attempt, setAttempt] = useState(null);
+  const [trackName, setTrackName] = useState('');
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -39,23 +43,29 @@ export default function Assessment() {
   }, [supabase]);
 
   const submit = useCallback(async (auto = false) => {
-    if (submittingRef.current) return;
+    if (submittingRef.current || !trackId) return;
     submittingRef.current = true;
     window.clearInterval(timerRef.current);
     try {
-      const payload = await authedFetch('assessment/submit', { auto, answers });
+      const payload = await authedFetch('assessment/submit', { subdomainId: trackId, auto, answers });
       if (payload) { setResult(payload); setPhase('submitted'); }
     } catch (err) {
       setError(err.message);
       submittingRef.current = false;
     }
-  }, [answers, authedFetch]);
+  }, [answers, authedFetch, trackId]);
 
   useEffect(() => {
     (async () => {
+      if (!trackId) { navigate('/recruitment/dashboard/round-1', { replace: true }); return; }
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate('/recruitment/login', { replace: true }); return; }
-      const { data: existing } = await supabase.from('assessment_attempts').select('*').eq('candidate_id', user.id).maybeSingle();
+
+      const { data: sub } = await supabase.from('subdomains').select('name').eq('id', trackId).maybeSingle();
+      setTrackName(sub?.name ?? 'Technical');
+
+      const { data: existing } = await supabase.from('assessment_attempts')
+        .select('*').eq('candidate_id', user.id).eq('subdomain_id', trackId).maybeSingle();
       if (!existing) { setPhase('intro'); return; }
       setAttempt(existing);
       if (existing.status !== 'in_progress') { setPhase('submitted'); setResult({ score: existing.score, totalMarks: existing.total_marks }); return; }
@@ -69,11 +79,10 @@ export default function Assessment() {
       setAnswers(Object.fromEntries((saved ?? []).map((row) => [row.question_id, row.answer])));
 
       const elapsed = Math.floor((Date.now() - new Date(existing.started_at).getTime()) / 1000);
-      const remaining = Math.max(0, existing.time_limit_seconds - elapsed);
-      setTimeLeft(remaining);
+      setTimeLeft(Math.max(0, existing.time_limit_seconds - elapsed));
       setPhase('test');
     })();
-  }, []);
+  }, [trackId]);
 
   // Auto-submit the moment the clock runs out.
   useEffect(() => {
@@ -86,9 +95,10 @@ export default function Assessment() {
   async function start() {
     setError('');
     try {
-      const payload = await authedFetch('assessment/start');
+      const payload = await authedFetch('assessment/start', { subdomainId: trackId });
       if (!payload) return;
       setAttempt(payload.attempt);
+      if (payload.track?.name) setTrackName(payload.track.name);
       setQuestions(await loadQuestions(payload.attempt));
       setTimeLeft(payload.attempt.time_limit_seconds);
       setPhase('test');
@@ -121,11 +131,12 @@ export default function Assessment() {
     const released = result?.score != null && result?.totalMarks != null;
     return (
       <main className="mx-auto max-w-xl p-6 text-center sm:p-10">
-        <p className="eyebrow">ROUND 1 / TECHNICAL</p>
+        <p className="eyebrow">ROUND 1 / {trackName.toUpperCase()}</p>
         <h1 className="mt-4 text-3xl font-bold">Assessment submitted</h1>
         {released
           ? <p className="mt-6 font-mono text-3xl font-bold" style={{ color: 'var(--accent)' }}>{result.score} / {result.totalMarks}</p>
           : <p className="mt-4 text-sm" style={{ color: 'var(--muted)' }}>Results will be released shortly.</p>}
+        <p className="mt-4 text-sm" style={{ color: 'var(--muted)' }}>Your other tracks are unaffected and can be taken separately.</p>
         <Link to="/recruitment/dashboard/round-1" className="action mt-8 inline-flex">Back to Round 1</Link>
       </main>
     );
@@ -135,14 +146,14 @@ export default function Assessment() {
     return (
       <main className="mx-auto max-w-2xl p-6 sm:p-10">
         <p className="eyebrow">ROUND 1 / TECHNICAL</p>
-        <h1 className="mt-4 text-3xl font-bold">Technical assessment</h1>
+        <h1 className="mt-4 text-3xl font-bold">{trackName} assessment</h1>
         <p className="mt-4 text-sm leading-6" style={{ color: 'var(--muted)' }}>
-          10 questions and 10 minutes for each Technical specialisation you selected. Answers save automatically, and the
-          assessment submits itself when the timer ends. You get one attempt.
+          10 questions, 10 minutes, for {trackName} only. Answers save automatically and the paper submits itself when the
+          timer ends. One attempt per specialisation — your other tracks stay untouched.
         </p>
         {error && <p role="alert" className="mt-6 border p-4 text-sm" style={{ borderColor: 'rgba(239,68,68,.5)', background: 'rgba(239,68,68,.1)', color: 'var(--error)' }}>{error}</p>}
         <div className="mt-8 flex flex-wrap gap-3">
-          <button type="button" onClick={start} className="action">Start assessment →</button>
+          <button type="button" onClick={start} className="action">Start {trackName} assessment →</button>
           <Link to="/recruitment/dashboard/round-1" className="action-secondary">Back to Round 1</Link>
         </div>
       </main>
@@ -158,7 +169,7 @@ export default function Assessment() {
   return (
     <div className="flex min-h-screen flex-col" style={{ background: 'var(--bg)' }}>
       <header className="flex items-center justify-between border-b px-5 py-3" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-        <span className="text-sm font-medium">Round 1 · Technical assessment</span>
+        <span className="text-sm font-medium">Round 1 · {trackName}</span>
         <span className={cn('font-mono text-lg font-bold', timeLeft < 60 && 'animate-pulse')} style={{ color: timeLeft < 60 ? 'var(--error)' : 'var(--accent)' }}>{formatTime(timeLeft)}</span>
         <span className="text-sm" style={{ color: 'var(--muted)' }}>{answered}/{questions.length} answered</span>
       </header>
@@ -231,7 +242,7 @@ export default function Assessment() {
                 <button type="button" onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))} disabled={currentIdx === 0} className="action-secondary disabled:opacity-40">← Previous</button>
                 {currentIdx < questions.length - 1
                   ? <button type="button" onClick={() => setCurrentIdx((i) => i + 1)} className="action">Next →</button>
-                  : <button type="button" onClick={() => submit(false)} className="action">Submit assessment</button>}
+                  : <button type="button" onClick={() => submit(false)} className="action">Submit {trackName}</button>}
               </div>
             </div>
           )}
