@@ -89,32 +89,40 @@ router.post('/admin/login', async (req, res) => {
     const adminEmail = `${ADMIN_ID.replace(/[^a-z0-9._-]/gi, '')}@admin.local`;
     const supabase = adminSupabase();
 
-    const { data: created, error: createError } = await supabase.auth.admin.createUser({
-      email: adminEmail,
-      password: ADMIN_PASSWORD,
-      email_confirm: true,
-    });
-    let adminUserId = created?.user?.id;
+    // Sign in first. Creating or re-applying the password on every login would
+    // revoke every other admin session, so the account is only touched when the
+    // sign-in actually fails.
+    let signIn = await supabase.auth.signInWithPassword({ email: adminEmail, password: ADMIN_PASSWORD });
+    let adminUserId = signIn.data?.user?.id;
 
-    if (createError) {
-      // Already registered: find it and re-apply the current ADMIN_PASSWORD, so
-      // rotating the env variable keeps working without manual cleanup.
-      const { data: list, error: listError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (listError) return res.status(500).json({ error: listError.message });
-      const existing = list?.users?.find((user) => user.email === adminEmail);
-      if (!existing) return res.status(500).json({ error: createError.message });
-      const { error: updateError } = await supabase.auth.admin.updateUserById(existing.id, {
+    if (signIn.error) {
+      const { data: created, error: createError } = await supabase.auth.admin.createUser({
+        email: adminEmail,
         password: ADMIN_PASSWORD,
         email_confirm: true,
       });
-      if (updateError) return res.status(500).json({ error: updateError.message });
-      adminUserId = existing.id;
+      adminUserId = created?.user?.id;
+
+      if (createError) {
+        // Already registered, so the stored password no longer matches
+        // ADMIN_PASSWORD: re-apply it, which is also how a rotated password
+        // takes effect.
+        const { data: list, error: listError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        if (listError) return res.status(500).json({ error: listError.message });
+        const existing = list?.users?.find((user) => user.email === adminEmail);
+        if (!existing) return res.status(500).json({ error: createError.message });
+        const { error: updateError } = await supabase.auth.admin.updateUserById(existing.id, {
+          password: ADMIN_PASSWORD,
+          email_confirm: true,
+        });
+        if (updateError) return res.status(500).json({ error: updateError.message });
+        adminUserId = existing.id;
+      }
+
+      signIn = await supabase.auth.signInWithPassword({ email: adminEmail, password: ADMIN_PASSWORD });
     }
 
-    const { data: signedIn, error: signInError } = await supabase.auth.signInWithPassword({
-      email: adminEmail,
-      password: ADMIN_PASSWORD,
-    });
+    const { data: signedIn, error: signInError } = signIn;
     if (signInError || !signedIn.session) {
       return res.status(500).json({ error: signInError?.message ?? 'Could not create an admin session' });
     }
