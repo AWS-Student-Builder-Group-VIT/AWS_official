@@ -32,3 +32,14 @@ test('migration enforces the Technical-only maximum and written-answer RLS', () 
   assert.match(sql, /candidate_written_answers ENABLE ROW LEVEL SECURITY/);
   assert.match(sql, /candidate_id = auth\.uid\(\)/);
 });
+
+test('lock migration checks for assessment attempts and raises DOMAIN_CHOICES_LOCKED', () => {
+  const lockSql = readFileSync(
+    new URL('./202609160002_lock_domain_choices_after_assessment.sql', import.meta.url),
+    'utf8',
+  );
+  assert.match(lockSql, /DOMAIN_CHOICES_LOCKED/);
+  assert.match(lockSql, /assessment_attempts/);
+  assert.match(lockSql, /domain_locked/);
+});
+

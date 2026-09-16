@@ -110,7 +110,7 @@ export default function ProfileComplete() {
                 <span className="label">Year</span>
                 <select className="field" {...register('year')}>
                   <option value="">Select year</option>
-                  {[1, 2, 3, 4, 5].map((y) => <option key={y}>{y}</option>)}
+                  {[1, 2, 3, 4].map((y) => <option key={y}>{y}</option>)}
                 </select>
                 {errors.year && <span className="mt-1 block text-xs text-[var(--error)]">{errors.year.message}</span>}
               </label>

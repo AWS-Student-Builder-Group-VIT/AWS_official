@@ -44,7 +44,7 @@ export default function Assessment() {
     window.clearInterval(timerRef.current);
     try {
       const payload = await authedFetch('assessment/submit', { auto, answers });
-      if (payload) { setResult(payload); setPhase('submitted'); }
+      if (payload) { setResult(null); setPhase('submitted'); }
     } catch (err) {
       setError(err.message);
       submittingRef.current = false;
@@ -58,7 +58,12 @@ export default function Assessment() {
       const { data: existing } = await supabase.from('assessment_attempts').select('*').eq('candidate_id', user.id).maybeSingle();
       if (!existing) { setPhase('intro'); return; }
       setAttempt(existing);
-      if (existing.status !== 'in_progress') { setPhase('submitted'); setResult({ score: existing.score, totalMarks: existing.total_marks }); return; }
+      if (existing.status !== 'in_progress') {
+        const isReleased = existing.results_released_at != null;
+        setPhase('submitted');
+        setResult(isReleased ? { score: existing.score, totalMarks: existing.total_marks, releasedAt: existing.results_released_at } : null);
+        return;
+      }
 
       try {
         setQuestions(await loadQuestions(existing));
@@ -122,11 +127,28 @@ export default function Assessment() {
     return (
       <main className="mx-auto max-w-xl p-6 text-center sm:p-10">
         <p className="eyebrow">ROUND 1 / TECHNICAL</p>
-        <h1 className="mt-4 text-3xl font-bold">Assessment submitted</h1>
-        {released
-          ? <p className="mt-6 font-mono text-3xl font-bold" style={{ color: 'var(--accent)' }}>{result.score} / {result.totalMarks}</p>
-          : <p className="mt-4 text-sm" style={{ color: 'var(--muted)' }}>Results will be released shortly.</p>}
-        <Link to="/recruitment/dashboard/round-1" className="action mt-8 inline-flex">Back to Round 1</Link>
+        <h1 className="mt-4 text-3xl font-bold">{released ? 'Assessment Results' : 'Thank You!'}</h1>
+        {released ? (
+          <div className="mt-6 rounded-xl border p-6" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+            <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Official Marks</p>
+            <p className="mt-2 font-mono text-4xl font-bold" style={{ color: 'var(--accent)' }}>
+              {result.score} <span className="text-xl font-normal" style={{ color: 'var(--muted)' }}>/ {result.totalMarks} marks</span>
+            </p>
+            <p className="mt-3 text-xs" style={{ color: 'var(--dim)' }}>
+              Official marks released by the recruitment team
+            </p>
+          </div>
+        ) : (
+          <div className="mt-6 rounded-xl border p-6" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+            <p className="text-base font-semibold" style={{ color: 'var(--text)' }}>
+              Thank you for completing your technical assessment!
+            </p>
+            <p className="mt-3 text-sm leading-6" style={{ color: 'var(--muted)' }}>
+              Your responses have been recorded and submitted successfully. Your score and review will appear here once marks are released by the recruitment team.
+            </p>
+          </div>
+        )}
+        <Link to="/recruitment/dashboard/round-1" className="action mt-8 inline-flex">Back to Round 1 →</Link>
       </main>
     );
   }

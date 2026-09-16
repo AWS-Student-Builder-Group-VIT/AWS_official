@@ -4,9 +4,9 @@ import { ArrowLeft, Check, ChevronRight, ExternalLink, FileText, Save, Send, Ter
 import { createClient } from '../lib/supabase.js';
 import { roundOneCards } from '../lib/round-one-hub-rules.js';
 
-const statusCopy = { not_started: 'Not started', draft: 'Draft saved', submitted: 'Submitted' };
-const statusBorder = { not_started: 'var(--border)', draft: 'rgba(245,158,11,.5)', submitted: 'rgba(34,197,94,.5)' };
-const statusTextColor = { not_started: 'var(--muted)', draft: 'var(--warning)', submitted: 'var(--success)' };
+const statusCopy = { not_started: 'Not started', draft: 'Draft saved', submitted: 'Submitted', not_assessed: 'Not assessed' };
+const statusBorder = { not_started: 'var(--border)', draft: 'rgba(245,158,11,.5)', submitted: 'rgba(34,197,94,.5)', not_assessed: 'rgba(239,68,68,.5)' };
+const statusTextColor = { not_started: 'var(--muted)', draft: 'var(--warning)', submitted: 'var(--success)', not_assessed: 'var(--error)' };
 
 export default function RoundOne() {
   const navigate = useNavigate();
@@ -190,13 +190,28 @@ export default function RoundOne() {
               <p className="mt-2 min-h-10 text-xs leading-5" style={{ color: 'var(--muted)' }}>{card.subtitle}</p>
               <div className="mt-6 flex items-center justify-between gap-3 border-t pt-4" style={{ borderColor: 'var(--border)' }}>
                 <span className="status-chip" style={{ borderColor, color: textColor }}>{statusCopy[card.status]}</span>
-                <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase" style={{ color: 'var(--accent)' }}>{card.status === 'submitted' ? 'Review' : 'Open'}{card.kind === 'technical' ? <ExternalLink size={13} /> : <ChevronRight size={14} />}</span>
+                <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase" style={{ color: card.status === 'not_assessed' ? 'var(--dim)' : 'var(--accent)' }}>
+                  {card.status === 'submitted' ? 'Review' : card.status === 'not_assessed' ? 'Locked' : 'Open'}
+                  {card.kind === 'technical' ? <ExternalLink size={13} /> : <ChevronRight size={14} />}
+                </span>
               </div>
             </>
           );
-          return card.kind === 'technical'
-            ? <Link key={card.key} to={`/recruitment/dashboard/assessment?track=${encodeURIComponent(card.subdomainId ?? '')}`} className="technical-panel block min-h-64 p-5 transition hover:border-[var(--accent)] sm:p-6">{content}</Link>
-            : <button key={card.key} type="button" onClick={() => setActiveDomainId(card.domainId ?? null)} className="technical-panel min-h-64 p-5 text-left transition hover:border-[var(--accent)] sm:p-6">{content}</button>;
+          if (card.kind === 'technical') {
+            if (card.status === 'not_assessed') {
+              return (
+                <div key={card.key} className="technical-panel block min-h-64 cursor-not-allowed p-5 opacity-75 sm:p-6" title="This domain was selected after your technical assessment was already submitted. Technical assessments are limited to one attempt per candidate.">
+                  {content}
+                </div>
+              );
+            }
+            return (
+              <Link key={card.key} to={`/recruitment/dashboard/assessment?track=${encodeURIComponent(card.subdomainId ?? '')}`} className="technical-panel block min-h-64 p-5 transition hover:border-[var(--accent)] sm:p-6">
+                {content}
+              </Link>
+            );
+          }
+          return <button key={card.key} type="button" onClick={() => setActiveDomainId(card.domainId ?? null)} className="technical-panel min-h-64 p-5 text-left transition hover:border-[var(--accent)] sm:p-6">{content}</button>;
         })}
       </section>
     </main>

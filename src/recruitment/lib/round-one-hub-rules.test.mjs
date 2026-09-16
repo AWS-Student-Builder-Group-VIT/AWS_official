@@ -28,6 +28,21 @@ test('marks technical cards submitted once the assessment is complete', () => {
   assert.equal(card.status, 'submitted');
 });
 
+test('marks unassessed technical tracks as not_assessed even when assessment is complete', () => {
+  const cards = roundOneCards([], {}, {
+    required: true,
+    complete: false,
+    status: 'submitted',
+    tracks: [
+      { subdomainId: 's9', name: 'Web Development', status: 'submitted', assessed: true },
+      { subdomainId: 's10', name: 'App Development', status: 'not_assessed', assessed: false },
+    ],
+  });
+  assert.equal(cards[0].status, 'submitted');
+  assert.equal(cards[1].status, 'not_assessed');
+  assert.equal(cards[1].subtitle, 'Not included in your submitted assessment');
+});
+
 test('omits technical cards when no technical track is selected', () => {
   const cards = roundOneCards(domains, states, { required: false, complete: true, status: 'not_required', tracks: [] });
   assert.deepEqual(cards.map((card) => card.kind), ['written']);

@@ -218,7 +218,7 @@ router.post('/assessment/start', async (req, res) => {
     }).select('*').single();
     if (attemptError) return res.status(500).json({ error: attemptError.message });
 
-    await supabase.from('candidate_profiles').update({ round_0_status: 'in_progress', status: 'round_0' }).eq('id', user.id);
+    await supabase.from('candidate_profiles').update({ round_0_status: 'in_progress', status: 'round_0', domain_locked: true }).eq('id', user.id);
     return res.json({ attempt });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -284,9 +284,12 @@ router.post('/assessment/submit', async (req, res) => {
       const done = new Set((finalAnswers ?? []).map((a) => a.domain_id));
       writtenComplete = writtenDomainIds.every((id) => done.has(id));
     }
-    if (writtenComplete) await supabase.from('candidate_profiles').update({ round_0_status: 'submitted' }).eq('id', user.id);
+    await supabase.from('candidate_profiles').update({
+      round_0_status: writtenComplete ? 'submitted' : 'in_progress',
+      domain_locked: true,
+    }).eq('id', user.id);
 
-    return res.json({ submitted: true, score, totalMarks });
+    return res.json({ submitted: true });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -402,22 +405,19 @@ router.post('/admin/assessments/release', async (req, res) => {
   const ctx = await requireAdmin(req, res);
   if (!ctx) return;
   const { supabase } = ctx;
-  const { attempt_id, release } = req.body ?? {};
-  if (!attempt_id) return res.status(400).json({ error: 'attempt_id required' });
+  const { attempt_id, attempt_ids, release } = req.body ?? {};
+  const ids = Array.isArray(attempt_ids) && attempt_ids.length > 0
+    ? attempt_ids
+    : attempt_id ? [attempt_id] : [];
+  if (!ids.length) return res.status(400).json({ error: 'attempt_id or attempt_ids required' });
   try {
-    if (release) {
-      // Calculate score if not already done
-      const { data: attempt } = await supabase.from('assessment_attempts').select('id, candidate_id, subdomain_id, score, total_marks').eq('id', attempt_id).single();
-      if (!attempt.score) {
-        // Grading is done by the DB trigger or we just mark as released without scoring
-        await supabase.from('assessment_attempts').update({ results_released_at: new Date().toISOString() }).eq('id', attempt_id);
-      } else {
-        await supabase.from('assessment_attempts').update({ results_released_at: new Date().toISOString() }).eq('id', attempt_id);
-      }
-    } else {
-      await supabase.from('assessment_attempts').update({ results_released_at: null }).eq('id', attempt_id);
-    }
-    return res.json({ ok: true });
+    const timestamp = release ? new Date().toISOString() : null;
+    const { error } = await supabase
+      .from('assessment_attempts')
+      .update({ results_released_at: timestamp })
+      .in('id', ids);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true, count: ids.length });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -636,15 +636,70 @@ router.get('/round-1/written', async (req, res) => {
 
     // Technical choices are answered through the timed assessment, not written
     // questions, so they are returned separately for their own Round 1 cards.
-    const technicalTrackList = (profile.subdomain_choices ?? [])
+    let technicalTrackList = (profile.subdomain_choices ?? [])
       .filter((c) => c.subdomain?.domain?.slug === 'technical')
       .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
       .map((c) => ({ subdomainId: c.subdomain_id, name: c.subdomain?.name ?? 'Technical' }));
     const hasTechnical = technicalTrackList.length > 0;
     const { data: attempt } = hasTechnical
-      ? await supabase.from('assessment_attempts').select('status').eq('candidate_id', user.id).maybeSingle()
+      ? await supabase.from('assessment_attempts').select('status, question_ids, subdomain_id').eq('candidate_id', user.id).maybeSingle()
       : { data: null };
-    const technicalComplete = hasTechnical ? attempt?.status === 'submitted' : true;
+
+    let assessedSubdomainIds = new Set();
+    if (attempt) {
+      let qIds = [];
+      if (Array.isArray(attempt.question_ids)) {
+        qIds = attempt.question_ids;
+      } else if (typeof attempt.question_ids === 'string') {
+        try { qIds = JSON.parse(attempt.question_ids); } catch { qIds = []; }
+      }
+      if (qIds.length > 0) {
+        const { data: qRows } = await supabase
+          .from('assessment_questions')
+          .select('subdomain_id')
+          .in('id', qIds);
+        assessedSubdomainIds = new Set((qRows ?? []).map((q) => q.subdomain_id).filter(Boolean));
+      }
+      if (attempt.subdomain_id) assessedSubdomainIds.add(attempt.subdomain_id);
+
+      // Auto-heal: If assessment is already submitted and there are unassessed technical tracks
+      // added afterwards, prune them from candidate choices so the candidate is restored to their valid submitted state
+      if (attempt.status === 'submitted' && assessedSubdomainIds.size > 0) {
+        const orphanChoices = technicalTrackList.filter((t) => !assessedSubdomainIds.has(t.subdomainId));
+        if (orphanChoices.length > 0) {
+          const orphanIds = orphanChoices.map((t) => t.subdomainId);
+          await supabase
+            .from('candidate_subdomain_choices')
+            .delete()
+            .eq('candidate_id', user.id)
+            .in('subdomain_id', orphanIds);
+          technicalTrackList = technicalTrackList.filter((t) => assessedSubdomainIds.has(t.subdomainId));
+        }
+      }
+    }
+
+    const annotatedTechnicalTracks = technicalTrackList.map((track) => {
+      if (!attempt) {
+        return { ...track, status: 'not_started', assessed: false };
+      }
+      const wasAssessed = assessedSubdomainIds.has(track.subdomainId);
+      if (!wasAssessed) {
+        return {
+          ...track,
+          status: 'not_assessed',
+          assessed: false,
+        };
+      }
+      return {
+        ...track,
+        status: attempt.status === 'submitted' ? 'submitted' : 'in_progress',
+        assessed: true,
+      };
+    });
+
+    const technicalComplete = hasTechnical
+      ? (attempt?.status === 'submitted' && annotatedTechnicalTracks.every((t) => t.assessed))
+      : true;
 
     // Format questions with answerKey
     const formattedQuestions = questions.map((q) => ({
@@ -665,8 +720,16 @@ router.get('/round-1/written', async (req, res) => {
       technical: {
         required: hasTechnical,
         complete: technicalComplete,
-        status: !hasTechnical ? 'not_required' : attempt?.status === 'submitted' ? 'submitted' : attempt ? 'in_progress' : 'not_started',
-        tracks: technicalTrackList,
+        status: !hasTechnical
+          ? 'not_required'
+          : annotatedTechnicalTracks.some((t) => t.status === 'not_assessed')
+            ? 'incomplete'
+            : attempt?.status === 'submitted'
+              ? 'submitted'
+              : attempt
+                ? 'in_progress'
+                : 'not_started',
+        tracks: annotatedTechnicalTracks,
       },
     });
   } catch (err) {
@@ -715,6 +778,7 @@ router.post('/round-1/written', async (req, res) => {
     if (rows.length > 0) {
       const { error } = await supabase.from('candidate_written_answers').upsert(rows, { onConflict: 'candidate_id,domain_id,question_id' });
       if (error) return res.status(400).json({ error: error.message });
+      await supabase.from('candidate_profiles').update({ domain_locked: true }).eq('id', user.id);
     }
     return res.json({ ok: true, submitted: true });
   } catch (err) {

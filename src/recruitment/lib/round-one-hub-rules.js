@@ -10,14 +10,20 @@ export function roundOneCards(domains, domainStates, technical) {
       ? 'draft'
       : 'not_started';
 
-  const technicalCards = (technical.tracks ?? []).map((track) => ({
-    key: `technical:${track.subdomainId}`,
-    kind: 'technical',
-    title: track.name,
-    subtitle: 'Timed technical assessment',
-    status: technicalStatus,
-    subdomainId: track.subdomainId,
-  }));
+  const technicalCards = (technical.tracks ?? []).map((track) => {
+    const status = track.status || technicalStatus;
+    return {
+      key: `technical:${track.subdomainId}`,
+      kind: 'technical',
+      title: track.name,
+      subtitle: status === 'not_assessed'
+        ? 'Not included in your submitted assessment'
+        : 'Timed technical assessment',
+      status,
+      subdomainId: track.subdomainId,
+      assessed: track.assessed !== false,
+    };
+  });
 
   const writtenCards = domains.map((domain) => ({
     key: `written:${domain.id}`,
