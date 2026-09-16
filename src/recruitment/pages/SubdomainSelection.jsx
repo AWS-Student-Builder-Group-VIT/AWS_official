@@ -15,26 +15,30 @@ export default function SubdomainSelection() {
   const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [writtenSubmitted, setWrittenSubmitted] = useState(false);
   const [popup, setPopup] = useState(null);
 
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate('/recruitment/login', { replace: true }); return; }
-      const [choiceResult, domainResult, settingResult, profileResult, attemptResult] = await Promise.all([
+      const [choiceResult, domainResult, settingResult, profileResult, attemptResult, writtenResult] = await Promise.all([
         supabase.from('candidate_subdomain_choices').select('subdomain_id,priority').eq('candidate_id', user.id).order('priority'),
         supabase.from('domains').select('*, subdomains(*)').eq('is_active', true).eq('subdomains.is_active', true).order('sort_order').order('sort_order', { referencedTable: 'subdomains' }),
         supabase.from('recruitment_settings').select('value').eq('key', 'application_deadline').maybeSingle(),
         supabase.from('candidate_profiles').select('domain_locked, round_0_status, status').eq('id', user.id).maybeSingle(),
-        supabase.from('assessment_attempts').select('status, question_ids').eq('candidate_id', user.id).maybeSingle(),
+        // One attempt per technical track, so this is a list rather than a single row.
+        supabase.from('assessment_attempts').select('status').eq('candidate_id', user.id),
+        supabase.from('candidate_written_answers').select('domain_id').eq('candidate_id', user.id).eq('is_final', true).limit(1),
       ]);
+      setWrittenSubmitted(Boolean(writtenResult.data?.length));
       if (choiceResult.error) setPopup({ title: 'Unable to load choices', message: choiceResult.error.message });
       else setSelected((choiceResult.data || []).map((c) => c.subdomain_id));
       if (domainResult.error) setPopup({ title: 'Unable to load domains', message: domainResult.error.message });
       setDomains(domainResult.data || []);
       setDeadline(settingResult.data?.value?.at ?? null);
       setProfile(profileResult.data ?? null);
-      setAttempt(attemptResult.data ?? null);
+      setAttempt(attemptResult.data ?? []);
       setLoading(false);
     })();
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -56,7 +60,13 @@ export default function SubdomainSelection() {
     selected.map((id) => allTracks.find((t) => t.id === id)).filter(Boolean), [allTracks, selected]);
 
   const closed = Boolean(deadline && now >= new Date(deadline).getTime());
-  const isAssessmentLocked = Boolean(attempt?.status || profile?.domain_locked || (profile?.round_0_status && profile?.round_0_status !== 'not_started'));
+  // Any started track, a submitted written domain, or the database lock freezes the application.
+  const isAssessmentLocked = Boolean(
+    attempt?.length
+    || profile?.domain_locked
+    || (profile?.round_0_status && profile?.round_0_status !== 'not_started')
+    || writtenSubmitted,
+  );
   const isLocked = closed || isAssessmentLocked;
   const technicalCount = selectedDetails.filter((t) => t.domainSlug === 'technical').length;
 
@@ -130,7 +140,7 @@ export default function SubdomainSelection() {
           <p className="mt-4 border-l-2 pl-4 text-sm" style={{ borderColor: 'var(--error)', color: 'var(--muted)' }}>
             {closed
               ? 'The deadline has passed. Your submitted choices are now locked.'
-              : 'Your domain choices are locked because your Round 1 assessment has already been started or submitted.'}
+              : 'Your domain choices are locked because you have already started Round 1.'}
           </p>
         )}
       </section>

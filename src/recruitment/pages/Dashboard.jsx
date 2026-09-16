@@ -116,6 +116,16 @@ export default function Dashboard() {
         </div>
       )}
 
+      {profile.final_status && (
+        <div className="mb-8 rounded-xl border p-6" style={{ borderColor: 'rgba(34,197,94,.3)', background: 'rgba(34,197,94,.08)' }}>
+          <p className="font-mono text-[10px] uppercase tracking-widest" style={{ color: 'var(--muted)' }}>Final decision</p>
+          <p className={`mt-2 text-xl font-semibold ${statusColor[profile.final_status]}`}>{statusLabel[profile.final_status]}</p>
+          <p className="mt-2 text-sm leading-6" style={{ color: 'var(--muted)' }}>
+            This is the recruitment team&apos;s final decision. It takes precedence over the individual round statuses below.
+          </p>
+        </div>
+      )}
+
       <h2 className="mb-4 font-semibold" style={{ color: 'var(--text)' }}>Rounds</h2>
       <div className="space-y-4">
         {roundSteps.map(({ key, settingKey, label, desc, href }) => {
@@ -169,7 +179,6 @@ export default function Dashboard() {
                           ? track.subdomain?.domain?.name
                           : `${track.subdomain?.domain?.name} / ${track.subdomain?.name}`}
                       </p>
-                      <p className={`mt-1 text-xs ${statusColor[st]}`}>{statusLabel[st]}</p>
                     </div>
                   ))}
                 </div>

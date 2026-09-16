@@ -10,6 +10,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import recruitmentRouter from './recruitmentRoutes.js';
 
+// The workspace keeps a single .env.local at the repository root; plain
+// .env is loaded afterwards so it can fill any gaps without overriding.
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 const app = express();

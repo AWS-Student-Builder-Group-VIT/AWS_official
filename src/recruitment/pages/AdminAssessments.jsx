@@ -11,6 +11,10 @@ export default function AdminAssessments() {
   const [saving, setSaving] = useState(null);
   const [batchSaving, setBatchSaving] = useState(false);
   const [error, setError] = useState('');
+  const [minPercent, setMinPercent] = useState(40);
+  const [markOthers, setMarkOthers] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState('');
 
   const load = async () => {
     const { data } = await supabase
@@ -57,6 +61,32 @@ export default function AdminAssessments() {
     setSaving(null);
   };
 
+  // Qualify everyone at or above a threshold the admin picks.
+  const bulkQualify = async () => {
+    const summary = markOthers
+      ? `Qualify every unreviewed candidate scoring ${minPercent}% or above, and mark the rest not qualified?`
+      : `Qualify every unreviewed candidate scoring ${minPercent}% or above?`;
+    if (!confirm(summary)) return;
+    setBulkBusy(true);
+    setError('');
+    setBulkResult('');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setError('Administrator session expired.'); setBulkBusy(false); return; }
+    const response = await fetch('/api/recruitment/admin/assessments/bulk-qualify', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minPercent: Number(minPercent), markOthersNotQualified: markOthers }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) setError(result.error ?? 'Bulk qualify failed.');
+    else {
+      setBulkResult(`${result.qualified} qualified, ${result.notQualified} not qualified, ${result.skipped} skipped of ${result.considered} reviewed.`);
+      await load();
+    }
+    setBulkBusy(false);
+  };
+
+  // Qualify exactly the attempts ticked in the list.
   const qualifyBatch = async (qualified) => {
     if (selectedIds.length === 0 || batchSaving) return;
     setBatchSaving(true);
@@ -217,6 +247,30 @@ export default function AdminAssessments() {
       )}
 
       {error && <div role="alert" className="mb-4 rounded-lg border p-3 text-sm" style={{ borderColor: 'rgba(239,68,68,.4)', background: 'rgba(239,68,68,.1)', color: 'var(--error)' }}>{error}</div>}
+
+      <section className="mb-6 rounded-xl border p-5" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+        <p className="label">BULK QUALIFY</p>
+        <div className="mt-3 flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--muted)' }}>
+            Qualify everyone scoring at least
+            <input type="number" min="0" max="100" value={minPercent} onChange={(e) => setMinPercent(e.target.value)}
+              className="w-20 border px-2 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
+              style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text)' }} />
+            %
+          </label>
+          <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--muted)' }}>
+            <input type="checkbox" checked={markOthers} onChange={(e) => setMarkOthers(e.target.checked)} style={{ accentColor: 'var(--accent)' }} />
+            Also mark everyone below as not qualified
+          </label>
+          <button type="button" onClick={bulkQualify} disabled={bulkBusy || attempts.length === 0} className="action !min-h-10">
+            {bulkBusy ? 'Applying…' : 'Apply to all'}
+          </button>
+        </div>
+        <p className="mt-3 text-xs" style={{ color: 'var(--dim)' }}>
+          Only candidates you have not already reviewed are changed. Unscored attempts are skipped.
+        </p>
+        {bulkResult && <p role="status" className="mt-2 text-sm" style={{ color: 'var(--success)' }}>{bulkResult}</p>}
+      </section>
       <div className="space-y-4">
         {attempts.length === 0 && <div className="rounded-xl border p-8 text-center text-sm" style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--muted)' }}>No submitted assessments to review.</div>}
         {attempts.map((a) => (
