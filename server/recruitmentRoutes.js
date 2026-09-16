@@ -401,8 +401,30 @@ router.post('/admin/questions', async (req, res) => {
   const { mode, ...fields } = req.body ?? {};
   try {
     if (mode === 'written') {
-      const { data, error } = await supabase.from('written_application_questions').insert({ domain_id: fields.domain_id, scope: fields.scope ?? 'domain', question_group: fields.question_group, prompt: fields.prompt, instructions: fields.instructions, response_type: fields.response_type ?? 'long_text', required: fields.required ?? true, sort_order: fields.sort_order ?? 100, is_active: true, minimum_answers: fields.minimum_answers ?? null }).select().single();
+      // No domain means the question is asked of every non-Technical applicant.
+      const scope = fields.domain_id ? 'domain' : 'common_non_technical';
+      // slug is NOT NULL UNIQUE, so admin-authored questions get a generated one.
+      const slug = `admin-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const { data, error } = await supabase.from('written_application_questions').insert({
+        slug,
+        scope,
+        domain_id: scope === 'domain' ? fields.domain_id : null,
+        question_group: fields.question_group || 'common',
+        prompt: fields.prompt,
+        instructions: fields.instructions ?? '',
+        response_type: fields.response_type ?? 'long_text',
+        required: fields.required ?? true,
+        sort_order: fields.sort_order ?? 100,
+        is_active: true,
+      }).select().single();
       if (error) return res.status(400).json({ error: error.message });
+      // minimum_answers is a rule about a question group, stored on its own table.
+      if (fields.minimum_answers && scope === 'domain') {
+        await supabase.from('written_application_rules').upsert(
+          { domain_id: fields.domain_id, question_group: data.question_group, minimum_answers: fields.minimum_answers },
+          { onConflict: 'domain_id,question_group' },
+        );
+      }
       return res.status(201).json({ question: data });
     }
     const { data, error } = await supabase.from('assessment_questions').insert({ subdomain_id: fields.subdomain_id, question_text: fields.question_text, question_type: fields.question_type ?? 'mcq', options: fields.options ?? null, correct_answers: fields.correct_answers, marks: fields.marks ?? 1, difficulty: fields.difficulty ?? 'medium', is_active: true }).select().single();
@@ -523,11 +545,21 @@ router.get('/round-1/written', async (req, res) => {
     const domains = Array.from(domainMap.values()).filter((d) => d.slug !== 'technical');
 
     const domainIds = domains.map((d) => d.id);
-    const [{ data: questions }, { data: rules }, { data: answers }] = await Promise.all([
-      supabase.from('written_application_questions').select('*').in('domain_id', domainIds).eq('is_active', true).order('sort_order'),
+    const questionFilter = domainIds.length
+      ? `domain_id.in.(${domainIds.join(',')}),scope.eq.common_non_technical`
+      : 'scope.eq.common_non_technical';
+    const [{ data: questionRows }, { data: rules }, { data: answers }] = await Promise.all([
+      // Common questions carry no domain_id, so an .in() filter hides them.
+      supabase.from('written_application_questions').select('*').or(questionFilter).eq('is_active', true).order('sort_order'),
       supabase.from('written_application_rules').select('*').in('domain_id', domainIds),
       supabase.from('candidate_written_answers').select('*').eq('candidate_id', user.id).in('domain_id', domainIds),
     ]);
+
+    // One entry per (domain, question): a common question is asked once per
+    // selected domain, matching how answers are keyed.
+    const questions = domains.flatMap((domain) => (questionRows ?? [])
+      .filter((q) => q.domain_id === domain.id || q.scope === 'common_non_technical')
+      .map((q) => ({ ...q, domain_id: domain.id })));
 
     // Build per-domain state
     const domainStates = {};
@@ -562,7 +594,13 @@ router.get('/round-1/written', async (req, res) => {
     const technicalComplete = hasTechnical ? attempt?.status === 'submitted' : true;
 
     // Format questions with answerKey
-    const formattedQuestions = (questions ?? []).map((q) => ({ ...q, domainId: q.domain_id, answerKey: `${q.domain_id}:${q.id}` }));
+    const formattedQuestions = questions.map((q) => ({
+      ...q,
+      domainId: q.domain_id,
+      answerKey: `${q.domain_id}:${q.id}`,
+      group: q.question_group,
+      responseType: q.response_type,
+    }));
 
     return res.json({
       domains,

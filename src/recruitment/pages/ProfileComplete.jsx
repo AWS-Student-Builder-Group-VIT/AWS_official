@@ -19,8 +19,13 @@ export default function ProfileComplete() {
   } = useForm({ resolver: zodResolver(profileSchema) });
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { navigate('/recruitment/login', { replace: true }); return; }
+      // A returning candidate keeps the record they already filled in; signing
+      // in again should drop them straight back on the dashboard.
+      const { data: existing } = await supabase
+        .from('candidate_profiles').select('profile_complete').eq('id', user.id).maybeSingle();
+      if (existing?.profile_complete) { navigate('/recruitment/dashboard', { replace: true }); return; }
       setIdentity({
         name: user.user_metadata.full_name || user.user_metadata.name || '',
         email: user.email || '',

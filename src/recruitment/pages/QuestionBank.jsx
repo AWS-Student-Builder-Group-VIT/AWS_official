@@ -25,13 +25,6 @@ export default function QuestionBank({ domains, onClose }) {
   const [difficulty, setDifficulty] = useState('medium');
   const [questions, setQuestions] = useState([]);
   const [writtenQuestions, setWrittenQuestions] = useState([]);
-  const [writtenScope, setWrittenScope] = useState('domain');
-  const [writtenGroup, setWrittenGroup] = useState('domain_specific');
-  const [writtenInstructions, setWrittenInstructions] = useState('');
-  const [writtenResponseType, setWrittenResponseType] = useState('long_text');
-  const [writtenRequired, setWrittenRequired] = useState(true);
-  const [writtenSortOrder, setWrittenSortOrder] = useState(100);
-  const [minimumAnswers, setMinimumAnswers] = useState('');
   const [guidelines, setGuidelines] = useState({ 2: null, 3: null });
   const [guidelineDraft, setGuidelineDraft] = useState('');
   const [projects, setProjects] = useState([]);
@@ -54,13 +47,12 @@ export default function QuestionBank({ domains, onClose }) {
 
   async function loadContent() {
     if (activeRound === 1 && questionMode === 'scored' && !subdomainId) { setQuestions([]); return; }
-    if (activeRound === 1 && questionMode === 'written' && !domainId) { setWrittenQuestions([]); return; }
     if (activeRound > 1 && !subdomainId) { setGuidelineDraft(''); setProjects([]); return; }
     setLoadingContent(true); setError('');
     const headers = await authHeaders();
     if (!headers) { setError('Administrator session expired.'); setLoadingContent(false); return; }
     if (activeRound === 1) {
-      const endpoint = questionMode === 'scored' ? `/api/recruitment/admin/questions?subdomain_id=${encodeURIComponent(subdomainId)}` : `/api/recruitment/admin/questions?mode=written&domain_id=${encodeURIComponent(domainId)}`;
+      const endpoint = questionMode === 'scored' ? `/api/recruitment/admin/questions?subdomain_id=${encodeURIComponent(subdomainId)}` : `/api/recruitment/admin/questions?mode=written${domainId ? `&domain_id=${encodeURIComponent(domainId)}` : ''}`;
       const res = await fetch(endpoint, { headers, cache: 'no-store' });
       const result = await res.json();
       if (!res.ok) setError(result.error ?? 'Unable to load content.');
@@ -115,15 +107,14 @@ export default function QuestionBank({ domains, onClose }) {
 
   async function saveWrittenQuestion() {
     setError(''); setMessage('');
-    if (writtenScope === 'domain' && !domainId) { setError('Select a target domain.'); return; }
     if (questionText.trim().length < 10) { setError('Question text needs at least 10 characters.'); return; }
     setSaving(true);
     const headers = await authHeaders();
     if (!headers) { setError('Administrator session expired.'); setSaving(false); return; }
-    const res = await fetch('/api/recruitment/admin/questions', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'written', scope: writtenScope, domain_id: writtenScope === 'domain' ? domainId : null, question_group: writtenGroup, prompt: questionText, instructions: writtenInstructions, response_type: writtenResponseType, required: writtenRequired, sort_order: writtenSortOrder, is_active: true, minimum_answers: minimumAnswers === '' ? null : minimumAnswers }) });
+    const res = await fetch('/api/recruitment/admin/questions', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'written', domain_id: domainId || null, prompt: questionText }) });
     const result = await res.json();
     if (!res.ok) setError(result.error ?? 'Unable to save written question.');
-    else { setWrittenQuestions((curr) => [...curr, result.question]); setMessage('Written question saved.'); setQuestionText(''); setWrittenInstructions(''); }
+    else { setWrittenQuestions((curr) => [...curr, result.question]); setMessage(domainId ? `Question added for ${activeDomain?.name}.` : 'Question added for every non-Technical domain.'); setQuestionText(''); }
     setSaving(false);
   }
 
@@ -251,21 +242,11 @@ export default function QuestionBank({ domains, onClose }) {
           <div className="grid lg:grid-cols-[minmax(0,1fr)_420px]">
             <main className="border-r p-5 sm:p-7" style={{ borderColor: 'var(--border)' }}>
               <section className="border p-5" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div><label className="label">Scope</label><select value={writtenScope} onChange={(e) => setWrittenScope(e.target.value)} className="field" style={fieldStyle}><option value="domain">Selected domain</option><option value="common_non_technical">All non-Technical domains</option></select></div>
-                  <div><label className="label">Question group</label><input value={writtenGroup} onChange={(e) => setWrittenGroup(e.target.value)} className="field" style={fieldStyle} /></div>
-                </div>
-                <div className="mt-4"><label className="label">Prompt</label><textarea rows={3} value={questionText} onChange={(e) => setQuestionText(e.target.value)} className="field resize-y" style={fieldStyle} /></div>
-                <div className="mt-4"><label className="label">Instructions</label><textarea rows={4} value={writtenInstructions} onChange={(e) => setWrittenInstructions(e.target.value)} className="field resize-y" style={fieldStyle} /></div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                  <div><label className="label">Response</label><select value={writtenResponseType} onChange={(e) => setWrittenResponseType(e.target.value)} className="field" style={fieldStyle}><option value="long_text">Long text</option><option value="long_text_with_links">Text + links</option></select></div>
-                  <div><label className="label">Sort order</label><input type="number" min="0" value={writtenSortOrder} onChange={(e) => setWrittenSortOrder(Number(e.target.value))} className="field" style={fieldStyle} /></div>
-                  <div><label className="label">Minimum in group</label><input type="number" min="1" value={minimumAnswers} onChange={(e) => setMinimumAnswers(e.target.value ? Number(e.target.value) : '')} className="field" placeholder="Optional" style={fieldStyle} /></div>
-                </div>
-                <label className="mt-4 flex items-center gap-2 text-sm" style={{ color: 'var(--muted)' }}><input type="checkbox" checked={writtenRequired} onChange={(e) => setWrittenRequired(e.target.checked)} style={{ accentColor: 'var(--accent)' }} />Required individually</label>
+                <div><label className="label">Question</label><textarea rows={4} value={questionText} onChange={(e) => setQuestionText(e.target.value)} className="field resize-y" placeholder="Type the question candidates will answer…" style={fieldStyle} /></div>
+                <p className="mt-2 text-xs" style={{ color: 'var(--dim)' }}>{domainId ? `Asked only of ${activeDomain?.name} applicants.` : 'Asked of every non-Technical applicant. Choose a domain above to target one domain.'}</p>
                 {error && <p className="mt-4 text-sm" style={{ color: 'var(--error)' }}>{error}</p>}
                 {message && <p className="mt-4 text-sm" style={{ color: 'var(--success)' }}>{message}</p>}
-                <button onClick={saveWrittenQuestion} disabled={saving || (writtenScope === 'domain' && !domainId)} className="action mt-5 inline-flex items-center gap-2"><Save size={15} />Save written question</button>
+                <button onClick={saveWrittenQuestion} disabled={saving} className="action mt-5 inline-flex items-center gap-2"><Save size={15} />Add question</button>
               </section>
             </main>
             <aside className="flex flex-col border-l p-5" style={{ borderColor: 'var(--border)', background: '#060709' }}>
