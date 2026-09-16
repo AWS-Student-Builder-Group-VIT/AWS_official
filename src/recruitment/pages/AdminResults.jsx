@@ -12,7 +12,7 @@ export default function AdminResults() {
   const load = async () => {
     const { data } = await supabase
       .from('candidate_profiles')
-      .select('*, domain:domains(*), final_result:final_results(*)')
+      .select('*, domain:domains!domain_id(*), final_result:final_results(*)')
       .in('status', ['round_2', 'selected', 'waitlisted', 'rejected'])
       .order('full_name');
     const list = data ?? [];

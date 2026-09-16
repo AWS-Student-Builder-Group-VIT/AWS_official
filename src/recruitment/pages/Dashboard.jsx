@@ -16,18 +16,20 @@ export default function Dashboard() {
   const [schedule, setSchedule] = useState({});
   const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { navigate('/recruitment/login', { replace: true }); return; }
       Promise.all([
         supabase.from('candidate_profiles')
-          .select('*, domain:domains(*), subdomain_choices:candidate_subdomain_choices(*, subdomain:subdomains(*, domain:domains(*)))')
-          .eq('id', user.id).single(),
+          .select('*, subdomain_choices:candidate_subdomain_choices(*, subdomain:subdomains(*, domain:domains(*)))')
+          .eq('id', user.id).maybeSingle(),
         supabase.from('recruitment_settings')
           .select('key,value')
           .in('key', roundSteps.map((r) => r.settingKey)),
       ]).then(([profileResult, settingsResult]) => {
+        if (profileResult.error) setLoadError(profileResult.error.message);
         setProfile(profileResult.data);
         const next = {};
         settingsResult.data?.forEach((row) => { next[row.key] = row.value?.at ?? null; });
@@ -51,6 +53,16 @@ export default function Dashboard() {
     </div>
   );
   // No profile row means completion never succeeded; showing an empty page hides that.
+  // Only a genuinely missing record sends the candidate to the form; a failed
+  // query must surface, or the two pages redirect to each other forever.
+  if (loadError) return (
+    <main className="mx-auto max-w-lg p-8 text-center">
+      <p className="eyebrow">DASHBOARD</p>
+      <h1 className="mt-4 text-2xl font-bold">Could not load your dashboard.</h1>
+      <p role="alert" className="mt-4 text-sm" style={{ color: 'var(--error)' }}>{loadError}</p>
+      <button type="button" onClick={() => window.location.reload()} className="action mt-6">Try again</button>
+    </main>
+  );
   if (!profile) return <Navigate to="/recruitment/profile/complete" replace />;
 
   const statusFor = (key) => {
