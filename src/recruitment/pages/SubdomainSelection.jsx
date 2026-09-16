@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Check, Clock3, Plus, X } from 'lucide-react';
 import { createClient } from '../lib/supabase.js';
 import { toggleTrackSelection } from '../lib/selection-rules.js';
@@ -10,30 +10,35 @@ export default function SubdomainSelection() {
   const [domains, setDomains] = useState([]);
   const [selected, setSelected] = useState([]);
   const [deadline, setDeadline] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [attempt, setAttempt] = useState(null);
   const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [started, setStarted] = useState(false);
+  const [writtenSubmitted, setWrittenSubmitted] = useState(false);
   const [popup, setPopup] = useState(null);
 
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate('/recruitment/login', { replace: true }); return; }
-      const [choiceResult, domainResult, settingResult, attemptResult, writtenResult] = await Promise.all([
+      const [choiceResult, domainResult, settingResult, profileResult, attemptResult, writtenResult] = await Promise.all([
         supabase.from('candidate_subdomain_choices').select('subdomain_id,priority').eq('candidate_id', user.id).order('priority'),
         supabase.from('domains').select('*, subdomains(*)').eq('is_active', true).eq('subdomains.is_active', true).order('sort_order').order('sort_order', { referencedTable: 'subdomains' }),
         supabase.from('recruitment_settings').select('value').eq('key', 'application_deadline').maybeSingle(),
-        // Starting any part of Round 1 freezes the application.
-        supabase.from('assessment_attempts').select('id').eq('candidate_id', user.id).maybeSingle(),
+        supabase.from('candidate_profiles').select('domain_locked, round_0_status, status').eq('id', user.id).maybeSingle(),
+        // One attempt per technical track, so this is a list rather than a single row.
+        supabase.from('assessment_attempts').select('status').eq('candidate_id', user.id),
         supabase.from('candidate_written_answers').select('domain_id').eq('candidate_id', user.id).eq('is_final', true).limit(1),
       ]);
-      setStarted(Boolean(attemptResult.data) || Boolean(writtenResult.data?.length));
+      setWrittenSubmitted(Boolean(writtenResult.data?.length));
       if (choiceResult.error) setPopup({ title: 'Unable to load choices', message: choiceResult.error.message });
       else setSelected((choiceResult.data || []).map((c) => c.subdomain_id));
       if (domainResult.error) setPopup({ title: 'Unable to load domains', message: domainResult.error.message });
       setDomains(domainResult.data || []);
       setDeadline(settingResult.data?.value?.at ?? null);
+      setProfile(profileResult.data ?? null);
+      setAttempt(attemptResult.data ?? []);
       setLoading(false);
     })();
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -54,13 +59,19 @@ export default function SubdomainSelection() {
   const selectedDetails = useMemo(() =>
     selected.map((id) => allTracks.find((t) => t.id === id)).filter(Boolean), [allTracks, selected]);
 
-  const deadlinePassed = Boolean(deadline && now >= new Date(deadline).getTime());
-  // Locked either by the deadline or by having started Round 1.
-  const closed = deadlinePassed || started;
+  const closed = Boolean(deadline && now >= new Date(deadline).getTime());
+  // Any started track, a submitted written domain, or the database lock freezes the application.
+  const isAssessmentLocked = Boolean(
+    attempt?.length
+    || profile?.domain_locked
+    || (profile?.round_0_status && profile?.round_0_status !== 'not_started')
+    || writtenSubmitted,
+  );
+  const isLocked = closed || isAssessmentLocked;
   const technicalCount = selectedDetails.filter((t) => t.domainSlug === 'technical').length;
 
   function toggle(track) {
-    if (closed) return;
+    if (isLocked) return;
     const result = toggleTrackSelection(selected, track, allTracks);
     if (result.error === 'TECHNICAL_SELECTION_LIMIT') {
       setPopup({ title: 'Technical selection limit reached', message: 'You can select up to two Technical specializations. Remove one before adding another.' });
@@ -70,15 +81,17 @@ export default function SubdomainSelection() {
   }
 
   async function save() {
-    if (selected.length < 1 || closed) return;
+    if (selected.length < 1 || isLocked) return;
     setSaving(true);
     const { error: saveError } = await supabase.rpc('set_candidate_subdomains', { p_subdomain_ids: selected });
     if (saveError) {
       const isPassed = saveError.message.includes('APPLICATION_DEADLINE_PASSED');
+      const isLockedError = saveError.message.includes('DOMAIN_CHOICES_LOCKED');
       const needsMigration = saveError.message.includes('SELECT_ONE_OR_TWO_SUBDOMAINS');
       setPopup({
-        title: isPassed ? 'Applications closed' : needsMigration ? 'Database update required' : 'Unable to save application',
+        title: isPassed ? 'Applications closed' : isLockedError ? 'Choices locked' : needsMigration ? 'Database update required' : 'Unable to save application',
         message: isPassed ? 'The application deadline has passed. Your choices can no longer be changed.'
+          : isLockedError ? 'Your domain choices are locked because your Round 1 assessment has already been started or submitted.'
           : needsMigration ? 'Apply the latest recruitment migration before saving the expanded domain choices.'
           : saveError.message,
       });
@@ -98,9 +111,9 @@ export default function SubdomainSelection() {
           <h1 className="mt-3 text-3xl font-bold sm:text-4xl">Build your application.</h1>
           <p className="mt-3 max-w-3xl" style={{ color: 'var(--muted)' }}>Apply to any domains that match your interests. Technical is optional and allows up to two specializations; all other choices are unrestricted.</p>
         </div>
-        <div className="status-chip inline-flex items-center gap-2 self-start" style={{ color: closed ? 'var(--error)' : 'var(--accent)' }}>
+        <div className="status-chip inline-flex items-center gap-2 self-start" style={{ color: closed ? 'var(--error)' : isAssessmentLocked ? 'var(--dim)' : 'var(--accent)' }}>
           <Clock3 size={15} />
-          {started ? 'Locked — Round 1 started' : deadline ? `${deadlinePassed ? 'Closed' : 'Closes'} ${new Date(deadline).toLocaleString()}` : 'No deadline set'}
+          {closed ? 'Closed' : isAssessmentLocked ? 'Choices locked' : deadline ? `Closes ${new Date(deadline).toLocaleString()}` : 'No deadline set'}
         </div>
       </div>
 
@@ -115,7 +128,7 @@ export default function SubdomainSelection() {
               {selectedDetails.map((track) => (
                 <span key={track.id} className="inline-flex items-center gap-2 border px-3 py-2 font-mono text-xs" style={{ borderColor: 'rgba(255,153,0,.4)', background: 'rgba(255,153,0,.1)', color: 'var(--accent)' }}>
                   <span>{track.domainSlug === 'finance' || track.domainSlug === 'outreach' ? track.domainName : `${track.domainName} / ${track.name}`}</span>
-                  {!closed && (
+                  {!isLocked && (
                     <button type="button" onClick={() => toggle(track)} className="grid h-5 w-5 place-items-center border" style={{ borderColor: 'rgba(255,153,0,.4)' }} aria-label={`Remove ${track.name}`}><X size={12} /></button>
                   )}
                 </span>
@@ -123,11 +136,11 @@ export default function SubdomainSelection() {
             </div>
           )}
         </div>
-        {closed && (
+        {isLocked && (
           <p className="mt-4 border-l-2 pl-4 text-sm" style={{ borderColor: 'var(--error)', color: 'var(--muted)' }}>
-            {started
-              ? 'You have started Round 1, so your domain choices are locked and can no longer be changed.'
-              : 'The deadline has passed. Your submitted choices are now locked.'}
+            {closed
+              ? 'The deadline has passed. Your submitted choices are now locked.'
+              : 'Your domain choices are locked because you have already started Round 1.'}
           </p>
         )}
       </section>
@@ -148,7 +161,7 @@ export default function SubdomainSelection() {
                   </div>
                 </div>
                 {wholeDomain && (
-                  <button type="button" disabled={closed || !wholeTrack} onClick={() => wholeTrack && toggle(wholeTrack)}
+                  <button type="button" disabled={isLocked || !wholeTrack} onClick={() => wholeTrack && toggle(wholeTrack)}
                     className="grid h-11 w-11 shrink-0 place-items-center border transition disabled:cursor-not-allowed disabled:opacity-50"
                     style={{ borderColor: wholeSelected ? 'var(--accent)' : 'var(--border)', background: wholeSelected ? 'var(--accent)' : 'var(--surface)', color: wholeSelected ? 'var(--bg)' : 'var(--accent)' }}
                     aria-label={`${wholeSelected ? 'Remove' : 'Add'} ${domain.name}`}>
@@ -162,7 +175,7 @@ export default function SubdomainSelection() {
                     const track = allTracks.find((t) => t.id === sub.id);
                     const isSelected = selected.includes(sub.id);
                     return (
-                      <button key={sub.id} type="button" disabled={closed} onClick={() => track && toggle(track)}
+                      <button key={sub.id} type="button" disabled={isLocked} onClick={() => track && toggle(track)}
                         className="group relative min-h-32 border p-5 text-left transition disabled:cursor-not-allowed disabled:opacity-70"
                         style={{ borderColor: isSelected ? 'var(--accent)' : 'var(--border)', background: isSelected ? 'rgba(255,153,0,.1)' : 'var(--surface)' }}>
                         <div className="flex items-start justify-between gap-4">
@@ -184,12 +197,18 @@ export default function SubdomainSelection() {
         })}
       </div>
 
-      {!closed && (
-        <div className="sticky bottom-4 mt-10 flex flex-wrap items-center justify-between gap-4 border p-4 shadow-2xl backdrop-blur" style={{ borderColor: 'var(--border)', background: 'rgba(17,19,24,.95)' }}>
-          <p className="text-xs" style={{ color: 'var(--muted)' }}>Save your choices to continue directly to Round 1.</p>
+      <div className="sticky bottom-4 mt-10 flex flex-wrap items-center justify-between gap-4 border p-4 shadow-2xl backdrop-blur" style={{ borderColor: 'var(--border)', background: 'rgba(17,19,24,.95)' }}>
+        <p className="text-xs" style={{ color: 'var(--muted)' }}>
+          {isLocked
+            ? (closed ? 'Applications are closed. Your submitted choices are locked.' : 'Your domain choices are locked because your Round 1 assessment has already been started or submitted.')
+            : 'Save your choices to continue directly to Round 1.'}
+        </p>
+        {isLocked ? (
+          <Link to="/recruitment/dashboard/round-1" className="action">Back to Round 1 →</Link>
+        ) : (
           <button onClick={save} disabled={selected.length === 0 || saving} className="action">{saving ? 'Saving…' : 'Continue to Round 1 →'}</button>
-        </div>
-      )}
+        )}
+      </div>
 
       {popup && (
         <div className="fixed inset-0 z-50 grid place-items-center p-5 backdrop-blur-sm" style={{ background: 'rgba(10,11,14,.8)' }}

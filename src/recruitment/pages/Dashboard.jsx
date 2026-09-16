@@ -97,7 +97,9 @@ export default function Dashboard() {
                 </p>
               ))
               : <p className="mt-1" style={{ color: 'var(--text)' }}>—</p>}
-            <Link to="/recruitment/subdomain" className="mt-2 inline-block text-xs transition hover:underline" style={{ color: 'var(--muted)' }}>View or change →</Link>
+            <Link to="/recruitment/subdomain" className="mt-2 inline-block text-xs transition hover:underline" style={{ color: 'var(--muted)' }}>
+              {profile.domain_locked || (profile.round_0_status && profile.round_0_status !== 'not_started') ? 'View choices →' : 'View or change →'}
+            </Link>
           </div>
           <div className="text-right">
             <p className="text-sm" style={{ color: 'var(--muted)' }}>Applied</p>

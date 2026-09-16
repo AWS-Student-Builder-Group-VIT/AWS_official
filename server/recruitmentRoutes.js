@@ -219,7 +219,9 @@ router.post('/assessment/start', async (req, res) => {
     }).select('*').single();
     if (attemptError) return res.status(500).json({ error: attemptError.message });
 
-    await supabase.from('candidate_profiles').update({ round_0_status: 'in_progress', status: 'round_0' }).eq('id', user.id);
+    await supabase.from('candidate_profiles')
+      .update({ round_0_status: 'in_progress', status: 'round_0', domain_locked: true })
+      .eq('id', user.id);
     return res.json({ attempt, track });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -295,11 +297,12 @@ router.post('/assessment/submit', async (req, res) => {
       const done = new Set((finalAnswers ?? []).map((a) => a.domain_id));
       writtenComplete = writtenDomainIds.every((id) => done.has(id));
     }
-    if (technicalComplete && writtenComplete) {
-      await supabase.from('candidate_profiles').update({ round_0_status: 'submitted' }).eq('id', user.id);
-    }
+    await supabase.from('candidate_profiles').update({
+      round_0_status: technicalComplete && writtenComplete ? 'submitted' : 'in_progress',
+      domain_locked: true,
+    }).eq('id', user.id);
 
-    return res.json({ submitted: true, score, totalMarks });
+    return res.json({ submitted: true });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -415,22 +418,19 @@ router.post('/admin/assessments/release', async (req, res) => {
   const ctx = await requireAdmin(req, res);
   if (!ctx) return;
   const { supabase } = ctx;
-  const { attempt_id, release } = req.body ?? {};
-  if (!attempt_id) return res.status(400).json({ error: 'attempt_id required' });
+  const { attempt_id, attempt_ids, release } = req.body ?? {};
+  const ids = Array.isArray(attempt_ids) && attempt_ids.length > 0
+    ? attempt_ids
+    : attempt_id ? [attempt_id] : [];
+  if (!ids.length) return res.status(400).json({ error: 'attempt_id or attempt_ids required' });
   try {
-    if (release) {
-      // Calculate score if not already done
-      const { data: attempt } = await supabase.from('assessment_attempts').select('id, candidate_id, subdomain_id, score, total_marks').eq('id', attempt_id).single();
-      if (!attempt.score) {
-        // Grading is done by the DB trigger or we just mark as released without scoring
-        await supabase.from('assessment_attempts').update({ results_released_at: new Date().toISOString() }).eq('id', attempt_id);
-      } else {
-        await supabase.from('assessment_attempts').update({ results_released_at: new Date().toISOString() }).eq('id', attempt_id);
-      }
-    } else {
-      await supabase.from('assessment_attempts').update({ results_released_at: null }).eq('id', attempt_id);
-    }
-    return res.json({ ok: true });
+    const timestamp = release ? new Date().toISOString() : null;
+    const { error } = await supabase
+      .from('assessment_attempts')
+      .update({ results_released_at: timestamp })
+      .in('id', ids);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true, count: ids.length });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -709,6 +709,7 @@ router.get('/round-1/written', async (req, res) => {
         subdomainId: c.subdomain_id,
         name: c.subdomain?.name ?? 'Technical',
         status: status === 'submitted' ? 'submitted' : status ? 'in_progress' : 'not_started',
+        assessed: true,
       };
     });
     const technicalComplete = hasTechnical ? technicalTrackList.every((t) => t.status === 'submitted') : true;
@@ -732,6 +733,13 @@ router.get('/round-1/written', async (req, res) => {
       technical: {
         required: hasTechnical,
         complete: technicalComplete,
+        status: !hasTechnical
+          ? 'not_required'
+          : technicalComplete
+            ? 'submitted'
+            : technicalTrackList.some((t) => t.status === 'in_progress')
+              ? 'in_progress'
+              : 'not_started',
         tracks: technicalTrackList,
       },
     });
@@ -781,6 +789,7 @@ router.post('/round-1/written', async (req, res) => {
     if (rows.length > 0) {
       const { error } = await supabase.from('candidate_written_answers').upsert(rows, { onConflict: 'candidate_id,domain_id,question_id' });
       if (error) return res.status(400).json({ error: error.message });
+      await supabase.from('candidate_profiles').update({ domain_locked: true }).eq('id', user.id);
     }
     return res.json({ ok: true, submitted: true });
   } catch (err) {
