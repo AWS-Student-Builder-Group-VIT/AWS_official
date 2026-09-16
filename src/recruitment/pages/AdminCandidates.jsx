@@ -121,7 +121,7 @@ export default function AdminCandidates() {
                   {c.subdomain_choices?.length
                     ? [...c.subdomain_choices].sort((a, b) => a.priority - b.priority).map((ch) => (
                       <span key={ch.subdomain_id} className="block text-xs" style={{ color: 'var(--accent)' }}>
-                        {ch.subdomain?.domain?.slug === 'finance' || ch.subdomain?.domain?.slug === 'outreach'
+                        {ch.subdomain?.domain?.selection_mode === 'whole_domain'
                           ? ch.subdomain?.domain?.name : `${ch.subdomain?.domain?.name} / ${ch.subdomain?.name}`}
                       </span>
                     ))

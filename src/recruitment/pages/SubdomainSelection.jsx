@@ -53,7 +53,7 @@ export default function SubdomainSelection() {
   }, [popup]);
 
   const allTracks = useMemo(() => domains.flatMap((domain) =>
-    (domain.subdomains || []).map((sub) => ({ ...sub, domainId: domain.id, domainSlug: domain.slug, domainName: domain.name }))
+    (domain.subdomains || []).map((sub) => ({ ...sub, domainId: domain.id, domainSlug: domain.slug, domainName: domain.name, domainMode: domain.selection_mode }))
   ), [domains]);
 
   const selectedDetails = useMemo(() =>
@@ -127,7 +127,7 @@ export default function SubdomainSelection() {
             <div className="flex flex-wrap gap-2">
               {selectedDetails.map((track) => (
                 <span key={track.id} className="inline-flex items-center gap-2 border px-3 py-2 font-mono text-xs" style={{ borderColor: 'rgba(255,153,0,.4)', background: 'rgba(255,153,0,.1)', color: 'var(--accent)' }}>
-                  <span>{track.domainSlug === 'finance' || track.domainSlug === 'outreach' ? track.domainName : `${track.domainName} / ${track.name}`}</span>
+                  <span>{track.domainMode === 'whole_domain' ? track.domainName : `${track.domainName} / ${track.name}`}</span>
                   {!isLocked && (
                     <button type="button" onClick={() => toggle(track)} className="grid h-5 w-5 place-items-center border" style={{ borderColor: 'rgba(255,153,0,.4)' }} aria-label={`Remove ${track.name}`}><X size={12} /></button>
                   )}
