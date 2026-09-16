@@ -72,6 +72,36 @@ export default function AdminOperations() {
     });
   }, [records, search, domainIds, subdomainId, stage, minScore, sort]);
 
+  const [deletingId, setDeletingId] = useState(null);
+
+  // Deleting wipes every answer, attempt and choice, so it asks for the
+  // registration number rather than a single click.
+  const deleteCandidate = async (profile) => {
+    const typed = prompt(
+      `This permanently deletes ${profile.full_name} and all of their recruitment data.\n\nType their registration number (${profile.registration_number}) to confirm:`,
+    );
+    if (typed == null) return;
+    if (typed.trim().toLowerCase() !== (profile.registration_number ?? '').toLowerCase()) {
+      setError('Registration number did not match. Nothing was deleted.');
+      return;
+    }
+    setDeletingId(profile.id);
+    setError('');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setError('Administrator session expired.'); setDeletingId(null); return; }
+    const response = await fetch(`/api/recruitment/admin/candidates?id=${encodeURIComponent(profile.id)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) setError(result.error ?? 'Unable to delete this candidate.');
+    else {
+      setSelectedId(null);
+      await load();
+    }
+    setDeletingId(null);
+  };
+
   const selected = records.find((r) => r.profile.id === selectedId) ?? null;
   const visibleSubdomains = useMemo(() => payload.domains.filter((d) => domainIds.includes(d.id)).flatMap((d) => d.subdomains ?? []), [payload.domains, domainIds]);
   useEffect(() => { if (subdomainId && !visibleSubdomains.some((s) => s.id === subdomainId)) setSubdomainId(''); }, [subdomainId, visibleSubdomains]);
@@ -211,7 +241,7 @@ export default function AdminOperations() {
         {/* Candidate inspector */}
         <aside className={`${selected ? 'block' : 'hidden xl:block'} fixed inset-0 z-40 overflow-auto xl:static xl:z-auto`} style={{ background: '#080a0d' }}>
           {selected
-            ? <CandidateInspector record={selected} onClose={() => setSelectedId(null)} releasing={releasingId === selected.attempt?.id} onReleaseMarks={setMarksRelease} />
+            ? <CandidateInspector record={selected} onClose={() => setSelectedId(null)} releasing={releasingId === selected.attempt?.id} onReleaseMarks={setMarksRelease} onDelete={deleteCandidate} deleting={deletingId === selected.profile.id} />
             : <div className="grid h-full place-items-center p-8 text-center"><div><Users style={{ color: 'var(--dim)' }} className="mx-auto" /><p className="mt-3 font-mono text-xs" style={{ color: 'var(--muted)' }}>SELECT A CANDIDATE<br />TO OPEN THE DOSSIER</p></div></div>}
         </aside>
       </div>
@@ -226,7 +256,7 @@ export default function AdminOperations() {
   );
 }
 
-function CandidateInspector({ record, onClose, releasing, onReleaseMarks }) {
+function CandidateInspector({ record, onClose, releasing, onReleaseMarks, onDelete, deleting }) {
   const { profile, attempt, assignments, submissions, bookings, writtenAnswers, result } = record;
   const choices = [...(profile.subdomain_choices ?? [])].sort((a, b) => a.priority - b.priority);
   const Section = ({ title, children }) => <section className="border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}><h3 className="mb-3 border-b pb-2 font-mono text-[10px] uppercase tracking-wider" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>{title}</h3>{children}</section>;
@@ -288,6 +318,17 @@ function CandidateInspector({ record, onClose, releasing, onReleaseMarks }) {
           <div className="flex items-center justify-between"><span className="text-sm" style={{ color: 'var(--muted)' }}>Current outcome</span><strong className="font-mono text-sm" style={{ color: result?.result === 'selected' ? 'var(--success)' : result?.result === 'not_selected' ? 'var(--error)' : 'var(--accent)' }}>{humanize(result?.result ?? profile.final_status ?? 'Pending')}</strong></div>
           {result?.feedback && <p className="mt-3 border-t pt-3 text-xs leading-5" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>{result.feedback}</p>}
         </Section>
+        <section className="border p-4" style={{ borderColor: 'rgba(239,68,68,.35)', background: 'rgba(239,68,68,.06)' }}>
+          <h3 className="mb-3 border-b pb-2 font-mono text-[10px] uppercase tracking-wider" style={{ borderColor: 'rgba(239,68,68,.25)', color: 'var(--error)' }}>Danger zone</h3>
+          <p className="text-xs leading-5" style={{ color: 'var(--muted)' }}>
+            Permanently removes this candidate, every answer and attempt they have, and their sign-in account.
+          </p>
+          <button type="button" onClick={() => onDelete?.(profile)} disabled={deleting}
+            className="mt-3 inline-flex items-center gap-2 border px-4 py-2 font-mono text-[10px] uppercase tracking-wider transition disabled:opacity-40"
+            style={{ borderColor: 'rgba(239,68,68,.5)', color: 'var(--error)' }}>
+            {deleting ? 'Deleting…' : 'Delete candidate'}
+          </button>
+        </section>
       </div>
     </div>
   );
