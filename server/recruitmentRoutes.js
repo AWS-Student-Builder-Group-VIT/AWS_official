@@ -197,6 +197,26 @@ router.post('/profile/complete', async (req, res) => {
 const QUESTIONS_PER_TRACK = 10;
 const SECONDS_PER_TRACK = 600;
 
+const SCHEDULE_KEYS = ['application_deadline', 'round_0_start_at', 'round_0_deadline_at', 'round_1_start_at', 'round_1_deadline_at', 'round_2_start_at'];
+const GRACE_MS = 60_000;
+
+/** Round 1 deadline, read live from settings. Empty means no deadline. */
+async function roundOneSchedule(supabase) {
+  const { data } = await supabase.from('recruitment_settings').select('value').eq('key', 'round_0_deadline_at').maybeSingle();
+  const deadlineAt = data?.value?.at ?? null;
+  return { deadlineAt, closed: Boolean(deadlineAt) && Date.now() >= new Date(deadlineAt).getTime() };
+}
+
+// GET /api/recruitment/schedule
+// Candidates can only read start dates from the table directly, so deadlines come from here.
+router.get('/schedule', async (req, res) => {
+  const ctx = await requireAuth(req, res);
+  if (!ctx) return;
+  const { data, error } = await ctx.supabase.from('recruitment_settings').select('key,value').in('key', SCHEDULE_KEYS);
+  if (error) return res.status(500).json({ error: error.message });
+  return res.json(Object.fromEntries(SCHEDULE_KEYS.map((key) => [key, data?.find((r) => r.key === key)?.value?.at ?? null])));
+});
+
 /**
  * Round 1 counts as complete only once every technical track and every
  * written domain has been submitted. Called after either kind of submission.
@@ -269,6 +289,9 @@ router.post('/assessment/start', async (req, res) => {
     const { data: existing } = await supabase.from('assessment_attempts')
       .select('*').eq('candidate_id', user.id).eq('subdomain_id', track.subdomainId).maybeSingle();
     if (existing) return res.json({ attempt: existing, track, resumed: true });
+    if ((await roundOneSchedule(supabase)).closed) {
+      return res.status(403).json({ error: 'The Round 1 deadline has passed. New tests can no longer be started.' });
+    }
 
     // A thin question bank yields a shorter paper rather than blocking the track.
     const { data: pool, error: poolError } = await supabase
@@ -310,10 +333,18 @@ router.post('/assessment/submit', async (req, res) => {
     if (!subdomainId) return res.status(400).json({ error: 'subdomainId is required.' });
 
     const { data: attempt, error: attemptError } = await supabase.from('assessment_attempts')
-      .select('id,question_ids,status').eq('candidate_id', user.id).eq('subdomain_id', subdomainId).maybeSingle();
+      .select('id,question_ids,status,started_at,time_limit_seconds').eq('candidate_id', user.id).eq('subdomain_id', subdomainId).maybeSingle();
     if (attemptError) return res.status(500).json({ error: attemptError.message });
     if (!attempt) return res.status(404).json({ error: 'Assessment attempt not found.' });
     if (attempt.status !== 'in_progress') return res.status(409).json({ error: 'This assessment has already been submitted.' });
+    // A test started before the deadline may still finish within its own time limit.
+    const { deadlineAt } = await roundOneSchedule(supabase);
+    if (deadlineAt) {
+      const testEndsAt = new Date(attempt.started_at).getTime() + (attempt.time_limit_seconds ?? SECONDS_PER_TRACK) * 1000;
+      if (Date.now() > Math.max(new Date(deadlineAt).getTime(), testEndsAt) + GRACE_MS) {
+        return res.status(403).json({ error: 'The Round 1 deadline has passed.' });
+      }
+    }
 
     const questionIds = attempt.question_ids ?? [];
     const allowed = new Set(questionIds);
@@ -1151,6 +1182,7 @@ router.get('/round-1/written', async (req, res) => {
       domainStates,
       roundOneComplete: Object.values(domainStates).every((s) => s.final) && technicalComplete,
       domainLocked: Boolean(profile.domain_locked),
+      ...await roundOneSchedule(supabase),
       technical: {
         required: hasTechnical,
         complete: technicalComplete,
@@ -1176,12 +1208,7 @@ router.put('/round-1/written', async (req, res) => {
   const { domainId, answers } = req.body ?? {};
   if (!domainId || !Array.isArray(answers)) return res.status(400).json({ error: 'domainId and answers[] required' });
   try {
-    // Check deadline
-    const { data: setting } = await supabase.from('recruitment_settings').select('value').eq('key', 'round_0_start_at').maybeSingle();
-    const startAt = setting?.value?.at;
-    if (startAt && new Date() > new Date(startAt)) {
-      // Allow saving after start but check if already final
-    }
+    if ((await roundOneSchedule(supabase)).closed) return res.status(403).json({ error: 'The Round 1 deadline has passed.' });
     const rows = answers.map(({ questionId, answerText, submissionLinks }) => ({
       candidate_id: user.id, domain_id: domainId, question_id: questionId,
       answer_text: answerText ?? '', submission_links: submissionLinks ?? [], is_final: false, updated_at: new Date().toISOString(),
@@ -1207,6 +1234,7 @@ router.post('/round-1/written', async (req, res) => {
     return res.status(400).json({ error: 'Invalid domain.' });
   }
   try {
+    if ((await roundOneSchedule(supabase)).closed) return res.status(403).json({ error: 'The Round 1 deadline has passed.' });
     // A domain can only be finalised once every required question has an answer.
     const { data: requiredQuestions, error: questionError } = await supabase.from('written_application_questions')
       .select('id').eq('is_active', true).eq('required', true)

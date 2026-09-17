@@ -26,16 +26,17 @@ export default function Dashboard() {
         supabase.from('candidate_profiles')
           .select('*, subdomain_choices:candidate_subdomain_choices(*, subdomain:subdomains(*, domain:domains(*)))')
           .eq('id', user.id).maybeSingle(),
-        supabase.from('recruitment_settings')
-          .select('key,value')
-          .in('key', [...roundSteps.map((r) => r.settingKey), 'round_1_deadline_at']),
+        // Deadlines are not readable from the table by candidates, so the schedule comes from the API.
+        // If that request fails, fall back to the start dates candidates can read directly.
+        supabase.auth.getSession().then(({ data: { session } }) => fetch('/api/recruitment/schedule', { headers: { Authorization: `Bearer ${session?.access_token}` } }))
+          .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+          .catch(() => supabase.from('recruitment_settings').select('key,value').in('key', roundSteps.map((r) => r.settingKey))
+            .then(({ data }) => Object.fromEntries((data ?? []).map((row) => [row.key, row.value?.at ?? null])))),
         supabase.from('assessment_attempts').select('subdomain_id,admin_qualified').eq('candidate_id', user.id),
       ]).then(([profileResult, settingsResult, attemptsResult]) => {
         if (profileResult.error) setLoadError(profileResult.error.message);
         setProfile(profileResult.data);
-        const next = {};
-        settingsResult.data?.forEach((row) => { next[row.key] = row.value?.at ?? null; });
-        setSchedule(next);
+        setSchedule(settingsResult ?? {});
         setAttempts(attemptsResult.data ?? []);
         setLoading(false);
       });
@@ -88,6 +89,8 @@ export default function Dashboard() {
   };
   const roundTwoDeadline = schedule.round_1_deadline_at ?? null;
   const roundTwoClosed = Boolean(roundTwoDeadline && now >= new Date(roundTwoDeadline).getTime());
+  const roundOneDeadline = schedule.round_0_deadline_at ?? null;
+  const roundOneClosed = Boolean(roundOneDeadline && now >= new Date(roundOneDeadline).getTime());
 
   return (
     <div className="mx-auto max-w-4xl p-6">
@@ -148,7 +151,7 @@ export default function Dashboard() {
         {roundSteps.map(({ key, settingKey, label, desc, href }) => {
           const st = statusFor(key);
           // Past the Round 2 deadline nobody can start or change a project.
-          const isActive = (st === 'in_progress' || st === 'not_started') && !(key === 'round_1' && roundTwoClosed);
+          const isActive = (st === 'in_progress' || st === 'not_started') && !(key === 'round_1' && roundTwoClosed) && !(key === 'round_0' && roundOneClosed);
           const startsAt = schedule[settingKey] ?? null;
           const hasStarted = Boolean(startsAt && now >= new Date(startsAt).getTime());
           const allTracks = [...(profile.subdomain_choices ?? [])].sort((a, b) => a.priority - b.priority);
@@ -188,9 +191,9 @@ export default function Dashboard() {
                       <Link to={href} className="action mt-2 !min-h-9 !px-4">
                         {st === 'in_progress' ? 'Continue →' : 'Start now →'}
                       </Link>
-                    ) : key === 'round_1' && eligible && (st === 'submitted' || st === 'in_progress' || roundTwoClosed) && (
+                    ) : (key === 'round_1' || key === 'round_0') && eligible && (st === 'submitted' || st === 'in_progress' || (key === 'round_1' ? roundTwoClosed : roundOneClosed)) && (
                       <div className="mt-2">
-                        {roundTwoClosed && <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: 'var(--error)' }}>Deadline passed</p>}
+                        {(key === 'round_1' ? roundTwoClosed : roundOneClosed) && <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: 'var(--error)' }}>Deadline passed</p>}
                         {st !== 'not_started' && <Link to={href} className="mt-1 inline-block text-xs hover:underline" style={{ color: 'var(--muted)' }}>View submission →</Link>}
                       </div>
                     ))
@@ -202,6 +205,20 @@ export default function Dashboard() {
                         </p>
                       </div>
                     )}
+                  {(() => {
+                    // Show an upcoming deadline for Round 1 and Round 2, whether or not the round has opened.
+                    const deadline = key === 'round_0' ? roundOneDeadline : key === 'round_1' ? roundTwoDeadline : null;
+                    const passed = key === 'round_0' ? roundOneClosed : roundTwoClosed;
+                    if (!deadline || passed) return null;
+                    return (
+                      <div className="mt-2">
+                        <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: 'var(--dim)' }}>Deadline</p>
+                        <p className="mt-1 font-mono text-xs" style={{ color: 'var(--error)' }}>
+                          {new Date(deadline).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    );
+                  })()}
                   </>)}
                 </div>
               </div>
