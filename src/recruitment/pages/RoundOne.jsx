@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, Check, ChevronRight, ExternalLink, FileText, Send, TerminalSquare } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowLeft, Check, ChevronRight, ExternalLink, FileText, Send, TerminalSquare } from 'lucide-react';
 import { createClient } from '../lib/supabase.js';
 import { roundOneCards } from '../lib/round-one-hub-rules.js';
 
@@ -23,6 +23,8 @@ export default function RoundOne() {
   const [dirtyDomainId, setDirtyDomainId] = useState(null);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
+  // Shown on arrival until the candidate acknowledges it, while domains can still change.
+  const [lockWarningSeen, setLockWarningSeen] = useState(false);
 
   const request = useCallback(async (method, body) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -266,6 +268,27 @@ export default function RoundOne() {
           return <button key={card.key} type="button" onClick={() => setActiveDomainId(card.domainId ?? null)} className="technical-panel min-h-64 p-5 text-left transition hover:border-[var(--accent)] sm:p-6">{content}</button>;
         })}
       </section>
+
+      {!data.domainLocked && !lockWarningSeen && (
+        <div className="fixed inset-0 z-50 grid place-items-center p-5 backdrop-blur-sm" style={{ background: 'rgba(10,11,14,.8)' }}>
+          <section role="alertdialog" aria-modal="true" aria-labelledby="lock-title" aria-describedby="lock-body" className="technical-panel w-full max-w-md p-6 shadow-2xl sm:p-7">
+            <div className="flex items-start gap-4">
+              <span className="grid h-10 w-10 shrink-0 place-items-center border" style={{ borderColor: 'rgba(255,153,0,.45)', background: 'rgba(255,153,0,.1)', color: 'var(--accent)' }}><AlertTriangle size={19} /></span>
+              <div className="flex-1">
+                <h2 id="lock-title" className="text-xl font-bold">Your domains will be locked</h2>
+                <p id="lock-body" className="mt-3 text-sm leading-6" style={{ color: 'var(--muted)' }}>
+                  Once you start any test or submit any domain, you <strong style={{ color: 'var(--text)' }}>will not be able to edit your domains</strong>.
+                  Make sure your selection is final before you begin.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row">
+              <Link to="/recruitment/subdomain" className="action-secondary flex-1 justify-center">Change my domains</Link>
+              <button type="button" autoFocus onClick={() => setLockWarningSeen(true)} className="action flex-1 justify-center">I understand, continue</button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
