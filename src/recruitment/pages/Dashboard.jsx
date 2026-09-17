@@ -27,8 +27,11 @@ export default function Dashboard() {
           .select('*, subdomain_choices:candidate_subdomain_choices(*, subdomain:subdomains(*, domain:domains(*)))')
           .eq('id', user.id).maybeSingle(),
         // Deadlines are not readable from the table by candidates, so the schedule comes from the API.
+        // If that request fails, fall back to the start dates candidates can read directly.
         supabase.auth.getSession().then(({ data: { session } }) => fetch('/api/recruitment/schedule', { headers: { Authorization: `Bearer ${session?.access_token}` } }))
-          .then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
+          .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+          .catch(() => supabase.from('recruitment_settings').select('key,value').in('key', roundSteps.map((r) => r.settingKey))
+            .then(({ data }) => Object.fromEntries((data ?? []).map((row) => [row.key, row.value?.at ?? null])))),
         supabase.from('assessment_attempts').select('subdomain_id,admin_qualified').eq('candidate_id', user.id),
       ]).then(([profileResult, settingsResult, attemptsResult]) => {
         if (profileResult.error) setLoadError(profileResult.error.message);
