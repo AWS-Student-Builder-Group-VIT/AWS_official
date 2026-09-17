@@ -157,21 +157,19 @@ export default function App() {
         navigate('/recruitment');
       },
     },
-    user
-      ? {
-          label: 'Account',
-          ariaLabel: 'Manage your account',
-          link: '/account',
-          onClick: (e) => {
-            e?.preventDefault();
-            navigate('/account');
+    ...(user
+      ? [
+          {
+            label: 'Account',
+            ariaLabel: 'Manage your account',
+            link: '/account',
+            onClick: (e) => {
+              e?.preventDefault();
+              navigate('/account');
+            },
           },
-        }
-      : {
-          label: 'Login',
-          ariaLabel: 'Login to your account',
-          onClick: () => window.dispatchEvent(new Event('open-login-modal')),
-        },
+        ]
+      : []),
   ];
 
   const socialItems = [
