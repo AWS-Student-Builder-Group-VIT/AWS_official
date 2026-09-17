@@ -1150,6 +1150,7 @@ router.get('/round-1/written', async (req, res) => {
       answers: answers ?? [],
       domainStates,
       roundOneComplete: Object.values(domainStates).every((s) => s.final) && technicalComplete,
+      domainLocked: Boolean(profile.domain_locked),
       technical: {
         required: hasTechnical,
         complete: technicalComplete,
