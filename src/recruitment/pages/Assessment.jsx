@@ -24,7 +24,7 @@ function CameraPreviewBox({ stream }) {
   );
 }
 
-function ProctorFloatingBadge({ cameraStream, strikes, maxStrikes = 3 }) {
+function ProctorFloatingBadge({ cameraStream, strikes, maxStrikes = 3, hasScreenShare = false }) {
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -79,7 +79,7 @@ function ProctorFloatingBadge({ cameraStream, strikes, maxStrikes = 3 }) {
           </div>
         )}
         <div className="absolute bottom-1.5 left-1.5 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[9px] text-neutral-300">
-          🖥️ Screen Sharing On
+          {hasScreenShare ? '🖥️ Screen Sharing On' : '📱 Mobile Proctor Active'}
         </div>
       </div>
     </aside>
@@ -114,6 +114,10 @@ export default function Assessment() {
   const [strikes, setStrikes] = useState(0);
   const strikesRef = useRef(0);
   const [violationModal, setViolationModal] = useState(null);
+  const isMobileDevice = typeof navigator !== 'undefined' && (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    typeof navigator.mediaDevices?.getDisplayMedia !== 'function'
+  );
 
   const stopAllMediaStreams = useCallback(() => {
     if (cameraStreamRef.current) {
@@ -197,6 +201,10 @@ export default function Assessment() {
     setError('');
     setIsVerifying(true);
     try {
+      if (!navigator.mediaDevices?.getUserMedia || !navigator.mediaDevices?.getDisplayMedia) {
+        throw new Error('Your browser does not support proctoring hardware APIs. Please use Google Chrome, Edge, or Brave on a desktop computer.');
+      }
+
       // 1. Request Webcam
       const cam = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
@@ -205,23 +213,30 @@ export default function Assessment() {
       cameraStreamRef.current = cam;
       setCameraStream(cam);
 
-      // 2. Request Screen Share (prefer entire monitor)
-      const scr = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: 'monitor' },
-        audio: false,
-      });
-      screenStreamRef.current = scr;
-      setScreenStream(scr);
+      // 2. Request Desktop Screen Share
+      try {
+        const scr = await navigator.mediaDevices.getDisplayMedia({
+          video: { displaySurface: 'monitor' },
+          audio: false,
+        });
+        screenStreamRef.current = scr;
+        setScreenStream(scr);
 
-      // Detect if user terminates screen share early
-      scr.getVideoTracks()[0].onended = () => {
-        if (phase === 'test') {
-          registerViolation('Screen sharing was stopped. Full desktop sharing is mandatory.');
-        } else {
-          setProctorVerified(false);
-          setError('Screen sharing was ended. Please re-verify to proceed.');
+        // Detect if user terminates screen share early
+        scr.getVideoTracks()[0].onended = () => {
+          if (phase === 'test') {
+            registerViolation('Screen sharing was stopped. Full desktop sharing is mandatory.');
+          } else {
+            setProctorVerified(false);
+            setError('Screen sharing was ended. Please re-verify to proceed.');
+          }
+        };
+      } catch (scrErr) {
+        if (scrErr.name === 'NotAllowedError') {
+          throw new Error('Screen sharing permission was declined. Full desktop screen sharing is required.');
         }
-      };
+        throw scrErr;
+      }
 
       setProctorVerified(true);
     } catch (err) {
@@ -229,7 +244,7 @@ export default function Assessment() {
       stopAllMediaStreams();
       setProctorVerified(false);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setError('Camera and screen sharing permissions were denied. Both are strictly required for the proctored assessment.');
+        setError('Camera or screen sharing permissions were denied. Both are strictly required for this proctored assessment.');
       } else {
         setError(err.message || 'Unable to access camera or screen. Please check browser permissions.');
       }
@@ -425,6 +440,33 @@ export default function Assessment() {
     );
   }
 
+  if (isMobileDevice) {
+    return (
+      <main className="mx-auto max-w-lg p-6 text-center sm:p-10">
+        <p className="eyebrow">ROUND 1 / TECHNICAL</p>
+        <div
+          className="mx-auto my-6 flex h-20 w-20 items-center justify-center rounded-2xl border text-4xl shadow-xl"
+          style={{ borderColor: 'rgba(255,153,0,0.3)', background: 'rgba(255,153,0,0.1)' }}
+        >
+          💻
+        </div>
+        <h1 className="text-2xl font-bold sm:text-3xl">Please take this exam on a laptop or desktop</h1>
+        <p className="mt-4 text-sm leading-6 text-neutral-300">
+          This assessment requires webcam proctoring and full-screen sharing, which is not supported on mobile devices.
+        </p>
+        <p className="mt-3 text-sm font-semibold text-amber-400">
+          Please log in and attempt this examination using a laptop or desktop computer.
+        </p>
+
+        <div className="mt-8 flex justify-center">
+          <Link to="/recruitment/dashboard/round-1" className="action">
+            Back to Dashboard
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   if (phase === 'intro' || phase === 'resume') {
     const isResuming = phase === 'resume';
     return (
@@ -521,7 +563,7 @@ export default function Assessment() {
   return (
     <div className="flex min-h-screen select-none flex-col" style={{ background: 'var(--bg)' }}>
       {/* Floating Proctor Camera Widget */}
-      <ProctorFloatingBadge cameraStream={cameraStream} strikes={strikes} />
+      <ProctorFloatingBadge cameraStream={cameraStream} strikes={strikes} hasScreenShare={Boolean(screenStream)} />
 
       {/* Proctoring Violation Warning Modal */}
       {violationModal && (
