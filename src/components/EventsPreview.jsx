@@ -63,31 +63,31 @@ const events = [
     quiz: "Cloud Combat 3.0 — Case Study Activity",
   },
   {
-    day: "12th & 13th Sept",
-    title: "HackQuest : AWS Mystery Box Hackathon",
-    time: "24-Hour Hackathon · HDFC Bank",
-    icon: "military_tech",
-    color: "#FF9900",
-    points: [
-      "24-hour mystery box hackathon with HDFC Bank.",
-      "3 rounds: Ideation, Development with Point Shop games & Chaos Card, and Final Demo.",
-      "Judged by Mr. Ranjithkumar S — awards for top 3 & Best UI/UX.",
-    ],
-    quiz: "3-Round Hackathon Structure",
-  },
-  {
-    day: "19th Sept",
-    title: "AWS 106 : Cloud Foundations Bootcamp",
-    time: "Speaker: Mr. Vignesh Devan · Amazon",
+    day: "5th Sept",
+    title: "AWS Workshop : Cloud Foundations Bootcamp",
+    time: "Venue: KAMARAJ AUDITORIUM · Speaker: Mr. Vignesh Devan",
     icon: "terminal",
     color: "#FF9900",
     points: [
-      "Led by Mr. Vignesh Devan, Sr. Data Scientist at Amazon.",
+      "Venue: KAMARAJ AUDITORIUM | Led by Mr. Vignesh Devan, Sr. Data Scientist at Amazon.",
       "Core computing, server architecture, IaaS/PaaS/SaaS & AWS Console.",
       "Bridged Gen AI: LLMs, Bedrock, SageMaker, Amazon Q & AI Agents.",
       "Hands-on labs: Launching EC2, S3 bucket creation, IAM & security.",
     ],
     quiz: "Hands-on Console Labs",
+  },
+  {
+    day: "6th Sept",
+    title: "HackQuest : AWS Mystery Box Hackathon",
+    time: "Venue: SAROJINI NAIDU AUDITORIUM · HDFC Bank",
+    icon: "military_tech",
+    color: "#FF9900",
+    points: [
+      "Venue: SAROJINI NAIDU AUDITORIUM | Mystery box hackathon with HDFC Bank.",
+      "3 rounds: Ideation, Development with Point Shop games & Chaos Card, and Final Demo.",
+      "Judged by Mr. Ranjithkumar S — awards for top 3 & Best UI/UX.",
+    ],
+    quiz: "3-Round Hackathon Structure",
   },
 ];
 
