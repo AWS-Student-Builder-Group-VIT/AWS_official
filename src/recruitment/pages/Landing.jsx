@@ -31,7 +31,7 @@ export default function Landing() {
         <div>
           <p className="eyebrow">RECRUITMENT_2026 / APPLICATIONS_OPEN</p>
           <h1 className="mt-7 text-5xl font-bold leading-[.95] tracking-[-.055em] sm:text-7xl lg:text-[88px]">
-            BUILD.<br />LEARN.<br /><span style={{ color: 'var(--accent)' }}>DEPLOY.</span>
+            LEARN.<br />BUILD.<br /><span style={{ color: 'var(--accent)' }}>DEPLOY.</span>
           </h1>
           <p className="mt-8 max-w-xl text-lg leading-8" style={{ color: 'var(--muted)' }}>
             Join the builders and organizers who create the technology, planning, logistics, and live execution behind every AWS-SBG experience.

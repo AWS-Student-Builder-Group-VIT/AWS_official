@@ -203,7 +203,7 @@ export function WordleGame({ onComplete, onExit }) {
         </section>
       </main>
 
-      <footer className="footer-line"><span>Build // Learn // Deploy</span><span>System: AWS-SBG-WORDLE-V1</span></footer>
+      <footer className="footer-line"><span>Learn // Build // Deploy</span><span>System: AWS-SBG-WORDLE-V1</span></footer>
     </div>
     <div className={`toast ${error ? 'show' : ''}`} role="status" aria-live="assertive">{error}</div>
   </div>;

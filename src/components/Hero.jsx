@@ -105,7 +105,7 @@ export default function Hero() {
               containerClassName="!m-0"
               textClassName="font-headline-xl text-[75px] md:text-[112px] lg:text-[128px] whitespace-nowrap text-white tracking-widest leading-tight font-bold !text-left"
             >
-              BUILD.
+              LEARN.
             </ScrollFloat>
             <ScrollFloat
               animationDuration={1}
@@ -116,7 +116,7 @@ export default function Hero() {
               containerClassName="!m-0"
               textClassName="font-headline-xl text-[75px] md:text-[112px] lg:text-[128px] whitespace-nowrap text-white tracking-widest leading-tight font-bold !text-left"
             >
-              LEARN.
+              BUILD.
             </ScrollFloat>
             <ScrollFloat
               animationDuration={1}

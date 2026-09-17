@@ -5,11 +5,11 @@ Welcome to the official web application for the **AWS Student Builder Group at V
 ## Community & Socials
 
 - [GitHub](https://github.com/AWS-Student-Builder-Group-VIT)
-- [LinkedIn](https://www.linkedin.com/company/aws-student-builder-group-vit)
-- [Instagram](https://www.instagram.com/aws.sbg.vit)
+- [LinkedIn](https://www.linkedin.com/company/awsbuilder-vit/)
+- [Instagram](https://www.instagram.com/awsbuilder_vit)
 
 ---
-*Build, Learn, Deploy.*
+*Learn, Build, Deploy.*
 
 ## Local development
 
