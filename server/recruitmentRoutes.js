@@ -782,6 +782,7 @@ async function loadDossier(supabase, candidateId) {
     return {
       subdomainId: choice.subdomain_id,
       label: domain?.selection_mode === 'whole_domain' ? domain?.name : `${domain?.name ?? ''} / ${choice.subdomain?.name ?? ''}`,
+      domainId: domain?.id ?? null,
       domainName: domain?.name ?? '',
       technical,
       attempt,
