@@ -63,7 +63,7 @@ const events = [
     quiz: "Cloud Combat 3.0 — Case Study Activity",
   },
   {
-    day: "5th Sept",
+    day: "28th Aug",
     title: "AWS Workshop : Cloud Foundations Bootcamp",
     time: "Venue: KAMARAJ AUDITORIUM · Speaker: Mr. Vignesh Devan",
     icon: "terminal",
