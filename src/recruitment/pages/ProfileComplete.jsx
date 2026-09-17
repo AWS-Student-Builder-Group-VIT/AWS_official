@@ -5,16 +5,18 @@ import { useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { createClient } from '../lib/supabase.js';
 import { profileSchema } from '../lib/profile-schema.js';
+import { splitVitName } from '../lib/vit-identity.js';
 
 export default function ProfileComplete() {
   const navigate = useNavigate();
   const [supabase] = useState(createClient);
-  const [identity, setIdentity] = useState({ name: '', email: '' });
+  const [identity, setIdentity] = useState({ name: '', email: '', registrationNumber: null });
   const [error, setError] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm({ resolver: zodResolver(profileSchema) });
 
@@ -26,10 +28,9 @@ export default function ProfileComplete() {
       const { data: existing } = await supabase
         .from('candidate_profiles').select('profile_complete').eq('id', user.id).maybeSingle();
       if (existing?.profile_complete) { navigate('/recruitment/dashboard', { replace: true }); return; }
-      setIdentity({
-        name: user.user_metadata.full_name || user.user_metadata.name || '',
-        email: user.email || '',
-      });
+      const { name, registrationNumber } = splitVitName(user.user_metadata.full_name || user.user_metadata.name || '');
+      setIdentity({ name, email: user.email || '', registrationNumber });
+      if (registrationNumber) setValue('registration_number', registrationNumber, { shouldValidate: true });
     });
   }, []);
 
@@ -63,10 +64,12 @@ export default function ProfileComplete() {
     navigate('/recruitment/login', { replace: true });
   }
 
-  const field = (name, label) => (
+  const field = (name, label, { readOnly = false, hint = '' } = {}) => (
     <label key={name}>
       <span className="label">{label}</span>
-      <input className="field" {...register(name)} aria-invalid={Boolean(errors[name])} />
+      <input className="field" {...register(name)} readOnly={readOnly} aria-invalid={Boolean(errors[name])}
+        style={readOnly ? { opacity: 0.7, cursor: 'not-allowed' } : undefined} />
+      {hint && !errors[name] && <span className="mt-1 block text-xs text-[var(--dim)]">{hint}</span>}
       {errors[name] && <span className="mt-1 block text-xs text-[var(--error)]">{errors[name]?.message}</span>}
     </label>
   );
@@ -104,7 +107,9 @@ export default function ProfileComplete() {
           <section>
             <h2 className="eyebrow mb-5">01 / ACADEMIC_PROFILE</h2>
             <div className="grid gap-5 sm:grid-cols-2">
-              {field('registration_number', 'Registration number')}
+              {field('registration_number', 'Registration number', identity.registrationNumber
+                ? { readOnly: true, hint: 'Taken from your VIT Google account.' }
+                : {})}
               {field('phone', 'Phone number')}
               <label>
                 <span className="label">Year</span>

@@ -45,7 +45,7 @@ export default function Landing() {
           <CloudCog size={32} style={{ color: 'var(--accent)' }} />
           <p className="eyebrow mt-10">SYSTEM_STATUS</p>
           <dl className="mt-4 divide-y font-mono text-xs" style={{ borderColor: 'var(--border)' }}>
-            {[['APPLICATIONS','OPEN'],['COST TO APPLY','₹0 / FREE'],['DOMAINS','04 ACTIVE'],['SUBDOMAINS','19 ACTIVE']].map(([k,v]) => (
+            {[['APPLICATIONS','OPEN'],['COST TO APPLY','₹0 / FREE'],['DOMAINS','04 ACTIVE']].map(([k,v]) => (
               <div key={k} className="flex justify-between py-4">
                 <dt style={{ color: 'var(--muted)' }}>{k}</dt>
                 <dd style={{ color: k === 'APPLICATIONS' ? 'var(--accent)' : 'var(--text)' }}>{v}</dd>

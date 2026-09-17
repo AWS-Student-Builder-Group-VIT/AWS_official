@@ -10,6 +10,7 @@ import { Router } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { randomInt, timingSafeEqual } from 'node:crypto';
 import { validateProfilePayload } from '../src/recruitment/lib/profile-schema.js';
+import { splitVitName } from '../src/recruitment/lib/vit-identity.js';
 import { isAssessmentAnswerCorrect } from '../src/recruitment/lib/assessment-grading.js';
 import { isAllowedEmail, parseAllowedDomains } from '../src/recruitment/lib/email-domains.js';
 import { chunk, fetchAll } from '../src/recruitment/lib/fetch-all.js';
@@ -161,14 +162,19 @@ router.post('/profile/complete', async (req, res) => {
   const { user, supabase } = ctx;
   if (!user.email) return res.status(401).json({ error: 'Your signed-in account does not provide an email address.' });
 
-  const parsed = validateProfilePayload(req.body ?? null);
+  // VIT accounts carry the registration number in the Google name; when it is
+  // there it wins over whatever was typed, so nobody can claim someone else's.
+  const metadata = user.user_metadata ?? {};
+  const identity = splitVitName(metadata.full_name || metadata.name || user.email.split('@')[0]);
+  const body = { ...(req.body ?? {}) };
+  if (identity.registrationNumber) body.registration_number = identity.registrationNumber;
+
+  const parsed = validateProfilePayload(body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid profile.' });
 
-  const metadata = user.user_metadata ?? {};
-  const fullName = String(metadata.full_name || metadata.name || user.email.split('@')[0]);
   const { data, error } = await supabase.from('candidate_profiles').upsert({
     id: user.id,
-    full_name: fullName,
+    full_name: identity.name,
     email: user.email,
     ...parsed.data,
     profile_complete: true,
