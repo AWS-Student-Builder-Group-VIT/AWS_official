@@ -29,7 +29,8 @@ const allowedOrigins = [
   'http://localhost:5176',
   'http://localhost:3000',
   'https://aws-official.onrender.com',
-  process.env.CORS_ORIGIN,
+  // Comma-separated, e.g. "https://example.com,https://www.example.com"
+  ...(process.env.CORS_ORIGIN ?? '').split(',').map((o) => o.trim()),
 ].filter(Boolean);
 
 app.use(cors({
