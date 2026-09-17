@@ -11,6 +11,7 @@ import { createClient } from '@supabase/supabase-js';
 import { randomInt, timingSafeEqual } from 'node:crypto';
 import { validateProfilePayload } from '../src/recruitment/lib/profile-schema.js';
 import { splitVitName } from '../src/recruitment/lib/vit-identity.js';
+import { roundOneOutcome } from '../src/recruitment/lib/round-one-decision.js';
 import { isAssessmentAnswerCorrect } from '../src/recruitment/lib/assessment-grading.js';
 import { isAllowedEmail, parseAllowedDomains } from '../src/recruitment/lib/email-domains.js';
 import { chunk, fetchAll } from '../src/recruitment/lib/fetch-all.js';
@@ -732,6 +733,113 @@ router.post('/admin/assessments/bulk-qualify', async (req, res) => {
     }
 
     return res.json({ considered: considered.length, qualified, notQualified, skipped });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Everything the full-page dossier shows for one candidate. */
+async function loadDossier(supabase, candidateId) {
+  const [profile, attempts, assignments, bookings, results, answers] = await Promise.all([
+    supabase.from('candidate_profiles')
+      .select('*, subdomain_choices:candidate_subdomain_choices(subdomain_id,priority,admin_qualified,subdomain:subdomains(id,name,domain:domains(id,name,slug,selection_mode)))')
+      .eq('id', candidateId).maybeSingle(),
+    supabase.from('assessment_attempts')
+      .select('id,subdomain_id,started_at,submitted_at,auto_submitted,score,total_marks,status,admin_qualified,results_released_at')
+      .eq('candidate_id', candidateId),
+    supabase.from('project_assignments')
+      .select('id,subdomain_id,status,assigned_at,project:projects(code,title), submission:project_submissions(github_url,notes,submitted_at,evaluation:project_evaluations(*))')
+      .eq('candidate_id', candidateId).order('assigned_at'),
+    supabase.from('interview_bookings')
+      .select('*, slot:interview_slots(slot_time, date:interview_dates(date, location, meeting_link))')
+      .eq('candidate_id', candidateId),
+    supabase.from('final_results').select('*').eq('candidate_id', candidateId),
+    supabase.from('candidate_written_answers')
+      .select('domain_id,question_id,answer_text,submission_links,is_final,question:written_application_questions(prompt),domain:domains(name,slug)')
+      .eq('candidate_id', candidateId),
+  ]);
+  for (const r of [profile, attempts, assignments, bookings, results, answers]) {
+    if (r.error) throw new Error(r.error.message);
+  }
+  if (!profile.data) return null;
+
+  const attemptBySubdomain = new Map((attempts.data ?? []).map((a) => [a.subdomain_id, a]));
+  const tracks = [...(profile.data.subdomain_choices ?? [])].sort((a, b) => a.priority - b.priority).map((choice) => {
+    const domain = choice.subdomain?.domain;
+    const technical = domain?.slug === 'technical';
+    const attempt = technical ? attemptBySubdomain.get(choice.subdomain_id) ?? null : null;
+    return {
+      subdomainId: choice.subdomain_id,
+      label: domain?.selection_mode === 'whole_domain' ? domain?.name : `${domain?.name ?? ''} / ${choice.subdomain?.name ?? ''}`,
+      domainName: domain?.name ?? '',
+      technical,
+      attempt,
+      // Technical tracks are decided on their assessment; other domains on the choice.
+      decision: technical ? attempt?.admin_qualified ?? null : choice.admin_qualified ?? null,
+    };
+  });
+  const { subdomain_choices, ...rest } = profile.data;
+  return {
+    profile: rest,
+    tracks,
+    assignments: assignments.data ?? [],
+    bookings: bookings.data ?? [],
+    result: results.data?.[0] ?? null,
+    writtenAnswers: answers.data ?? [],
+  };
+}
+
+// GET /api/recruitment/admin/candidates/:id
+router.get('/admin/candidates/:id', async (req, res) => {
+  const ctx = await requireAdmin(req, res);
+  if (!ctx) return;
+  if (!UUID_PATTERN.test(req.params.id)) return res.status(400).json({ error: 'Invalid candidate id.' });
+  try {
+    const dossier = await loadDossier(ctx.supabase, req.params.id);
+    if (!dossier) return res.status(404).json({ error: 'Candidate not found.' });
+    return res.json(dossier);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/recruitment/admin/candidates/:id/qualify  { subdomainId, qualified: true | false | null }
+// Records a Round 1 decision for one domain/track, then derives the
+// candidate's overall Round 1 status from all of their tracks.
+router.post('/admin/candidates/:id/qualify', async (req, res) => {
+  const ctx = await requireAdmin(req, res);
+  if (!ctx) return;
+  const { supabase } = ctx;
+  const candidateId = req.params.id;
+  const { subdomainId, qualified } = req.body ?? {};
+  if (!UUID_PATTERN.test(candidateId) || !UUID_PATTERN.test(String(subdomainId ?? ''))) {
+    return res.status(400).json({ error: 'Valid candidate id and subdomainId are required.' });
+  }
+  if (![true, false, null].includes(qualified)) return res.status(400).json({ error: 'qualified must be true, false or null.' });
+  try {
+    const before = await loadDossier(supabase, candidateId);
+    if (!before) return res.status(404).json({ error: 'Candidate not found.' });
+    const track = before.tracks.find((t) => t.subdomainId === subdomainId);
+    if (!track) return res.status(404).json({ error: 'The candidate did not apply to this domain.' });
+
+    if (track.technical) {
+      if (!track.attempt) return res.status(409).json({ error: 'This candidate has not taken the assessment for this track yet.' });
+      const { error } = await supabase.from('assessment_attempts').update({ admin_qualified: qualified }).eq('id', track.attempt.id);
+      if (error) return res.status(500).json({ error: error.message });
+    } else {
+      const { error } = await supabase.from('candidate_subdomain_choices').update({ admin_qualified: qualified })
+        .eq('candidate_id', candidateId).eq('subdomain_id', subdomainId);
+      if (error) return res.status(500).json({ error: error.message });
+    }
+
+    const decisions = before.tracks.map((t) => (t.subdomainId === subdomainId ? qualified : t.decision));
+    const { error: profileError } = await supabase.from('candidate_profiles')
+      .update(roundOneOutcome(decisions, before.profile.status)).eq('id', candidateId);
+    if (profileError) return res.status(500).json({ error: profileError.message });
+
+    return res.json(await loadDossier(supabase, candidateId));
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

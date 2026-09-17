@@ -26,6 +26,7 @@ import CandidateResult from './pages/CandidateResult.jsx';
 import AdminLogin from './pages/AdminLogin.jsx';
 import AdminOverview from './pages/AdminOverview.jsx';
 import AdminCandidates from './pages/AdminCandidates.jsx';
+import CandidateDossier from './pages/CandidateDossier.jsx';
 import AdminAssessments from './pages/AdminAssessments.jsx';
 import AdminProjects from './pages/AdminProjects.jsx';
 import AdminInterviews from './pages/AdminInterviews.jsx';
@@ -62,6 +63,7 @@ export default function Recruitment() {
           <Route index element={<AdminOverview />} />
           <Route path="operations" element={<AdminOperations />} />
           <Route path="candidates" element={<AdminCandidates />} />
+          <Route path="candidates/:id" element={<CandidateDossier />} />
           <Route path="assessments" element={<AdminAssessments />} />
           <Route path="projects" element={<AdminProjects />} />
           <Route path="interviews" element={<AdminInterviews />} />
