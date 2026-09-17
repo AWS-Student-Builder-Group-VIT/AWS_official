@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '../lib/supabase.js';
+import { fetchAll } from '../lib/fetch-all.js';
 
 export default function AdminResults() {
   const [supabase] = useState(createClient);
@@ -10,12 +11,12 @@ export default function AdminResults() {
   const [feedbackMap, setFeedbackMap] = useState({});
 
   const load = async () => {
-    const { data } = await supabase
+    const list = await fetchAll(() => supabase
       .from('candidate_profiles')
       .select('*, domain:domains!domain_id(*), final_result:final_results(*)')
       .in('status', ['round_2', 'selected', 'waitlisted', 'rejected'])
-      .order('full_name');
-    const list = data ?? [];
+      .order('full_name')
+      .order('id'));
     setCandidates(list);
     const rm = {};
     const fm = {};

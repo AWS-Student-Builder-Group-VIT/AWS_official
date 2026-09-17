@@ -5,7 +5,7 @@ import { statusLabel, statusColor, formatDate } from '../lib/utils.js';
 
 const roundSteps = [
   { key: 'round_0', settingKey: 'round_0_start_at', label: 'Application', desc: 'Written domain responses and Technical assessment', href: '/recruitment/dashboard/round-1' },
-  { key: 'round_1', settingKey: 'round_1_start_at', label: 'AWS Project', desc: 'A project track for each selected subdomain', href: '/recruitment/round-1' },
+  { key: 'round_1', settingKey: 'round_1_start_at', label: 'AWS Project', desc: 'A project for each selected Technical track', href: '/recruitment/round-2' },
   { key: 'round_2', settingKey: 'round_2_start_at', label: 'Interview', desc: 'Interview scheduling by selected subdomain', href: '/recruitment/interview' },
 ];
 
@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [supabase] = useState(createClient);
   const [profile, setProfile] = useState(null);
   const [schedule, setSchedule] = useState({});
+  const [attempts, setAttempts] = useState([]);
   const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -27,13 +28,15 @@ export default function Dashboard() {
           .eq('id', user.id).maybeSingle(),
         supabase.from('recruitment_settings')
           .select('key,value')
-          .in('key', roundSteps.map((r) => r.settingKey)),
-      ]).then(([profileResult, settingsResult]) => {
+          .in('key', [...roundSteps.map((r) => r.settingKey), 'round_1_deadline_at']),
+        supabase.from('assessment_attempts').select('subdomain_id,admin_qualified').eq('candidate_id', user.id),
+      ]).then(([profileResult, settingsResult, attemptsResult]) => {
         if (profileResult.error) setLoadError(profileResult.error.message);
         setProfile(profileResult.data);
         const next = {};
         settingsResult.data?.forEach((row) => { next[row.key] = row.value?.at ?? null; });
         setSchedule(next);
+        setAttempts(attemptsResult.data ?? []);
         setLoading(false);
       });
     });
@@ -71,6 +74,17 @@ export default function Dashboard() {
     if (key === 'round_2') return profile.interview_status;
     return 'not_started';
   };
+
+  // Per-track decisions are only shown once Round 1 results are out.
+  const resultsOut = profile.round_0_status === 'qualified' || profile.round_0_status === 'not_qualified';
+  const trackBadge = (subdomainId) => {
+    const decision = resultsOut ? attempts.find((a) => a.subdomain_id === subdomainId)?.admin_qualified : null;
+    if (decision === true) return { text: 'Qualified', color: 'var(--success)' };
+    if (decision === false) return { text: 'Not qualified', color: 'var(--error)' };
+    return { text: 'Applied', color: 'var(--accent)' };
+  };
+  const roundTwoDeadline = schedule.round_1_deadline_at ?? null;
+  const roundTwoClosed = Boolean(roundTwoDeadline && now >= new Date(roundTwoDeadline).getTime());
 
   return (
     <div className="mx-auto max-w-4xl p-6">
@@ -130,13 +144,21 @@ export default function Dashboard() {
       <div className="space-y-4">
         {roundSteps.map(({ key, settingKey, label, desc, href }) => {
           const st = statusFor(key);
-          const isActive = st === 'in_progress' || st === 'not_started';
+          // Past the Round 2 deadline nobody can start or change a project.
+          const isActive = (st === 'in_progress' || st === 'not_started') && !(key === 'round_1' && roundTwoClosed);
           const startsAt = schedule[settingKey] ?? null;
           const hasStarted = Boolean(startsAt && now >= new Date(startsAt).getTime());
+          const allTracks = [...(profile.subdomain_choices ?? [])].sort((a, b) => a.priority - b.priority);
+          const technicalTracks = allTracks.filter((c) => c.subdomain?.domain?.slug === 'technical');
+          // Non-technical applicants skip the project round entirely.
+          const projectRoundSkipped = key === 'round_1' && technicalTracks.length === 0;
           const eligible = key === 'round_0'
-            || (key === 'round_1' ? profile.round_0_status === 'qualified' || profile.round_1_status !== 'not_started'
-              : profile.round_1_status === 'qualified' || profile.interview_status !== 'not_started');
-          const tracks = [...(profile.subdomain_choices ?? [])].sort((a, b) => a.priority - b.priority);
+            || (key === 'round_1'
+              ? profile.round_0_status === 'qualified' || profile.round_1_status !== 'not_started'
+              : technicalTracks.length
+                ? profile.round_1_status === 'qualified' || profile.interview_status !== 'not_started'
+                : profile.round_0_status === 'qualified' || profile.interview_status !== 'not_started');
+          const tracks = key === 'round_1' ? technicalTracks : allTracks;
           return (
             <section key={key} className="rounded-xl border p-5" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
               <div className="flex items-start gap-5">
@@ -149,15 +171,25 @@ export default function Dashboard() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium" style={{ color: 'var(--text)' }}>Round {Number(key.slice(-1)) + 1} · {label}</p>
-                  <p className="text-sm" style={{ color: 'var(--muted)' }}>{desc}</p>
+                  <p className="text-sm" style={{ color: 'var(--muted)' }}>
+                    {projectRoundSkipped ? 'Technical tracks only — your domains go straight to interview' : desc}
+                  </p>
                 </div>
                 <div className="shrink-0 text-right">
+                  {projectRoundSkipped ? (
+                    <p className="text-sm font-medium" style={{ color: 'var(--muted)' }}>Not required</p>
+                  ) : (<>
                   <p className={`text-sm font-medium ${statusColor[st]}`}>{statusLabel[st]}</p>
                   {hasStarted
-                    ? (isActive && eligible && profile.subdomain_id && (
+                    ? (isActive && eligible && profile.subdomain_id ? (
                       <Link to={href} className="action mt-2 !min-h-9 !px-4">
                         {st === 'in_progress' ? 'Continue →' : 'Start now →'}
                       </Link>
+                    ) : key === 'round_1' && eligible && (st === 'submitted' || st === 'in_progress' || roundTwoClosed) && (
+                      <div className="mt-2">
+                        {roundTwoClosed && <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: 'var(--error)' }}>Deadline passed</p>}
+                        {st !== 'not_started' && <Link to={href} className="mt-1 inline-block text-xs hover:underline" style={{ color: 'var(--muted)' }}>View submission →</Link>}
+                      </div>
                     ))
                     : (
                       <div className="mt-2">
@@ -167,13 +199,20 @@ export default function Dashboard() {
                         </p>
                       </div>
                     )}
+                  </>)}
                 </div>
               </div>
+              {projectRoundSkipped && (
+                <p className="mt-4 border-l-2 pl-3 text-sm leading-6" style={{ borderColor: 'var(--accent)', color: 'var(--muted)' }}>
+                  There is no project round for your domains. Once you are declared qualified in Round 1,
+                  you will get a direct interview call when your interview date is allotted.
+                </p>
+              )}
               {tracks.length > 0 && (
                 <div className={`mt-4 grid gap-2 ${tracks.length > 1 ? 'sm:grid-cols-2' : ''}`}>
                   {tracks.map((track) => (
                     <div key={track.subdomain_id} className="border p-3" style={{ borderColor: 'var(--border)', background: 'rgba(0,0,0,.3)' }}>
-                      <p className="font-mono text-[10px] uppercase tracking-widest" style={{ color: 'var(--accent)' }}>Selection</p>
+                      <p className="font-mono text-[10px] uppercase tracking-widest" style={{ color: trackBadge(track.subdomain_id).color }}>{trackBadge(track.subdomain_id).text}</p>
                       <p className="mt-1 text-sm" style={{ color: 'var(--text)' }}>
                         {track.subdomain?.domain?.selection_mode === 'whole_domain'
                           ? track.subdomain?.domain?.name
@@ -183,7 +222,7 @@ export default function Dashboard() {
                   ))}
                 </div>
               )}
-              {hasStarted && !eligible && (
+              {hasStarted && !eligible && !projectRoundSkipped && (
                 <p className="mt-4 border-l-2 pl-3 text-xs" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>
                   Complete and qualify in the previous round to unlock this round.
                 </p>

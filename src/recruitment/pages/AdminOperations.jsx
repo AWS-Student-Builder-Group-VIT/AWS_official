@@ -6,7 +6,7 @@ import { formatDateTime } from '../lib/utils.js';
 import { candidateCsvRow } from '../lib/admin-export.js';
 import QuestionBank from './QuestionBank.jsx';
 
-const emptyPayload = { admin: { id: '', email: '', name: '', role: '' }, candidates: [], attempts: [], assignments: [], submissions: [], bookings: [], results: [], domains: [], slots: [], written_questions: [], written_rules: [], written_answers: [], synced_at: '' };
+const emptyPayload = { admin: { id: '', email: '', name: '', role: '' }, candidates: [], attempts: [], assignments: [], submissions: [], bookings: [], results: [], domains: [], slots: [], written_questions: [], written_rules: [], subdomain_lookup: {}, synced_at: '' };
 const stageOrder = { selected: 8, waitlisted: 7, round_2: 6, round_1: 5, round_0: 4, pending: 3, rejected: 1 };
 
 function humanize(value) { return value ? value.replaceAll('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase()) : 'Not started'; }
@@ -30,6 +30,9 @@ export default function AdminOperations() {
   const [selectedId, setSelectedId] = useState(null);
   const [showQuestionBank, setShowQuestionBank] = useState(false);
   const [releasingId, setReleasingId] = useState(null);
+  // Written answers are loaded per candidate when a dossier opens, not in bulk.
+  const [answersByCandidate, setAnswersByCandidate] = useState({});
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true); else setLoading(true);
@@ -40,7 +43,16 @@ export default function AdminOperations() {
     const response = await fetch('/api/recruitment/admin/operations', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
     const result = await response.json();
     if (!response.ok) setError(result.error ?? 'Unable to load operations data.');
-    else setPayload(result);
+    else {
+      // Choices arrive as ids only; attach their subdomain and domain once here
+      // so the rest of the console can keep reading choice.subdomain.domain.
+      const lookup = result.subdomain_lookup ?? {};
+      for (const candidate of result.candidates ?? []) {
+        for (const choice of candidate.subdomain_choices ?? []) choice.subdomain = lookup[choice.subdomain_id] ?? null;
+      }
+      setPayload(result);
+      setAnswersByCandidate({});
+    }
     setLoading(false);
     setRefreshing(false);
   }, [supabase, navigate]);
@@ -50,14 +62,14 @@ export default function AdminOperations() {
   const records = useMemo(() => payload.candidates.map((profile) => {
     const assignments = payload.assignments.filter((item) => item.candidate_id === profile.id);
     const assignmentIds = new Set(assignments.map((item) => item.id));
-    return { profile, attempt: payload.attempts.find((item) => item.candidate_id === profile.id), assignments, submissions: payload.submissions.filter((item) => assignmentIds.has(item.assignment_id)), bookings: payload.bookings.filter((item) => item.candidate_id === profile.id), writtenAnswers: payload.written_answers.filter((item) => item.candidate_id === profile.id), result: payload.results.find((item) => item.candidate_id === profile.id) };
-  }), [payload]);
+    return { profile, attempt: payload.attempts.find((item) => item.candidate_id === profile.id), assignments, submissions: payload.submissions.filter((item) => assignmentIds.has(item.assignment_id)), bookings: payload.bookings.filter((item) => item.candidate_id === profile.id), writtenAnswers: answersByCandidate[profile.id] ?? null, result: payload.results.find((item) => item.candidate_id === profile.id) };
+  }), [payload, answersByCandidate]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     const list = records.filter((record) => {
       const choices = record.profile.subdomain_choices ?? [];
-      const searchable = [record.profile.full_name, record.profile.registration_number, record.profile.email, record.profile.phone, ...choices.map(choiceLabel), ...record.writtenAnswers.flatMap((a) => [a.answer_text, a.question?.prompt])].filter(Boolean).join(' ').toLowerCase();
+      const searchable = [record.profile.full_name, record.profile.registration_number, record.profile.email, record.profile.phone, ...choices.map(choiceLabel)].filter(Boolean).join(' ').toLowerCase();
       const domainMatch = domainIds.length === 0 || choices.some((c) => c.subdomain?.domain_id && domainIds.includes(c.subdomain.domain_id));
       const subdomainMatch = !subdomainId || choices.some((c) => c.subdomain_id === subdomainId);
       const pct = scorePercent(record.attempt);
@@ -125,9 +137,48 @@ export default function AdminOperations() {
     setReleasingId(null);
   }
 
-  function exportCsv() {
+  const adminFetch = useCallback(async (path) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Administrator session expired.');
+    const response = await fetch(path, { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error ?? `Request failed (HTTP ${response.status}).`);
+    return result;
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!selectedId || answersByCandidate[selectedId]) return;
+    let cancelled = false;
+    adminFetch(`/api/recruitment/admin/written-answers?candidate_id=${encodeURIComponent(selectedId)}`)
+      .then((result) => { if (!cancelled) setAnswersByCandidate((curr) => ({ ...curr, [selectedId]: result.answers ?? [] })); })
+      .catch((err) => { if (!cancelled) setError(err.message); });
+    return () => { cancelled = true; };
+  }, [selectedId, answersByCandidate, adminFetch]);
+
+  async function exportCsv() {
+    setExporting(true);
+    setError('');
+    // Every answer, a page at a time, so no single response grows too large.
+    const allAnswers = {};
+    try {
+      for (let offset = 0; offset != null;) {
+        const page = await adminFetch(`/api/recruitment/admin/written-answers?offset=${offset}&limit=400`);
+        for (const answer of page.answers ?? []) (allAnswers[answer.candidate_id] ??= []).push(answer);
+        offset = page.nextOffset;
+      }
+    } catch (err) {
+      setError(`Export failed: ${err.message}`);
+      setExporting(false);
+      return;
+    }
+    exportRows(allAnswers);
+    setExporting(false);
+  }
+
+  function exportRows(allAnswers) {
     const quote = (v) => `"${String(v ?? '').replaceAll('"', '""')}"`;
-    const rows = filtered.map(({ profile, attempt, assignments, bookings, result, writtenAnswers }) => {
+    const rows = filtered.map(({ profile, attempt, assignments, bookings, result }) => {
+      const writtenAnswers = allAnswers[profile.id] ?? [];
       const exportRow = candidateCsvRow({ profile, choices: [...(profile.subdomain_choices ?? [])].sort((a, b) => a.priority - b.priority).map(choiceLabel), writtenAnswers: writtenAnswers.map((a) => ({ domain: a.domain?.name ?? 'Domain', prompt: a.question?.prompt ?? 'Question', answer: a.answer_text, links: a.submission_links })) });
       return [exportRow.registration_number, exportRow.full_name, profile.email, profile.phone, profile.year, profile.branch, exportRow.choices, exportRow.written_responses, profile.status, attempt?.score, attempt?.total_marks, assignments.map((a) => a.project?.code).join(' | '), bookings.map((b) => `${b.slot?.date?.date ?? ''} ${b.slot?.slot_time ?? ''}`).join(' | '), result?.result];
     });
@@ -177,7 +228,7 @@ export default function AdminOperations() {
         <span><strong style={{ color: 'var(--accent)' }}>{filtered.length}</strong> OF {records.length} CANDIDATES DISPLAYED</span>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setShowQuestionBank(true)} className="inline-flex items-center gap-2 border px-3 py-2 transition" style={{ borderColor: 'rgba(255,153,0,.6)', background: 'rgba(255,153,0,.1)', color: 'var(--accent)' }}><FilePlus2 size={13} />QUESTION BANK</button>
-          <button onClick={exportCsv} className="inline-flex items-center gap-2 border px-3 py-2 transition" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}><Download size={13} />EXPORT CSV</button>
+          <button onClick={exportCsv} disabled={exporting} className="inline-flex items-center gap-2 border px-3 py-2 transition disabled:opacity-50" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}><Download size={13} />{exporting ? 'EXPORTING…' : 'EXPORT CSV'}</button>
           <button onClick={() => load(true)} disabled={refreshing} className="inline-flex items-center gap-2 border px-3 py-2 transition disabled:opacity-50" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}><RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />SYNC LIVE</button>
         </div>
       </div>
@@ -203,7 +254,7 @@ export default function AdminOperations() {
         {/* Candidate table */}
         <main className="min-w-0 overflow-hidden border-r" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center justify-between border-b px-3 py-2 font-mono text-[10px]" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-            <span style={{ color: 'var(--muted)' }}>INSTANT CANDIDATE BUFFER</span>
+            <span className="relative block w-full max-w-xs"><Search size={13} className="absolute left-2 top-1.5" style={{ color: 'var(--dim)' }} /><input type="search" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search candidates" className="w-full border py-1 pl-7 pr-2" style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text)' }} placeholder="Search name, reg no, email, phone…" /></span>
             <label className="flex items-center gap-2"><span style={{ color: 'var(--dim)' }}>SORT:</span>
               <select value={sort} onChange={(e) => setSort(e.target.value)} className="border px-2 py-1" style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text)' }}>
                 {[['newest','Newest'],['score_desc','Score ↓'],['score_asc','Score ↑'],['name','Name'],['status','Stage']].map(([v,l]) => <option key={v} value={v}>{l}</option>)}
@@ -290,7 +341,7 @@ function CandidateInspector({ record, onClose, releasing, onReleaseMarks, onDele
         </Section>
 
         <Section title="Round 1 · Written responses">
-          <div className="space-y-3">{writtenAnswers.length ? writtenAnswers.map((answer) => <article key={`${answer.domain_id}:${answer.question_id}`} className="border p-3" style={{ borderColor: 'var(--border)', background: 'rgba(0,0,0,.4)' }}><div className="flex justify-between gap-3"><p className="font-mono text-[9px]" style={{ color: 'var(--accent)' }}>{answer.domain?.name ?? 'Domain'}</p><span className="font-mono text-[9px]" style={{ color: answer.is_final ? 'var(--success)' : 'var(--warning)' }}>{answer.is_final ? 'FINAL' : 'DRAFT'}</span></div><h4 className="mt-2 text-xs font-semibold">{answer.question?.prompt ?? 'Question'}</h4><p className="mt-2 whitespace-pre-wrap text-xs leading-5" style={{ color: 'var(--muted)' }}>{answer.answer_text || 'No written explanation.'}</p>{answer.submission_links?.length > 0 && <div className="mt-2 space-y-1">{answer.submission_links.map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="block break-all text-xs hover:underline" style={{ color: 'var(--accent)' }}>{link} ↗</a>)}</div>}</article>) : <p className="text-xs" style={{ color: 'var(--muted)' }}>No written responses saved.</p>}</div>
+          <div className="space-y-3">{writtenAnswers == null ? <p className="text-xs" style={{ color: 'var(--muted)' }}>Loading written responses…</p> : writtenAnswers.length ? writtenAnswers.map((answer) => <article key={`${answer.domain_id}:${answer.question_id}`} className="border p-3" style={{ borderColor: 'var(--border)', background: 'rgba(0,0,0,.4)' }}><div className="flex justify-between gap-3"><p className="font-mono text-[9px]" style={{ color: 'var(--accent)' }}>{answer.domain?.name ?? 'Domain'}</p><span className="font-mono text-[9px]" style={{ color: answer.is_final ? 'var(--success)' : 'var(--warning)' }}>{answer.is_final ? 'FINAL' : 'DRAFT'}</span></div><h4 className="mt-2 text-xs font-semibold">{answer.question?.prompt ?? 'Question'}</h4><p className="mt-2 whitespace-pre-wrap text-xs leading-5" style={{ color: 'var(--muted)' }}>{answer.answer_text || 'No written explanation.'}</p>{answer.submission_links?.length > 0 && <div className="mt-2 space-y-1">{answer.submission_links.map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="block break-all text-xs hover:underline" style={{ color: 'var(--accent)' }}>{link} ↗</a>)}</div>}</article>) : <p className="text-xs" style={{ color: 'var(--muted)' }}>No written responses saved.</p>}</div>
         </Section>
 
         <Section title="Round 1 · Technical assessment">

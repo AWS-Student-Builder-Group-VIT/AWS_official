@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '../lib/supabase.js';
+import { fetchAll } from '../lib/fetch-all.js';
 import { statusLabel, statusColor, formatDate } from '../lib/utils.js';
 
 export default function AdminCandidates() {
@@ -14,15 +15,17 @@ export default function AdminCandidates() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    supabase
+    fetchAll(() => supabase
       .from('candidate_profiles')
       .select('*, subdomain_choices:candidate_subdomain_choices(*, subdomain:subdomains(*, domain:domains(*)))')
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setCandidates(data ?? []);
-        setFiltered(data ?? []);
-        setLoading(false);
-      });
+      .order('id'))
+      .then((data) => {
+        setCandidates(data);
+        setFiltered(data);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {

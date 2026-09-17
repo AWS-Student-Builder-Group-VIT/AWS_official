@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckSquare, Square, Check, X, Filter, Send } from 'lucide-react';
 import { createClient } from '../lib/supabase.js';
+import { fetchAll } from '../lib/fetch-all.js';
 import { formatDateTime } from '../lib/utils.js';
 
 export default function AdminAssessments() {
@@ -17,12 +18,17 @@ export default function AdminAssessments() {
   const [bulkResult, setBulkResult] = useState('');
 
   const load = async () => {
-    const { data } = await supabase
-      .from('assessment_attempts')
-      .select('*, candidate:candidate_profiles(full_name,registration_number), domain:domains(name), subdomain:subdomains(name)')
-      .eq('status', 'submitted')
-      .order('submitted_at', { ascending: false });
-    setAttempts(data ?? []);
+    try {
+      const data = await fetchAll(() => supabase
+        .from('assessment_attempts')
+        .select('*, candidate:candidate_profiles(full_name,registration_number), domain:domains(name), subdomain:subdomains(name)')
+        .eq('status', 'submitted')
+        .order('submitted_at', { ascending: false })
+        .order('id'));
+      setAttempts(data);
+    } catch (err) {
+      setError(err.message);
+    }
     setLoading(false);
   };
 
