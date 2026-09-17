@@ -12,7 +12,6 @@ import Blog from './components/Blog';
 import Footer from './components/Footer';
 import LoginModal from './components/LoginModal';
 import StaggeredMenu from './components/StaggeredMenu';
-import MacbookScrollSection from './components/MacbookScrollSection';
 import awsIcon from './assets/aws_icon.jpeg';
 
 import { checkSessionValidity, getUser, logout } from './utils/auth';
@@ -56,7 +55,6 @@ function HomePage() {
     <main>
       <Hero />
       <Marquee />
-      <MacbookScrollSection />
       <CoreProtocols />
       <WhyJoinUs />
       <TheBuilders />
