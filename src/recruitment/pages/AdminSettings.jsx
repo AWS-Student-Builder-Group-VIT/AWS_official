@@ -5,11 +5,13 @@ import { createClient } from '../lib/supabase.js';
 const scheduleFields = [
   { key: 'application_deadline', label: 'Application deadline', help: 'Students can revise their subdomain choices until this time.' },
   { key: 'round_0_start_at', label: 'Round 1 · Assessment', help: 'The assessment Start now button appears at this time.' },
-  { key: 'round_1_start_at', label: 'Round 2 · Project', help: 'Open releases each problem statement. Closed shows "Round 2 will start shortly".' },
+  { key: 'round_1_start_at', label: 'Round 2 · Project opens at', help: 'The date is when Round 2 opens (Open sets it to now). Close hides every project and blocks submissions; candidates see "Round 2 will start shortly".' },
+  // A deadline is a moment, not an open/close switch, so it has no quick buttons.
+  { key: 'round_1_deadline_at', label: 'Round 2 · Submission deadline', help: 'After this time nobody new can start a project and existing submissions can no longer be updated. Leave empty to keep submissions open. Press Save schedule after changing it.', deadline: true },
   { key: 'round_2_start_at', label: 'Round 3 · Interview', help: 'Qualified students can open interview booking at this time.' },
 ];
 
-const emptySchedule = { application_deadline: '', round_0_start_at: '', round_1_start_at: '', round_2_start_at: '' };
+const emptySchedule = { application_deadline: '', round_0_start_at: '', round_1_start_at: '', round_1_deadline_at: '', round_2_start_at: '' };
 
 function toLocalInput(iso) {
   if (!iso) return '';
@@ -92,12 +94,18 @@ export default function AdminSettings() {
                   onChange={(e) => setSchedule((curr) => ({ ...curr, [field.key]: e.target.value }))}
                   className="min-w-0 flex-1 border px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
                   style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text)' }} />
+                {field.deadline ? (
+                  <button type="button" onClick={() => setSchedule((curr) => ({ ...curr, [field.key]: '' }))} disabled={saving || !schedule[field.key]}
+                    className="border px-3 font-mono text-[10px] uppercase transition hover:border-[var(--error)] hover:text-[var(--error)] disabled:opacity-30"
+                    style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>Clear</button>
+                ) : (<>
                 <button type="button" onClick={() => setRoundOpen(field.key, true)} disabled={saving}
                   className="border px-3 font-mono text-[10px] uppercase transition hover:border-[var(--success)] hover:text-[var(--success)] disabled:opacity-30"
                   style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>Open</button>
                 <button type="button" onClick={() => setRoundOpen(field.key, false)} disabled={saving}
                   className="border px-3 font-mono text-[10px] uppercase transition hover:border-[var(--error)] hover:text-[var(--error)] disabled:opacity-30"
                   style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>Close</button>
+                </>)}
               </span>
             </label>
           ))}

@@ -264,13 +264,14 @@ export default function MobilePreloader({ onDone }) {
       to { opacity: 1; transform: scale(1) translateY(0); }
     }
 
-    /* STUDENT BUILDER */
+    /* STUDENT BUILDER GROUP — scales with the viewport so the longer title
+       stays on one line down to 320px-wide phones. */
     .mp-student {
       font-family: 'Space Mono', monospace, sans-serif;
-      font-size: 22px;
+      font-size: clamp(15px, 5.2vw, 22px);
       font-weight: 700;
       color: #FF9900;
-      letter-spacing: 3px;
+      letter-spacing: clamp(1.5px, 0.6vw, 3px);
       text-transform: uppercase;
       margin-bottom: 6px;
       opacity: 0;
@@ -443,7 +444,7 @@ export default function MobilePreloader({ onDone }) {
       {/* Content */}
       <div className="mp-content">
         <div className="mp-aws">AWS</div>
-        <div className="mp-student">STUDENT BUILDER</div>
+        <div className="mp-student">STUDENT BUILDER GROUP</div>
         <div className="mp-vit">VIT · Vellore</div>
         <div className="mp-community">Community</div>
         <p className="mp-tagline">Build · Deploy · Innovate</p>

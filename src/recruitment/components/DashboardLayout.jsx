@@ -48,7 +48,7 @@ export default function DashboardLayout() {
       <aside className="hidden w-60 flex-col border-r lg:flex" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
         <div className="flex h-16 items-center gap-3 border-b px-5" style={{ borderColor: 'var(--border)' }}>
           <img src={awsIcon} alt="AWS" className="h-8 w-8 rounded object-contain border border-[var(--border)] p-1 bg-black/40" />
-          <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>AWS SBG Recruitment</span>
+          <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>AWS Student Builder Group</span>
         </div>
 
         <nav className="flex-1 space-y-1 p-4">
@@ -95,7 +95,7 @@ export default function DashboardLayout() {
       <div className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b px-4 lg:hidden" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
         <div className="flex items-center gap-2">
           <img src={awsIcon} alt="AWS" className="h-7 w-7 rounded object-contain border border-[var(--border)] p-0.5 bg-black/40" />
-          <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>AWS SBG</span>
+          <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>AWS Student Builder Group</span>
         </div>
         <button
           onClick={handleLogout}

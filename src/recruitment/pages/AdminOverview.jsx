@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '../lib/supabase.js';
+import { fetchAll } from '../lib/fetch-all.js';
 
 export default function AdminOverview() {
   const [supabase] = useState(createClient);
@@ -7,8 +8,8 @@ export default function AdminOverview() {
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: candidates }, { data: domains }] = await Promise.all([
-        supabase.from('candidate_profiles').select('status, domain_id'),
+      const [candidates, { data: domains }] = await Promise.all([
+        fetchAll(() => supabase.from('candidate_profiles').select('id, status, domain_id').order('id')),
         supabase.from('domains').select('id, name, slug'),
       ]);
       const [{ count: assessments }, { count: projects }, { count: interviews }] = await Promise.all([

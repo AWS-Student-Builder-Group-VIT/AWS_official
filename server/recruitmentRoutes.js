@@ -8,10 +8,12 @@
 
 import { Router } from 'express';
 import { createClient } from '@supabase/supabase-js';
-import { timingSafeEqual } from 'node:crypto';
+import { randomInt, timingSafeEqual } from 'node:crypto';
 import { validateProfilePayload } from '../src/recruitment/lib/profile-schema.js';
 import { isAssessmentAnswerCorrect } from '../src/recruitment/lib/assessment-grading.js';
 import { isAllowedEmail, parseAllowedDomains } from '../src/recruitment/lib/email-domains.js';
+import { chunk, fetchAll } from '../src/recruitment/lib/fetch-all.js';
+import { normalizeGithubRepoUrl } from '../src/recruitment/lib/github-url.js';
 
 const router = Router();
 
@@ -338,43 +340,199 @@ router.post('/assessment/submit', async (req, res) => {
 // ROUND 2 — PROJECT
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Only these project fields ever reach a candidate. Judging criteria live in
+// projects.evaluation_rubric and are never selected here.
+const CANDIDATE_PROJECT_FIELDS = 'id,code,title,problem_statement,requirements,optional_features';
+
+/** Round 2 open/close and submission deadline, read live from settings. */
+async function roundTwoSchedule(supabase) {
+  const { data } = await supabase.from('recruitment_settings').select('key,value').in('key', ['round_1_start_at', 'round_1_deadline_at']);
+  const at = (key) => data?.find((row) => row.key === key)?.value?.at ?? null;
+  const startsAt = at('round_1_start_at');
+  const deadlineAt = at('round_1_deadline_at');
+  const now = Date.now();
+  return {
+    startsAt,
+    deadlineAt,
+    open: Boolean(startsAt) && now >= new Date(startsAt).getTime(),
+    // With no deadline set, submissions stay open; once set, it is enforced.
+    submissionsOpen: !deadlineAt || now < new Date(deadlineAt).getTime(),
+  };
+}
+
+/**
+ * Mirrors project progress onto candidate_profiles.round_1_status so the
+ * dashboard shows it. Admin decisions (qualified / not_qualified / under_review)
+ * are never overwritten.
+ */
+async function syncRoundTwoStatus(supabase, userId, current) {
+  if (!['not_started', 'in_progress', 'submitted', null, undefined].includes(current)) return;
+  const { data: rows } = await supabase.from('project_assignments').select('status').eq('candidate_id', userId);
+  if (!rows?.length) return;
+  const next = rows.every((r) => r.status === 'submitted') ? 'submitted' : 'in_progress';
+  if (next !== current) await supabase.from('candidate_profiles').update({ round_1_status: next }).eq('id', userId);
+}
+
 // GET /api/recruitment/round-2
-// Round 2 is open when round_1_start_at holds a time that has passed; until
-// then every selected track simply reports that it starts shortly.
+// Technical tracks get a project: once Round 2 is open and the candidate is
+// qualified in that track, one project is picked at random from the track's
+// active pool and kept for good. Other domains go straight to interview.
 router.get('/round-2', async (req, res) => {
   const ctx = await requireAuth(req, res);
   if (!ctx) return;
   const { user, supabase } = ctx;
   try {
-    const { data: setting } = await supabase.from('recruitment_settings').select('value').eq('key', 'round_1_start_at').maybeSingle();
-    const startsAt = setting?.value?.at ?? null;
-    const open = Boolean(startsAt) && Date.now() >= new Date(startsAt).getTime();
+    const schedule = await roundTwoSchedule(supabase);
 
-    const { data: choices, error: choiceError } = await supabase
-      .from('candidate_subdomain_choices')
-      .select('subdomain_id,priority,subdomain:subdomains(id,name,domain:domains(name,slug))')
-      .eq('candidate_id', user.id)
-      .order('priority');
+    const [{ data: choices, error: choiceError }, { data: profile }] = await Promise.all([
+      supabase.from('candidate_subdomain_choices')
+        .select('subdomain_id,priority,subdomain:subdomains(id,name,domain:domains(name,slug,selection_mode))')
+        .eq('candidate_id', user.id).order('priority'),
+      supabase.from('candidate_profiles').select('round_0_status,round_1_status').eq('id', user.id).maybeSingle(),
+    ]);
     if (choiceError) return res.status(500).json({ error: choiceError.message });
 
-    const subdomainIds = (choices ?? []).map((c) => c.subdomain_id);
-    const [{ data: projects }, { data: guidelines }] = subdomainIds.length
+    const technicalIds = (choices ?? []).filter((c) => c.subdomain?.domain?.slug === 'technical').map((c) => c.subdomain_id);
+
+    // Qualification is per track: only tracks whose attempt was qualified get a project.
+    const [{ data: attempts }, { data: existingAssignments }] = technicalIds.length
       ? await Promise.all([
-          supabase.from('projects').select('*').in('subdomain_id', subdomainIds).eq('is_active', true),
-          supabase.from('subdomain_round_guidelines').select('*').in('subdomain_id', subdomainIds).eq('round_number', 2),
+          supabase.from('assessment_attempts').select('subdomain_id,admin_qualified').eq('candidate_id', user.id).in('subdomain_id', technicalIds),
+          supabase.from('project_assignments').select('id,subdomain_id,project_id,assigned_at,status').eq('candidate_id', user.id).in('subdomain_id', technicalIds),
+        ])
+      : [{ data: [] }, { data: [] }];
+    const assignmentBySubdomain = new Map((existingAssignments ?? []).map((a) => [a.subdomain_id, a]));
+    const roundOneQualified = profile?.round_0_status === 'qualified';
+
+    const eligibilityFor = (subdomainId) => {
+      if (!schedule.open) return 'round_closed';
+      if (!roundOneQualified) return 'not_qualified';
+      const attempt = (attempts ?? []).find((a) => a.subdomain_id === subdomainId);
+      return attempt?.admin_qualified === true ? 'eligible' : 'not_qualified';
+    };
+
+    // Assign a random project to any eligible track that doesn't have one yet.
+    // Once the deadline passes nobody new can start.
+    for (const subdomainId of technicalIds) {
+      if (!schedule.submissionsOpen) break;
+      if (assignmentBySubdomain.has(subdomainId) || eligibilityFor(subdomainId) !== 'eligible') continue;
+      const { data: pool, error: poolError } = await supabase.from('projects').select('id').eq('subdomain_id', subdomainId).eq('is_active', true);
+      if (poolError) return res.status(500).json({ error: poolError.message });
+      if (!pool?.length) continue;
+      const pick = pool[randomInt(pool.length)];
+      const { data: created, error: insertError } = await supabase.from('project_assignments')
+        .insert({ candidate_id: user.id, subdomain_id: subdomainId, project_id: pick.id, status: 'assigned' })
+        .select('id,subdomain_id,project_id,assigned_at,status').single();
+      if (insertError) {
+        // 23505: a parallel request assigned first. Keep that one, never re-roll.
+        if (insertError.code !== '23505') return res.status(500).json({ error: insertError.message });
+        const { data: winner } = await supabase.from('project_assignments')
+          .select('id,subdomain_id,project_id,assigned_at,status').eq('candidate_id', user.id).eq('subdomain_id', subdomainId).maybeSingle();
+        if (winner) assignmentBySubdomain.set(subdomainId, winner);
+      } else {
+        assignmentBySubdomain.set(subdomainId, created);
+      }
+    }
+
+    const assignments = [...assignmentBySubdomain.values()];
+    if (assignments.length) await syncRoundTwoStatus(supabase, user.id, profile?.round_1_status);
+    const [{ data: projects }, { data: submissions }] = assignments.length
+      ? await Promise.all([
+          supabase.from('projects').select(CANDIDATE_PROJECT_FIELDS).in('id', assignments.map((a) => a.project_id)),
+          supabase.from('project_submissions').select('assignment_id,github_url,notes,submitted_at').in('assignment_id', assignments.map((a) => a.id)),
         ])
       : [{ data: [] }, { data: [] }];
 
-    const tracks = (choices ?? []).map((choice) => ({
-      subdomainId: choice.subdomain_id,
-      name: choice.subdomain?.name ?? 'Track',
-      domainName: choice.subdomain?.domain?.name ?? '',
-      // Content stays hidden until the round opens.
-      project: open ? (projects ?? []).find((p) => p.subdomain_id === choice.subdomain_id) ?? null : null,
-      guidelines: open ? (guidelines ?? []).find((g) => g.subdomain_id === choice.subdomain_id)?.guidelines ?? '' : '',
-    }));
+    const tracks = (choices ?? []).map((choice) => {
+      const domain = choice.subdomain?.domain;
+      const technical = domain?.slug === 'technical';
+      const base = {
+        subdomainId: choice.subdomain_id,
+        name: choice.subdomain?.name ?? 'Track',
+        domainName: domain?.name ?? '',
+        displayName: domain?.selection_mode === 'whole_domain' ? (domain?.name ?? '') : `${domain?.name ?? ''} / ${choice.subdomain?.name ?? ''}`,
+        kind: technical ? 'project' : 'direct_interview',
+      };
+      if (!technical) return base;
 
-    return res.json({ open, startsAt, tracks });
+      const assignment = assignmentBySubdomain.get(choice.subdomain_id);
+      const project = assignment ? (projects ?? []).find((p) => p.id === assignment.project_id) ?? null : null;
+      const submission = assignment ? (submissions ?? []).find((s) => s.assignment_id === assignment.id) ?? null : null;
+      const eligibility = eligibilityFor(choice.subdomain_id);
+      // Closing Round 2 or disqualifying a candidate hides the project at once.
+      // The assignment is kept, so re-enabling shows the same project again.
+      const visible = eligibility === 'eligible' && project;
+      return {
+        ...base,
+        status: eligibility !== 'eligible' ? eligibility : project ? 'assigned' : schedule.submissionsOpen ? 'no_projects' : 'deadline_passed',
+        project: visible
+          ? { code: project.code, title: project.title, problemStatement: project.problem_statement, requirements: project.requirements, bonus: project.optional_features, assignedAt: assignment.assigned_at }
+          : null,
+        submission: visible && submission
+          ? { githubUrl: submission.github_url, notes: submission.notes ?? '', submittedAt: submission.submitted_at }
+          : null,
+      };
+    });
+
+    return res.json({
+      open: schedule.open,
+      startsAt: schedule.startsAt,
+      deadlineAt: schedule.deadlineAt,
+      submissionsOpen: schedule.submissionsOpen,
+      tracks,
+      hasProjectRound: tracks.some((t) => t.kind === 'project'),
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/recruitment/round-2/submit  { subdomainId, githubUrl, notes? }
+// Saves (or updates) the GitHub link for an assigned project. Refused once the
+// admin-set deadline has passed.
+router.post('/round-2/submit', async (req, res) => {
+  const ctx = await requireAuth(req, res);
+  if (!ctx) return;
+  const { user, supabase } = ctx;
+  const subdomainId = req.body?.subdomainId;
+  const githubUrl = normalizeGithubRepoUrl(req.body?.githubUrl);
+  const notes = String(req.body?.notes ?? '').trim().slice(0, 2000);
+  if (!subdomainId) return res.status(400).json({ error: 'subdomainId is required.' });
+  if (!githubUrl) {
+    return res.status(400).json({ error: 'Enter a link to a GitHub repository, like https://github.com/your-name/your-project.' });
+  }
+  try {
+    const schedule = await roundTwoSchedule(supabase);
+    if (!schedule.open) return res.status(403).json({ error: 'Round 2 is not open.' });
+    if (!schedule.submissionsOpen) return res.status(403).json({ error: 'The submission deadline has passed.' });
+
+    const [{ data: profile }, { data: attempt }] = await Promise.all([
+      supabase.from('candidate_profiles').select('round_0_status,round_1_status').eq('id', user.id).maybeSingle(),
+      supabase.from('assessment_attempts').select('admin_qualified').eq('candidate_id', user.id).eq('subdomain_id', subdomainId).maybeSingle(),
+    ]);
+    if (profile?.round_0_status !== 'qualified' || attempt?.admin_qualified !== true) {
+      return res.status(403).json({ error: 'You are not qualified for a Round 2 project in this track.' });
+    }
+
+    const { data: assignment, error: assignmentError } = await supabase.from('project_assignments')
+      .select('id').eq('candidate_id', user.id).eq('subdomain_id', subdomainId).maybeSingle();
+    if (assignmentError) return res.status(500).json({ error: assignmentError.message });
+    if (!assignment) return res.status(404).json({ error: 'No project has been assigned to you for this track.' });
+
+    const submittedAt = new Date().toISOString();
+    const { error: submitError } = await supabase.from('project_submissions').upsert({
+      assignment_id: assignment.id,
+      candidate_id: user.id,
+      github_url: githubUrl,
+      notes: notes || null,
+      submitted_at: submittedAt,
+      is_late: false,
+    }, { onConflict: 'assignment_id' });
+    if (submitError) return res.status(500).json({ error: submitError.message });
+
+    await supabase.from('project_assignments').update({ status: 'submitted' }).eq('id', assignment.id);
+    await syncRoundTwoStatus(supabase, user.id, profile.round_1_status);
+    return res.json({ submitted: true, githubUrl, submittedAt });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -390,47 +548,80 @@ router.get('/admin/operations', async (req, res) => {
   if (!ctx) return;
   const { admin, supabase } = ctx;
   try {
+    // Built to stay complete and small at thousands of candidates:
+    // - every list is paged past PostgREST's 1,000-row cap
+    // - choices carry only ids, resolved client-side against subdomain_lookup
+    //   instead of repeating the full subdomain and domain for every choice
+    // - written answers are left out and fetched per candidate or page by page
+    // Together these keep the response well under Vercel's 4.5MB limit.
     const [
-      { data: candidates },
-      { data: attempts },
-      { data: assignments },
-      { data: submissions },
-      { data: bookings },
-      { data: results },
-      { data: domains },
-      { data: slots },
-      { data: written_questions },
-      { data: written_rules },
-      { data: written_answers },
+      candidates, attempts, assignments, submissions, bookings, results, slots,
+      { data: domains }, { data: allSubdomains }, { data: allDomains },
+      { data: written_questions }, { data: written_rules },
     ] = await Promise.all([
-      supabase.from('candidate_profiles').select('*, subdomain_choices:candidate_subdomain_choices(*, subdomain:subdomains(*, domain:domains(*)))').order('created_at', { ascending: false }),
-      supabase.from('assessment_attempts').select('*').order('started_at', { ascending: false }),
-      supabase.from('project_assignments').select('*, project:projects(*)').order('created_at', { ascending: false }),
-      supabase.from('project_submissions').select('*, evaluation:project_evaluations(*)').order('submitted_at', { ascending: false }),
-      supabase.from('interview_bookings').select('*, slot:interview_slots(slot_time, date:interview_dates(date, location, meeting_link, subdomain_id))').order('booked_at', { ascending: false }),
-      supabase.from('final_results').select('*'),
+      fetchAll(() => supabase.from('candidate_profiles').select('*, subdomain_choices:candidate_subdomain_choices(subdomain_id,priority)').order('created_at', { ascending: false }).order('id')),
+      fetchAll(() => supabase.from('assessment_attempts').select('id,candidate_id,domain_id,subdomain_id,started_at,submitted_at,time_limit_seconds,auto_submitted,score,total_marks,status,admin_qualified,admin_notes,evaluated_at,results_released_at,results_released_by').order('started_at', { ascending: false }).order('id')),
+      fetchAll(() => supabase.from('project_assignments').select('*, project:projects(*)').order('assigned_at', { ascending: false }).order('id')),
+      fetchAll(() => supabase.from('project_submissions').select('*, evaluation:project_evaluations(*)').order('submitted_at', { ascending: false }).order('id')),
+      fetchAll(() => supabase.from('interview_bookings').select('*, slot:interview_slots(slot_time, date:interview_dates(date, location, meeting_link, subdomain_id))').order('booked_at', { ascending: false }).order('id')),
+      fetchAll(() => supabase.from('final_results').select('*').order('id')),
+      fetchAll(() => supabase.from('interview_slots').select('id, is_booked, status').order('id')),
       supabase.from('domains').select('*, subdomains(*)').eq('is_active', true).order('sort_order'),
-      supabase.from('interview_slots').select('id, is_booked, status'),
+      supabase.from('subdomains').select('id,name,domain_id,is_active'),
+      supabase.from('domains').select('id,name,slug,selection_mode'),
       supabase.from('written_application_questions').select('*').order('sort_order'),
       supabase.from('written_application_rules').select('*'),
-      supabase.from('candidate_written_answers').select('*, question:written_application_questions(prompt), domain:domains(name, slug)'),
     ]);
+
+    const domainById = new Map((allDomains ?? []).map((d) => [d.id, d]));
+    const subdomain_lookup = Object.fromEntries((allSubdomains ?? []).map((sub) => [sub.id, {
+      id: sub.id, name: sub.name, domain_id: sub.domain_id, is_active: sub.is_active,
+      domain: domainById.get(sub.domain_id) ?? null,
+    }]));
 
     return res.json({
       admin: { id: admin.id, email: admin.email ?? '', name: admin.name ?? '', role: admin.role },
-      candidates: candidates ?? [],
-      attempts: attempts ?? [],
-      assignments: assignments ?? [],
-      submissions: submissions ?? [],
-      bookings: bookings ?? [],
-      results: results ?? [],
+      candidates,
+      attempts,
+      assignments,
+      submissions,
+      bookings,
+      results,
       domains: domains ?? [],
-      slots: slots ?? [],
+      subdomain_lookup,
+      slots,
       written_questions: written_questions ?? [],
       written_rules: written_rules ?? [],
-      written_answers: written_answers ?? [],
       synced_at: new Date().toISOString(),
     });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/recruitment/admin/written-answers?candidate_id=…   one candidate's dossier
+// GET /api/recruitment/admin/written-answers?offset=0&limit=400 every answer, a page at a time (CSV export)
+// Answers are long paragraphs, so they are never bundled into the operations payload.
+router.get('/admin/written-answers', async (req, res) => {
+  const ctx = await requireAdmin(req, res);
+  if (!ctx) return;
+  const { supabase } = ctx;
+  const columns = 'candidate_id,domain_id,question_id,answer_text,submission_links,is_final,question:written_application_questions(prompt),domain:domains(name,slug)';
+  try {
+    if (req.query.candidate_id) {
+      const { data, error } = await supabase.from('candidate_written_answers').select(columns)
+        .eq('candidate_id', String(req.query.candidate_id));
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json({ answers: data ?? [] });
+    }
+    const limit = Math.min(Math.max(Number(req.query.limit) || 400, 1), 1000);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const { data, error } = await supabase.from('candidate_written_answers').select(columns)
+      .order('candidate_id').order('domain_id').order('question_id')
+      .range(offset, offset + limit - 1);
+    if (error) return res.status(500).json({ error: error.message });
+    const page = data ?? [];
+    return res.json({ answers: page, nextOffset: page.length === limit ? offset + limit : null });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -480,30 +671,58 @@ router.post('/admin/assessments/bulk-qualify', async (req, res) => {
     return res.status(400).json({ error: 'minPercent must be between 0 and 100.' });
   }
   try {
-    const { data: attempts, error } = await supabase.from('assessment_attempts')
-      .select('id,candidate_id,score,total_marks,admin_qualified').eq('status', 'submitted');
-    if (error) return res.status(500).json({ error: error.message });
+    const attempts = await fetchAll(() => supabase.from('assessment_attempts')
+      .select('id,candidate_id,score,total_marks,admin_qualified').eq('status', 'submitted').order('id'));
+    const considered = attempts.filter((a) => !onlyUnreviewed || a.admin_qualified == null);
 
-    const considered = (attempts ?? []).filter((a) => !onlyUnreviewed || a.admin_qualified == null);
-    let qualified = 0;
-    let notQualified = 0;
+    // A candidate has one attempt per Technical track, so they qualify when any
+    // of their tracks meets the threshold; their best score is recorded.
     let skipped = 0;
-
+    const byCandidate = new Map();
     for (const attempt of considered) {
       // An unscored attempt has no percentage to compare against.
       if (attempt.score == null || !attempt.total_marks) { skipped += 1; continue; }
       const percent = (attempt.score / attempt.total_marks) * 100;
-      const pass = percent >= minPercent;
-      if (!pass && !markOthers) { skipped += 1; continue; }
+      const entry = byCandidate.get(attempt.candidate_id) ?? { pass: false, bestPercent: -1, bestScore: null, attempts: [] };
+      entry.attempts.push({ id: attempt.id, pass: percent >= minPercent });
+      if (percent >= minPercent) entry.pass = true;
+      if (percent > entry.bestPercent) { entry.bestPercent = percent; entry.bestScore = attempt.score; }
+      byCandidate.set(attempt.candidate_id, entry);
+    }
 
-      await supabase.from('assessment_attempts').update({ admin_qualified: pass }).eq('id', attempt.id);
-      await supabase.from('candidate_profiles').update({
-        round_0_status: pass ? 'qualified' : 'not_qualified',
-        round_0_score: attempt.score,
-        current_round: pass ? 1 : 0,
-        status: pass ? 'round_1' : 'rejected',
-      }).eq('id', attempt.candidate_id);
-      if (pass) qualified += 1; else notQualified += 1;
+    const passAttemptIds = [];
+    const failAttemptIds = [];
+    const profileGroups = new Map(); // same outcome + score share one update
+    let qualified = 0;
+    let notQualified = 0;
+    for (const [candidateId, entry] of byCandidate) {
+      if (!entry.pass && !markOthers) { skipped += entry.attempts.length; continue; }
+      for (const a of entry.attempts) {
+        if (a.pass) passAttemptIds.push(a.id);
+        else if (markOthers) failAttemptIds.push(a.id);
+      }
+      const key = `${entry.pass}|${entry.bestScore}`;
+      if (!profileGroups.has(key)) profileGroups.set(key, { pass: entry.pass, score: entry.bestScore, ids: [] });
+      profileGroups.get(key).ids.push(candidateId);
+      if (entry.pass) qualified += 1; else notQualified += 1;
+    }
+
+    const write = async (query) => { const { error } = await query; if (error) throw new Error(error.message); };
+    for (const ids of chunk(passAttemptIds, 150)) {
+      await write(supabase.from('assessment_attempts').update({ admin_qualified: true }).in('id', ids));
+    }
+    for (const ids of chunk(failAttemptIds, 150)) {
+      await write(supabase.from('assessment_attempts').update({ admin_qualified: false }).in('id', ids));
+    }
+    for (const group of profileGroups.values()) {
+      for (const ids of chunk(group.ids, 150)) {
+        await write(supabase.from('candidate_profiles').update({
+          round_0_status: group.pass ? 'qualified' : 'not_qualified',
+          round_0_score: group.score,
+          current_round: group.pass ? 1 : 0,
+          status: group.pass ? 'round_1' : 'rejected',
+        }).in('id', ids));
+      }
     }
 
     return res.json({ considered: considered.length, qualified, notQualified, skipped });
@@ -858,7 +1077,27 @@ router.post('/round-1/written', async (req, res) => {
   const { user, supabase } = ctx;
   const { domainId, answers } = req.body ?? {};
   if (!domainId || !Array.isArray(answers)) return res.status(400).json({ error: 'domainId and answers[] required' });
+  // domainId is interpolated into a filter below, so it must be a plain UUID.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(domainId)) {
+    return res.status(400).json({ error: 'Invalid domain.' });
+  }
   try {
+    // A domain can only be finalised once every required question has an answer.
+    const { data: requiredQuestions, error: questionError } = await supabase.from('written_application_questions')
+      .select('id').eq('is_active', true).eq('required', true)
+      .or(`domain_id.eq.${domainId},scope.eq.common_non_technical`);
+    if (questionError) return res.status(500).json({ error: questionError.message });
+    const answeredIds = new Set(answers
+      .filter((a) => String(a?.answerText ?? '').trim() || (Array.isArray(a?.submissionLinks) && a.submissionLinks.length))
+      .map((a) => a.questionId));
+    const missing = (requiredQuestions ?? []).filter((q) => !answeredIds.has(q.id)).map((q) => q.id);
+    if (missing.length) {
+      return res.status(400).json({
+        error: `Please answer all questions before submitting (${missing.length} unanswered).`,
+        missing,
+      });
+    }
+
     const rows = answers.map(({ questionId, answerText, submissionLinks }) => ({
       candidate_id: user.id, domain_id: domainId, question_id: questionId,
       answer_text: answerText ?? '', submission_links: submissionLinks ?? [], is_final: true, updated_at: new Date().toISOString(),

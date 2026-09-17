@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, ChevronRight, ExternalLink, FileText, Save, Send, TerminalSquare } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, ChevronRight, ExternalLink, FileText, Send, TerminalSquare } from 'lucide-react';
 import { createClient } from '../lib/supabase.js';
 import { roundOneCards } from '../lib/round-one-hub-rules.js';
 
-const statusCopy = { not_started: 'Not started', draft: 'Draft saved', submitted: 'Submitted', not_assessed: 'Not assessed' };
-const statusBorder = { not_started: 'var(--border)', draft: 'rgba(245,158,11,.5)', submitted: 'rgba(34,197,94,.5)', not_assessed: 'rgba(239,68,68,.5)' };
-const statusTextColor = { not_started: 'var(--muted)', draft: 'var(--warning)', submitted: 'var(--success)', not_assessed: 'var(--error)' };
+const statusCopy = { not_started: 'Not submitted', draft: 'Not submitted', submitted: 'Submitted', not_assessed: 'Not assessed' };
+const statusBorder = { not_started: 'var(--border)', draft: 'var(--border)', submitted: 'rgba(34,197,94,.5)', not_assessed: 'rgba(239,68,68,.5)' };
+const statusTextColor = { not_started: 'var(--muted)', draft: 'var(--muted)', submitted: 'var(--success)', not_assessed: 'var(--error)' };
+
+// A written answer counts once it has text, or a link for link questions.
+const isAnswered = (answer) => Boolean(answer?.answerText?.trim() || answer?.submissionLinks?.length);
 
 export default function RoundOne() {
   const navigate = useNavigate();
   const [supabase] = useState(createClient);
   const [data, setData] = useState(null);
   const [drafts, setDrafts] = useState({});
+  // Answer keys left blank on the last submit attempt, highlighted like a form.
+  const [missingKeys, setMissingKeys] = useState([]);
+  const [showIncomplete, setShowIncomplete] = useState(false);
   const [activeDomainId, setActiveDomainId] = useState(null);
   const [dirtyDomainId, setDirtyDomainId] = useState(null);
   const [status, setStatus] = useState('idle');
@@ -81,6 +87,8 @@ export default function RoundOne() {
   function updateAnswer(answerKey, change) {
     if (!activeDomainId || activeState?.final) return;
     setDrafts((curr) => { const prev = curr[answerKey] ?? { answerText: '', submissionLinks: [] }; return { ...curr, [answerKey]: { ...prev, ...change } }; });
+    const next = { ...(drafts[answerKey] ?? { answerText: '', submissionLinks: [] }), ...change };
+    if (isAnswered(next)) setMissingKeys((keys) => keys.filter((key) => key !== answerKey));
     setDirtyDomainId(activeDomainId); setStatus('idle'); setError('');
   }
 
@@ -89,8 +97,21 @@ export default function RoundOne() {
     setActiveDomainId(null); await load();
   }
 
+  function scrollToQuestion(answerKey) {
+    document.getElementById(answerKey)?.closest('article')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   async function submitDomain() {
     if (!activeDomainId || activeState?.final) return;
+    const missing = activeQuestions
+      .filter((question) => question.required !== false && !isAnswered(drafts[question.answerKey]))
+      .map((question) => question.answerKey);
+    if (missing.length) {
+      setMissingKeys(missing);
+      setShowIncomplete(true);
+      return;
+    }
+    setMissingKeys([]);
     setStatus('submitting'); setError('');
     try {
       await request('POST', domainPayload(activeDomainId));
@@ -133,8 +154,10 @@ export default function RoundOne() {
           <div className="space-y-8">
             {activeQuestions.map((question, qIdx) => {
               const answer = drafts[question.answerKey] ?? { answerText: '', submissionLinks: [] };
+              const isMissing = missingKeys.includes(question.answerKey);
               return (
-                <article key={question.answerKey} className={question.group === 'design_tasks' ? 'border p-5' : ''} style={question.group === 'design_tasks' ? { borderColor: 'var(--border)', background: 'rgba(0,0,0,.3)' } : {}}>
+                <article key={question.answerKey} className="border p-5 transition"
+                  style={{ borderColor: isMissing ? 'var(--error)' : question.group === 'design_tasks' ? 'var(--border)' : 'transparent', background: isMissing ? 'rgba(239,68,68,.06)' : question.group === 'design_tasks' ? 'rgba(0,0,0,.3)' : 'transparent' }}>
                   <label htmlFor={question.answerKey} className="block">
                     <span className="font-mono text-xs uppercase tracking-wider" style={{ color: 'var(--accent)' }}>{String(qIdx + 1).padStart(2, '0')} {question.required ? '/ REQUIRED' : '/ CHOOSE ANY TWO'}</span>
                     <span className="mt-2 block text-base font-semibold" style={{ color: 'var(--text)' }}>{question.prompt}</span>
@@ -150,6 +173,11 @@ export default function RoundOne() {
                         placeholder="https://drive.google.com/..." className="field disabled:cursor-not-allowed disabled:opacity-70" />
                     </label>
                   )}
+                  {isMissing && (
+                    <p role="alert" className="mt-3 inline-flex items-center gap-2 text-sm" style={{ color: 'var(--error)' }}>
+                      <AlertCircle size={15} aria-hidden="true" /> This is a required question
+                    </p>
+                  )}
                 </article>
               );
             })}
@@ -158,9 +186,33 @@ export default function RoundOne() {
         <div className="sticky bottom-4 mt-8 flex flex-wrap items-center justify-between gap-4 border p-4 shadow-2xl backdrop-blur" style={{ borderColor: 'var(--border)', background: 'rgba(17,19,24,.95)' }}>
           {activeState?.final
             ? <span className="inline-flex items-center gap-2 font-mono text-xs uppercase" style={{ color: 'var(--success)' }}><Check size={16} /> This domain is submitted and locked</span>
-            : <><button type="button" onClick={() => activeDomainId && saveDomainDraft(activeDomainId)} disabled={dirtyDomainId !== activeDomainId || status === 'saving'} className="action-secondary inline-flex items-center gap-2"><Save size={15} /> {status === 'saving' ? 'Saving…' : 'Save draft'}</button>
-               <button type="button" onClick={submitDomain} disabled={status === 'submitting'} className="action inline-flex items-center gap-2"><Send size={15} /> {status === 'submitting' ? 'Submitting…' : `Submit ${activeDomain.name}`}</button></>}
+            : <>
+                <span className="text-xs" style={{ color: 'var(--muted)' }}>All questions are required.</span>
+                <button type="button" onClick={submitDomain} disabled={status === 'submitting'} className="action inline-flex items-center gap-2"><Send size={15} /> {status === 'submitting' ? 'Submitting…' : `Submit ${activeDomain.name}`}</button>
+              </>}
         </div>
+
+        {showIncomplete && (
+          <div className="fixed inset-0 z-50 grid place-items-center p-5 backdrop-blur-sm" style={{ background: 'rgba(10,11,14,.8)' }}
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setShowIncomplete(false); }}>
+            <section role="alertdialog" aria-modal="true" aria-labelledby="incomplete-title" className="technical-panel w-full max-w-md p-6 shadow-2xl sm:p-7">
+              <div className="flex items-start gap-4">
+                <span className="grid h-10 w-10 shrink-0 place-items-center border" style={{ borderColor: 'rgba(239,68,68,.45)', background: 'rgba(239,68,68,.1)', color: 'var(--error)' }}><AlertCircle size={19} /></span>
+                <div className="flex-1">
+                  <h2 id="incomplete-title" className="text-xl font-bold">Please answer all questions</h2>
+                  <p className="mt-3 text-sm leading-6" style={{ color: 'var(--muted)' }}>
+                    {missingKeys.length} of {activeQuestions.length} question{activeQuestions.length === 1 ? '' : 's'} {missingKeys.length === 1 ? 'is' : 'are'} still unanswered.
+                    They are highlighted in red. Every question must be answered before you can submit.
+                  </p>
+                </div>
+              </div>
+              <button type="button" autoFocus className="action mt-6 w-full justify-center"
+                onClick={() => { setShowIncomplete(false); if (missingKeys[0]) scrollToQuestion(missingKeys[0]); }}>
+                Go to first unanswered question
+              </button>
+            </section>
+          </div>
+        )}
       </main>
     );
   }
