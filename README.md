@@ -56,7 +56,7 @@ The **AWS Student Builder Group at VIT Vellore** is a premier student-led techni
 - **AWS Cloud Credits & Certification Vouchers:** Enabling core builders to build without credit limits and attain official AWS certifications.
 - **Direct Industry Access:** Mentorship and interactive sessions with AWS Community Builders, solutions architects, and industry leaders.
 
----
+----
 
 ## 🏛️ Leadership & Core Team
 
