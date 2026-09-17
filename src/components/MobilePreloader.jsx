@@ -447,7 +447,7 @@ export default function MobilePreloader({ onDone }) {
         <div className="mp-student">STUDENT BUILDER GROUP</div>
         <div className="mp-vit">VIT · Vellore</div>
         <div className="mp-community">Community</div>
-        <p className="mp-tagline">Build · Deploy · Innovate</p>
+        <p className="mp-tagline">Learn · Build · Deploy</p>
 
         <div className="mp-progress">
           <div className="mp-progress__header">
