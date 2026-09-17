@@ -31,6 +31,7 @@ const MysteryBoxHackathon = lazy(() => import('./pages/MysteryBoxHackathon/index
 const MysteryBoxDashboard = lazy(() => import('./pages/MysteryBoxHackathon/index.js').then((module) => ({ default: module.MysteryBoxDashboard })));
 const GamesPage = lazy(() => import('./pages/GamesPage'));
 const GridScanIntro = lazy(() => import('./components/GridScanIntro'));
+const QuizPage = lazy(() => import('./pages/quiz/index.jsx'));
 
 const gameComponents = {
   'flappy-bird': lazy(() => import('./pages/games/FlappyBird/FlappyBird.jsx')),
@@ -361,6 +362,7 @@ export default function App() {
             <Route path="/blog/google-maps-traffic" element={<BlogGoogleMaps />} />
 
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/quiz" element={<QuizPage />} />
             <Route path="/account" element={<AccountPage />} />
             <Route path="/hackquest" element={<MysteryBoxHackathon />} />
             <Route path="/hackquest/dashboard" element={<MysteryBoxDashboard />} />

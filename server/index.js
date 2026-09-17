@@ -27,6 +27,7 @@ import {
   isSingleTeamMembershipConflict,
 } from './hackathonTeam.js';
 import { initializeEventRewards, registerEventRewardRoutes } from './eventRewards.js';
+import { initializeCloudIntelligence, registerCloudIntelligenceRoutes } from './cloudIntelligence.js';
 import { isAllowedOrigin } from './corsOrigins.js';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -110,6 +111,17 @@ async function withTransaction(operation) {
 
 // ── Init quiz_scores table ────────────────────────────────────
 async function runDatabaseMigrations() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      first_name VARCHAR(100) NOT NULL,
+      last_name VARCHAR(100) NOT NULL,
+      email VARCHAR(255) UNIQUE NOT NULL,
+      phone VARCHAR(50),
+      password_hash VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS quiz_scores (
       id           SERIAL PRIMARY KEY,
@@ -207,12 +219,13 @@ async function runDatabaseMigrations() {
   `).catch(err => console.log('ALTER columns for hackathon_teams error:', err.message));
   await initializeHackathonScoring(pool);
   await initializeEventRewards(pool);
+  await initializeCloudIntelligence(pool);
 }
 
 async function initDb() {
   const result = await initializeVersionedSchema({
     pool,
-    version: 'v8-board-scores-and-freeze',
+    version: 'v9-cloud-intelligence',
     migrate: runDatabaseMigrations,
   });
   console.log(result.migrated ? 'Database tables ready (migrated to v8)' : 'Database schema already ready');
@@ -412,6 +425,7 @@ app.get('/api/mystery-box/teams/:code', hackathonAuth, async (req, res) => {
 
 registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddleware });
 registerHackathonScoringRoutes(app, { pool, hackathonAuth, adminMiddleware });
+registerCloudIntelligenceRoutes(app, { pool, adminMiddleware });
 
 // ── Presentation Upload / Management Endpoints ───────────────
 app.post('/api/mystery-box/teams/:code/presentation', async (req, res) => {

@@ -1,0 +1,630 @@
+export async function initializeCloudIntelligence(pool) {
+  // 1. Questions table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cloud_intelligence_questions (
+      id SERIAL PRIMARY KEY,
+      question_text TEXT NOT NULL,
+      question_type VARCHAR(32) NOT NULL DEFAULT 'mcq',
+      difficulty VARCHAR(16) NOT NULL DEFAULT 'medium',
+      assertion TEXT,
+      reason TEXT,
+      options JSONB DEFAULT '[]'::jsonb,
+      correct_answer JSONB NOT NULL,
+      points NUMERIC(3,2) DEFAULT 1.0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 2. Settings table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cloud_intelligence_settings (
+      key VARCHAR(64) PRIMARY KEY,
+      value JSONB NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  const defaultSettings = [
+    ['status', JSON.stringify('frozen')], // 'frozen' | 'unfrozen' (default is frozen)
+    ['title', JSON.stringify('Cloud Intelligence Assessment')],
+    ['duration_minutes', JSON.stringify(30)],
+  ];
+
+  for (const [key, val] of defaultSettings) {
+    await pool.query(
+      `INSERT INTO cloud_intelligence_settings (key, value)
+       VALUES ($1, $2::jsonb)
+       ON CONFLICT (key) DO NOTHING`,
+      [key, val]
+    );
+  }
+
+  // 3. Submissions table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cloud_intelligence_submissions (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      participant_name VARCHAR(128) NOT NULL,
+      participant_email VARCHAR(255) NOT NULL,
+      participant_reg_no VARCHAR(64),
+      score NUMERIC(6,2) NOT NULL DEFAULT 0,
+      total_marks NUMERIC(6,2) NOT NULL DEFAULT 0,
+      percentage NUMERIC(5,2) NOT NULL DEFAULT 0,
+      composite_score NUMERIC(6,2) NOT NULL DEFAULT 0,
+      accuracy_score NUMERIC(6,2) NOT NULL DEFAULT 0,
+      speed_score NUMERIC(6,2) NOT NULL DEFAULT 0,
+      correct_count INTEGER DEFAULT 0,
+      incorrect_count INTEGER DEFAULT 0,
+      unanswered_count INTEGER DEFAULT 0,
+      time_taken_seconds INTEGER DEFAULT 0,
+      total_allotted_seconds INTEGER DEFAULT 1800,
+      answers JSONB DEFAULT '{}'::jsonb,
+      breakdown JSONB DEFAULT '[]'::jsonb,
+      submitted_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // 4. Seed initial questions in Database if empty (so questions, results, etc. are dynamic & database-backed)
+  const qCountRes = await pool.query('SELECT COUNT(*)::int as count FROM cloud_intelligence_questions');
+  const existingCount = parseInt(qCountRes.rows[0]?.count || 0, 10);
+  if (existingCount < 3) {
+    const seedQuestions = [
+      {
+        text: 'Which AWS service provides resizable, managed virtual compute capacity in the cloud?',
+        type: 'mcq',
+        difficulty: 'easy',
+        assertion: null,
+        reason: null,
+        options: [
+          'Amazon EC2 (Elastic Compute Cloud)',
+          'Amazon S3 (Simple Storage Service)',
+          'Amazon RDS (Relational Database Service)',
+          'AWS Lambda',
+        ],
+        answer: 'Amazon EC2 (Elastic Compute Cloud)',
+      },
+      {
+        text: 'What type of storage is Amazon Simple Storage Service (Amazon S3)?',
+        type: 'mcq',
+        difficulty: 'easy',
+        assertion: null,
+        reason: null,
+        options: [
+          'Object Storage',
+          'Block Storage',
+          'File System Storage',
+          'Tape Storage',
+        ],
+        answer: 'Object Storage',
+      },
+      {
+        text: 'Assertion: AWS Lambda is a serverless compute service that runs code in response to events.\nReason: Users do not need to provision or manage servers to execute code in AWS Lambda.',
+        type: 'assertion_reason',
+        difficulty: 'medium',
+        assertion: 'AWS Lambda is a serverless compute service that runs code in response to events.',
+        reason: 'Users do not need to provision or manage servers to execute code in AWS Lambda.',
+        options: [
+          'Both Assertion (A) and Reason (R) are true, and (R) is the correct explanation of (A).',
+          'Both Assertion (A) and Reason (R) are true, but (R) is NOT the correct explanation of (A).',
+          'Assertion (A) is true, but Reason (R) is false.',
+          'Assertion (A) is false, but Reason (R) is true.',
+        ],
+        answer: 'Both Assertion (A) and Reason (R) are true, and (R) is the correct explanation of (A).',
+      },
+    ];
+
+    for (let i = existingCount; i < seedQuestions.length; i++) {
+      const q = seedQuestions[i];
+      await pool.query(
+        `INSERT INTO cloud_intelligence_questions (
+          question_text, question_type, difficulty, assertion, reason, options, correct_answer, points
+        )
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 1.0)`,
+        [
+          q.text,
+          q.type,
+          q.difficulty,
+          q.assertion,
+          q.reason,
+          JSON.stringify(q.options),
+          JSON.stringify(q.answer),
+        ]
+      );
+    }
+  }
+}
+
+// ── 1-Mark per Question Scoring Engine ────────────────────────
+// Each question = 1.0 Mark Total:
+// - 0.6 Marks for Correctness (60% weightage)
+// - 0.4 Marks for Speed (40% weightage, scaled with accuracy)
+// Total Max Score = Total Questions Count (e.g. 20 Questions = 20.00 Marks)
+export function evaluateQuizSubmission({ questions, userAnswers, timeTakenSeconds, allottedSeconds = 1800 }) {
+  let correctCount = 0;
+  let incorrectCount = 0;
+  let unansweredCount = 0;
+  const breakdown = [];
+
+  for (const q of questions) {
+    const diff = (q.difficulty || 'medium').toLowerCase();
+    const uAns = userAnswers[q.id];
+    const qType = q.question_type;
+    let isCorrect = false;
+    let isAnswered = uAns !== undefined && uAns !== null && uAns !== '' && !(Array.isArray(uAns) && uAns.length === 0);
+
+    if (!isAnswered) {
+      unansweredCount++;
+      breakdown.push({
+        questionId: q.id,
+        difficulty: diff,
+        isAnswered: false,
+        isCorrect: false,
+        userAnswer: null,
+        correctAnswer: q.correct_answer,
+      });
+      continue;
+    }
+
+    if (qType === 'mcq' || qType === 'assertion_reason') {
+      const correctText = typeof q.correct_answer === 'object' ? JSON.stringify(q.correct_answer) : String(q.correct_answer).trim();
+      const userText = typeof uAns === 'object' ? JSON.stringify(uAns) : String(uAns).trim();
+      isCorrect = correctText.toLowerCase() === userText.toLowerCase();
+    } else if (qType === 'multi_select') {
+      const correctArr = Array.isArray(q.correct_answer) ? q.correct_answer.map(s => String(s).trim().toLowerCase()).sort() : [];
+      const userArr = Array.isArray(uAns) ? uAns.map(s => String(s).trim().toLowerCase()).sort() : [];
+      isCorrect = correctArr.length > 0 && correctArr.length === userArr.length && correctArr.every((val, index) => val === userArr[index]);
+    } else if (qType === 'objective') {
+      const cleanUser = String(uAns).trim().toLowerCase();
+      if (Array.isArray(q.correct_answer)) {
+        isCorrect = q.correct_answer.some(ans => String(ans).trim().toLowerCase() === cleanUser);
+      } else {
+        isCorrect = cleanUser === String(q.correct_answer).trim().toLowerCase();
+      }
+    }
+
+    if (isCorrect) {
+      correctCount++;
+    } else {
+      incorrectCount++;
+    }
+
+    breakdown.push({
+      questionId: q.id,
+      difficulty: diff,
+      isAnswered: true,
+      isCorrect,
+      userAnswer: uAns,
+      correctAnswer: q.correct_answer,
+    });
+  }
+
+  const totalQuestions = Math.max(1, questions.length);
+  const totalMaxMarks = totalQuestions * 1.0; // 1 mark per question
+
+  // 1. Correctness Score (Max = Total Questions * 0.6)
+  const accuracyScore = correctCount * 0.6;
+
+  // 2. Speed Score (Max = Total Questions * 0.4)
+  // Allotted duration is n * 90 seconds (1.5 * n minutes)
+  const totalAllotted = allottedSeconds || (totalQuestions * 90);
+  const validAllotted = Math.max(30, totalAllotted);
+  const actualTime = Math.min(timeTakenSeconds, validAllotted);
+  const timeSavedRatio = Math.max(0, (validAllotted - actualTime) / validAllotted);
+  const accuracyRatio = correctCount / totalQuestions;
+  
+  // Speed bonus scales with accuracy so guessing fast without correctness yields 0 speed bonus
+  const speedScore = timeSavedRatio * (totalQuestions * 0.4) * accuracyRatio;
+
+  const totalFinalScore = parseFloat((accuracyScore + speedScore).toFixed(2));
+  const percentage = parseFloat(((totalFinalScore / totalMaxMarks) * 100).toFixed(2));
+
+  return {
+    score: totalFinalScore,
+    totalMarks: totalMaxMarks,
+    percentage,
+    compositeScore: totalFinalScore,
+    accuracyScore: parseFloat(accuracyScore.toFixed(2)),
+    speedScore: parseFloat(speedScore.toFixed(2)),
+    correctCount,
+    incorrectCount,
+    unansweredCount,
+    breakdown,
+  };
+}
+
+export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) {
+  // ── Public / Participant Quiz Endpoints ──────────────────────
+
+  // 1. Get Quiz Public Info
+  app.get('/api/cloud-intelligence/quiz-info', async (req, res) => {
+    try {
+      const settingsRes = await pool.query('SELECT key, value FROM cloud_intelligence_settings');
+      const settings = {};
+      settingsRes.rows.forEach(r => { settings[r.key] = r.value; });
+
+      const countRes = await pool.query('SELECT COUNT(*)::int as count FROM cloud_intelligence_questions');
+      const totalQuestions = countRes.rows[0]?.count || 0;
+      // Default to frozen unless explicitly set to 'unfrozen'
+      const isFrozen = settings.status !== 'unfrozen';
+      // Duration is 1.5 minutes (90 seconds) per question
+      const durationMinutes = totalQuestions > 0 ? Number((totalQuestions * 1.5).toFixed(1)) : 1.5;
+      const allottedSeconds = Math.max(90, totalQuestions * 90);
+
+      res.json({
+        title: settings.title || 'Cloud Intelligence Assessment',
+        durationMinutes,
+        allottedSeconds,
+        isFrozen,
+        totalQuestions,
+      });
+    } catch (error) {
+      console.error('Quiz info error:', error);
+      res.status(500).json({ error: 'Failed to retrieve quiz status' });
+    }
+  });
+
+  // 2. Get Randomized Questions for Participant
+  app.get('/api/cloud-intelligence/questions', async (req, res) => {
+    try {
+      const statusRes = await pool.query("SELECT value FROM cloud_intelligence_settings WHERE key = 'status'");
+      const status = statusRes.rows[0]?.value;
+      if (status !== 'unfrozen') {
+        return res.status(403).json({ error: 'Quiz is currently frozen by the administrator.' });
+      }
+
+      const result = await pool.query(`
+        SELECT id, question_text, question_type, difficulty, assertion, reason, options
+        FROM cloud_intelligence_questions
+        ORDER BY RANDOM()
+      `);
+
+      res.json({
+        questions: result.rows,
+        totalCount: result.rows.length,
+      });
+    } catch (error) {
+      console.error('Participant questions error:', error);
+      res.status(500).json({ error: 'Failed to load assessment questions' });
+    }
+  });
+
+  // 3. Submit Participant Assessment
+  app.post('/api/cloud-intelligence/submit', async (req, res) => {
+    try {
+      const {
+        participantName,
+        participantEmail,
+        participantRegNo,
+        answers = {},
+        timeTakenSeconds = 0,
+      } = req.body;
+
+      if (!participantName || !participantEmail) {
+        return res.status(400).json({ error: 'Participant name and email are required.' });
+      }
+
+      // Check duplicate submission
+      const existing = await pool.query(
+        'SELECT * FROM cloud_intelligence_submissions WHERE LOWER(participant_email) = LOWER($1) ORDER BY submitted_at DESC LIMIT 1',
+        [participantEmail.trim()]
+      );
+      if (existing.rows.length > 0) {
+        return res.status(409).json({
+          error: 'You have already submitted this assessment.',
+          submission: existing.rows[0],
+        });
+      }
+
+      const allQuestionsRes = await pool.query('SELECT * FROM cloud_intelligence_questions');
+      const allQuestions = allQuestionsRes.rows;
+      const totalQuestions = allQuestions.length;
+      const allottedSeconds = Math.max(90, totalQuestions * 90);
+
+      // Evaluate with 1-mark system (0.6 correctness + 0.4 speed against dynamic 90s/q)
+      const evaluation = evaluateQuizSubmission({
+        questions: allQuestions,
+        userAnswers: answers,
+        timeTakenSeconds: Number(timeTakenSeconds) || 0,
+        allottedSeconds,
+      });
+
+      const insertRes = await pool.query(
+        `INSERT INTO cloud_intelligence_submissions (
+          participant_name, participant_email, participant_reg_no,
+          score, total_marks, percentage, composite_score, accuracy_score, speed_score,
+          correct_count, incorrect_count, unanswered_count,
+          time_taken_seconds, total_allotted_seconds, answers, breakdown
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb, $16::jsonb)
+        RETURNING id, score, total_marks, percentage, composite_score, accuracy_score, speed_score,
+                  correct_count, incorrect_count, unanswered_count, time_taken_seconds, submitted_at, breakdown`,
+        [
+          participantName.trim(),
+          participantEmail.trim().toLowerCase(),
+          (participantRegNo || '').trim().toUpperCase(),
+          evaluation.score,
+          evaluation.totalMarks,
+          evaluation.percentage,
+          evaluation.compositeScore,
+          evaluation.accuracyScore,
+          evaluation.speedScore,
+          evaluation.correctCount,
+          evaluation.incorrectCount,
+          evaluation.unansweredCount,
+          Number(timeTakenSeconds) || 0,
+          allottedSeconds,
+          JSON.stringify(answers),
+          JSON.stringify(evaluation.breakdown),
+        ]
+      );
+
+      res.status(201).json({
+        success: true,
+        submission: insertRes.rows[0],
+      });
+    } catch (error) {
+      console.error('Quiz submission error:', error);
+      res.status(500).json({ error: 'Failed to process assessment: ' + error.message });
+    }
+  });
+
+  // 4. Check If Participant Already Submitted
+  app.get('/api/cloud-intelligence/submission/:email', async (req, res) => {
+    try {
+      const { email } = req.params;
+      if (!email) return res.status(400).json({ error: 'Email is required' });
+
+      const result = await pool.query(
+        'SELECT * FROM cloud_intelligence_submissions WHERE LOWER(participant_email) = LOWER($1) ORDER BY submitted_at DESC LIMIT 1',
+        [email.trim()]
+      );
+
+      if (result.rows.length === 0) {
+        return res.json({ hasSubmitted: false });
+      }
+
+      res.json({
+        hasSubmitted: true,
+        submission: result.rows[0],
+      });
+    } catch (error) {
+      console.error('Check submission error:', error);
+      res.status(500).json({ error: 'Failed to check submission history' });
+    }
+  });
+
+  // ── Admin Endpoints ──────────────────────────────────────────
+
+  // Get all questions
+  app.get('/api/admin/cloud-intelligence/questions', adminMiddleware, async (req, res) => {
+    try {
+      const result = await pool.query('SELECT * FROM cloud_intelligence_questions ORDER BY id ASC');
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Fetch questions error:', error);
+      res.status(500).json({ error: 'Failed to fetch questions' });
+    }
+  });
+
+  // Create question (1 mark fixed)
+  app.post('/api/admin/cloud-intelligence/questions', adminMiddleware, async (req, res) => {
+    try {
+      const {
+        question_text,
+        question_type = 'mcq',
+        difficulty = 'medium',
+        assertion,
+        reason,
+        options = [],
+        correct_answer,
+      } = req.body;
+
+      if (!question_text && question_type !== 'assertion_reason') {
+        return res.status(400).json({ error: 'Question text is required' });
+      }
+      if (question_type === 'assertion_reason' && (!assertion || !reason)) {
+        return res.status(400).json({ error: 'Both Assertion and Reason statements are required' });
+      }
+      if (correct_answer === undefined || correct_answer === null || correct_answer === '') {
+        return res.status(400).json({ error: 'Correct answer is required' });
+      }
+
+      const parsedOptions = Array.isArray(options) ? options : [];
+
+      const result = await pool.query(
+        `INSERT INTO cloud_intelligence_questions (
+          question_text, question_type, difficulty, assertion, reason, options,
+          correct_answer, points
+        )
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 1.0)
+        RETURNING *`,
+        [
+          question_text || `Assertion: ${assertion}`,
+          question_type,
+          difficulty.toLowerCase(),
+          assertion || null,
+          reason || null,
+          JSON.stringify(parsedOptions),
+          typeof correct_answer === 'string' ? JSON.stringify(correct_answer) : JSON.stringify(correct_answer),
+        ]
+      );
+
+      res.status(201).json(result.rows[0]);
+    } catch (error) {
+      console.error('Create question error:', error);
+      res.status(500).json({ error: 'Failed to create question: ' + error.message });
+    }
+  });
+
+  // Update question
+  app.put('/api/admin/cloud-intelligence/questions/:id', adminMiddleware, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        question_text,
+        question_type = 'mcq',
+        difficulty = 'medium',
+        assertion,
+        reason,
+        options = [],
+        correct_answer,
+      } = req.body;
+
+      const parsedOptions = Array.isArray(options) ? options : [];
+
+      const result = await pool.query(
+        `UPDATE cloud_intelligence_questions
+         SET question_text = $1,
+             question_type = $2,
+             difficulty = $3,
+             assertion = $4,
+             reason = $5,
+             options = $6::jsonb,
+             correct_answer = $7::jsonb,
+             points = 1.0,
+             updated_at = NOW()
+         WHERE id = $8
+         RETURNING *`,
+        [
+          question_text || `Assertion: ${assertion}`,
+          question_type,
+          difficulty.toLowerCase(),
+          assertion || null,
+          reason || null,
+          JSON.stringify(parsedOptions),
+          typeof correct_answer === 'string' ? JSON.stringify(correct_answer) : JSON.stringify(correct_answer),
+          id,
+        ]
+      );
+
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Question not found' });
+      res.json(result.rows[0]);
+    } catch (error) {
+      console.error('Update question error:', error);
+      res.status(500).json({ error: 'Failed to update question: ' + error.message });
+    }
+  });
+
+  // Delete question
+  app.delete('/api/admin/cloud-intelligence/questions/:id', adminMiddleware, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const result = await pool.query('DELETE FROM cloud_intelligence_questions WHERE id = $1 RETURNING id', [id]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Question not found' });
+      res.json({ success: true, deletedId: id });
+    } catch (error) {
+      console.error('Delete question error:', error);
+      res.status(500).json({ error: 'Failed to delete question' });
+    }
+  });
+
+  // Freeze / Unfreeze toggle
+  app.post('/api/admin/cloud-intelligence/freeze', adminMiddleware, async (req, res) => {
+    try {
+      const { status } = req.body; // 'frozen' | 'unfrozen'
+      if (!['frozen', 'unfrozen'].includes(status)) {
+        return res.status(400).json({ error: 'Status must be "frozen" or "unfrozen"' });
+      }
+
+      await pool.query(
+        `INSERT INTO cloud_intelligence_settings (key, value, updated_at)
+         VALUES ('status', $1::jsonb, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
+        [JSON.stringify(status)]
+      );
+
+      res.json({ success: true, status });
+    } catch (error) {
+      console.error('Freeze toggle error:', error);
+      res.status(500).json({ error: 'Failed to toggle freeze state' });
+    }
+  });
+
+  // Get settings
+  app.get('/api/admin/cloud-intelligence/settings', adminMiddleware, async (req, res) => {
+    try {
+      const result = await pool.query('SELECT key, value FROM cloud_intelligence_settings');
+      const settings = {};
+      result.rows.forEach(r => { settings[r.key] = r.value; });
+
+      const countRes = await pool.query('SELECT COUNT(*)::int as count FROM cloud_intelligence_questions');
+      const qCount = countRes.rows[0]?.count || 0;
+      settings.duration_minutes = qCount > 0 ? Number((qCount * 1.5).toFixed(1)) : 1.5;
+
+      res.json(settings);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch settings' });
+    }
+  });
+
+  // Update settings
+  app.post('/api/admin/cloud-intelligence/settings', adminMiddleware, async (req, res) => {
+    try {
+      const { title, duration_minutes } = req.body;
+      if (title) {
+        await pool.query(
+          "INSERT INTO cloud_intelligence_settings (key, value, updated_at) VALUES ('title', $1::jsonb, NOW()) ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()",
+          [JSON.stringify(title)]
+        );
+      }
+      if (duration_minutes) {
+        await pool.query(
+          "INSERT INTO cloud_intelligence_settings (key, value, updated_at) VALUES ('duration_minutes', $1::jsonb, NOW()) ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()",
+          [JSON.stringify(Number(duration_minutes))]
+        );
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to save settings' });
+    }
+  });
+
+  // Results & Leaderboard
+  app.get('/api/admin/cloud-intelligence/results', adminMiddleware, async (req, res) => {
+    try {
+      const submissionsRes = await pool.query(`
+        SELECT * FROM cloud_intelligence_submissions
+        ORDER BY score DESC, accuracy_score DESC, time_taken_seconds ASC, submitted_at ASC
+      `);
+
+      const statsRes = await pool.query(`
+        SELECT
+          COUNT(*)::int as total_participants,
+          COALESCE(AVG(score), 0)::numeric(6,2) as avg_score,
+          COALESCE(MAX(score), 0)::numeric(6,2) as max_score,
+          COALESCE(AVG(time_taken_seconds), 0)::int as avg_time_seconds
+        FROM cloud_intelligence_submissions
+      `);
+
+      res.json({
+        submissions: submissionsRes.rows,
+        stats: statsRes.rows[0] || {},
+      });
+    } catch (error) {
+      console.error('Results query error:', error);
+      res.status(500).json({ error: 'Failed to retrieve results' });
+    }
+  });
+
+  // Reset Results
+  app.post('/api/admin/cloud-intelligence/results/reset', adminMiddleware, async (req, res) => {
+    try {
+      await pool.query('TRUNCATE TABLE cloud_intelligence_submissions');
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to reset results' });
+    }
+  });
+
+  // Delete single result
+  app.delete('/api/admin/cloud-intelligence/results/:id', adminMiddleware, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await pool.query('DELETE FROM cloud_intelligence_submissions WHERE id = $1', [id]);
+      res.json({ success: true, deletedId: id });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to delete result' });
+    }
+  });
+}
