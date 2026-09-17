@@ -20,7 +20,7 @@ export default function Landing() {
             alt="AWS Logo"
             className="h-10 w-10 rounded-md object-contain border border-[var(--border)] p-1 bg-black/40"
           />
-          <span>STUDENT BUILDER GROUP<br /><span style={{ color: 'var(--muted)' }}>VIT VELLORE</span></span>
+          <span>AWS STUDENT BUILDER GROUP<br /><span style={{ color: 'var(--muted)' }}>VIT VELLORE</span></span>
         </div>
         <Link className="action !min-h-10 !px-5" to="/recruitment/login">
           Enter portal <ArrowRight size={14} />
