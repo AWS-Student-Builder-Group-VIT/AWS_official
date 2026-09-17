@@ -77,9 +77,9 @@ const events = [
     quiz: "Hands-on Console Labs",
   },
   {
-    day: "6th Sept",
+    day: "12th & 13th Sept",
     title: "HackQuest : AWS Mystery Box Hackathon",
-    time: "Venue: SAROJINI NAIDU AUDITORIUM · HDFC Bank",
+    time: "24-Hour Hackathon · Venue: SAROJINI NAIDU AUDITORIUM · HDFC Bank",
     icon: "military_tech",
     color: "#FF9900",
     points: [

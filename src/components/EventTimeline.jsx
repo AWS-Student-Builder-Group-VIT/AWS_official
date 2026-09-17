@@ -101,9 +101,9 @@ const timelineData = [
     },
   },
   {
-    day: '6th Sept',
+    day: '12th & 13th Sept',
     title: 'HackQuest : AWS Mystery Box Hackathon',
-    time: 'Venue: SAROJINI NAIDU AUDITORIUM · In Assoc. with HDFC Bank',
+    time: '24-Hour Hackathon · Venue: SAROJINI NAIDU AUDITORIUM · In Assoc. with HDFC Bank',
     icon: 'military_tech',
     points: [
       'Venue: SAROJINI NAIDU AUDITORIUM | Organised by AWS SBG VIT with HDFC Bank.',
