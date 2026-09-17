@@ -77,8 +77,11 @@ export default function Dashboard() {
 
   // Per-track decisions are only shown once Round 1 results are out.
   const resultsOut = profile.round_0_status === 'qualified' || profile.round_0_status === 'not_qualified';
-  const trackBadge = (subdomainId) => {
-    const decision = resultsOut ? attempts.find((a) => a.subdomain_id === subdomainId)?.admin_qualified : null;
+  const trackBadge = (track) => {
+    // Technical tracks are decided on their assessment, other domains on the choice itself.
+    const decision = !resultsOut ? null : track.subdomain?.domain?.slug === 'technical'
+      ? attempts.find((a) => a.subdomain_id === track.subdomain_id)?.admin_qualified
+      : track.admin_qualified;
     if (decision === true) return { text: 'Qualified', color: 'var(--success)' };
     if (decision === false) return { text: 'Not qualified', color: 'var(--error)' };
     return { text: 'Applied', color: 'var(--accent)' };
@@ -212,7 +215,7 @@ export default function Dashboard() {
                 <div className={`mt-4 grid gap-2 ${tracks.length > 1 ? 'sm:grid-cols-2' : ''}`}>
                   {tracks.map((track) => (
                     <div key={track.subdomain_id} className="border p-3" style={{ borderColor: 'var(--border)', background: 'rgba(0,0,0,.3)' }}>
-                      <p className="font-mono text-[10px] uppercase tracking-widest" style={{ color: trackBadge(track.subdomain_id).color }}>{trackBadge(track.subdomain_id).text}</p>
+                      <p className="font-mono text-[10px] uppercase tracking-widest" style={{ color: trackBadge(track).color }}>{trackBadge(track).text}</p>
                       <p className="mt-1 text-sm" style={{ color: 'var(--text)' }}>
                         {track.subdomain?.domain?.selection_mode === 'whole_domain'
                           ? track.subdomain?.domain?.name

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Activity, CalendarClock, CheckCircle2, ClipboardCheck, Download, FilePlus2, FolderKanban, Mail, RefreshCw, Search, ShieldCheck, Users, X } from 'lucide-react';
+import { Activity, CalendarClock, CheckCircle2, ClipboardCheck, Download, FilePlus2, FolderKanban, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react';
 import { createClient } from '../lib/supabase.js';
 import { formatDateTime } from '../lib/utils.js';
 import { candidateCsvRow } from '../lib/admin-export.js';
@@ -27,11 +27,7 @@ export default function AdminOperations() {
   const [stage, setStage] = useState('');
   const [minScore, setMinScore] = useState(0);
   const [sort, setSort] = useState('newest');
-  const [selectedId, setSelectedId] = useState(null);
   const [showQuestionBank, setShowQuestionBank] = useState(false);
-  const [releasingId, setReleasingId] = useState(null);
-  // Written answers are loaded per candidate when a dossier opens, not in bulk.
-  const [answersByCandidate, setAnswersByCandidate] = useState({});
   const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async (silent = false) => {
@@ -51,7 +47,6 @@ export default function AdminOperations() {
         for (const choice of candidate.subdomain_choices ?? []) choice.subdomain = lookup[choice.subdomain_id] ?? null;
       }
       setPayload(result);
-      setAnswersByCandidate({});
     }
     setLoading(false);
     setRefreshing(false);
@@ -62,8 +57,8 @@ export default function AdminOperations() {
   const records = useMemo(() => payload.candidates.map((profile) => {
     const assignments = payload.assignments.filter((item) => item.candidate_id === profile.id);
     const assignmentIds = new Set(assignments.map((item) => item.id));
-    return { profile, attempt: payload.attempts.find((item) => item.candidate_id === profile.id), assignments, submissions: payload.submissions.filter((item) => assignmentIds.has(item.assignment_id)), bookings: payload.bookings.filter((item) => item.candidate_id === profile.id), writtenAnswers: answersByCandidate[profile.id] ?? null, result: payload.results.find((item) => item.candidate_id === profile.id) };
-  }), [payload, answersByCandidate]);
+    return { profile, attempt: payload.attempts.find((item) => item.candidate_id === profile.id), assignments, submissions: payload.submissions.filter((item) => assignmentIds.has(item.assignment_id)), bookings: payload.bookings.filter((item) => item.candidate_id === profile.id), result: payload.results.find((item) => item.candidate_id === profile.id) };
+  }), [payload]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -84,37 +79,6 @@ export default function AdminOperations() {
     });
   }, [records, search, domainIds, subdomainId, stage, minScore, sort]);
 
-  const [deletingId, setDeletingId] = useState(null);
-
-  // Deleting wipes every answer, attempt and choice, so it asks for the
-  // registration number rather than a single click.
-  const deleteCandidate = async (profile) => {
-    const typed = prompt(
-      `This permanently deletes ${profile.full_name} and all of their recruitment data.\n\nType their registration number (${profile.registration_number}) to confirm:`,
-    );
-    if (typed == null) return;
-    if (typed.trim().toLowerCase() !== (profile.registration_number ?? '').toLowerCase()) {
-      setError('Registration number did not match. Nothing was deleted.');
-      return;
-    }
-    setDeletingId(profile.id);
-    setError('');
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { setError('Administrator session expired.'); setDeletingId(null); return; }
-    const response = await fetch(`/api/recruitment/admin/candidates?id=${encodeURIComponent(profile.id)}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) setError(result.error ?? 'Unable to delete this candidate.');
-    else {
-      setSelectedId(null);
-      await load();
-    }
-    setDeletingId(null);
-  };
-
-  const selected = records.find((r) => r.profile.id === selectedId) ?? null;
   const visibleSubdomains = useMemo(() => payload.domains.filter((d) => domainIds.includes(d.id)).flatMap((d) => d.subdomains ?? []), [payload.domains, domainIds]);
   useEffect(() => { if (subdomainId && !visibleSubdomains.some((s) => s.id === subdomainId)) setSubdomainId(''); }, [subdomainId, visibleSubdomains]);
   const metrics = useMemo(() => {
@@ -129,14 +93,6 @@ export default function AdminOperations() {
   function toggleDomain(id) { setDomainIds((curr) => curr.includes(id) ? curr.filter((item) => item !== id) : [...curr, id]); }
   function resetFilters() { setSearch(''); setDomainIds([]); setSubdomainId(''); setStage(''); setMinScore(0); setSort('newest'); }
 
-  async function setMarksRelease(attemptId, release) {
-    setReleasingId(attemptId); setError('');
-    const { data: { session } } = await supabase.auth.getSession();
-    const response = session ? await fetch('/api/recruitment/admin/assessments/release', { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ attempt_id: attemptId, release }) }) : null;
-    if (!response?.ok) { const result = response ? await response.json() : null; setError(result?.error ?? 'Administrator session expired.'); } else await load(true);
-    setReleasingId(null);
-  }
-
   const adminFetch = useCallback(async (path) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('Administrator session expired.');
@@ -145,15 +101,6 @@ export default function AdminOperations() {
     if (!response.ok) throw new Error(result.error ?? `Request failed (HTTP ${response.status}).`);
     return result;
   }, [supabase]);
-
-  useEffect(() => {
-    if (!selectedId || answersByCandidate[selectedId]) return;
-    let cancelled = false;
-    adminFetch(`/api/recruitment/admin/written-answers?candidate_id=${encodeURIComponent(selectedId)}`)
-      .then((result) => { if (!cancelled) setAnswersByCandidate((curr) => ({ ...curr, [selectedId]: result.answers ?? [] })); })
-      .catch((err) => { if (!cancelled) setError(err.message); });
-    return () => { cancelled = true; };
-  }, [selectedId, answersByCandidate, adminFetch]);
 
   async function exportCsv() {
     setExporting(true);
@@ -235,7 +182,7 @@ export default function AdminOperations() {
 
       {error && <div role="alert" className="border-b px-4 py-3 text-sm" style={{ borderColor: 'var(--error)', background: 'rgba(239,68,68,.1)', color: 'var(--error)' }}>{error}</div>}
 
-      <div className="grid min-h-[calc(100vh-10.5rem)] xl:grid-cols-[230px_minmax(680px,1fr)_360px]">
+      <div className="grid min-h-[calc(100vh-10.5rem)] xl:grid-cols-[230px_minmax(680px,1fr)]">
         {/* Filters */}
         <aside className="border-r p-3" style={{ borderColor: 'var(--border)', background: '#060709' }}>
           <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: 'var(--border)' }}>
@@ -252,7 +199,7 @@ export default function AdminOperations() {
         </aside>
 
         {/* Candidate table */}
-        <main className="min-w-0 overflow-hidden border-r" style={{ borderColor: 'var(--border)' }}>
+        <main className="min-w-0 overflow-hidden" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center justify-between border-b px-3 py-2 font-mono text-[10px]" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
             <span className="relative block w-full max-w-xs"><Search size={13} className="absolute left-2 top-1.5" style={{ color: 'var(--dim)' }} /><input type="search" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search candidates" className="w-full border py-1 pl-7 pr-2" style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text)' }} placeholder="Search name, reg no, email, phone…" /></span>
             <label className="flex items-center gap-2"><span style={{ color: 'var(--dim)' }}>SORT:</span>
@@ -271,9 +218,8 @@ export default function AdminOperations() {
                   const { profile, attempt, assignments, submissions, bookings, result } = record;
                   const pct = scorePercent(attempt);
                   const choices = [...(profile.subdomain_choices ?? [])].sort((a, b) => a.priority - b.priority);
-                  const active = selectedId === profile.id;
                   return (
-                    <tr key={profile.id} onClick={() => setSelectedId(profile.id)} className="cursor-pointer border-b transition" style={{ borderColor: 'var(--border)', background: active ? 'rgba(255,153,0,.05)' : 'rgba(17,19,24,.4)', boxShadow: active ? 'inset 3px 0 0 #FF9900' : 'none' }}>
+                    <tr key={profile.id} onClick={() => navigate(`/recruitment/admin/candidates/${profile.id}`)} className="cursor-pointer border-b transition hover:bg-[rgba(255,153,0,.05)]" style={{ borderColor: 'var(--border)', background: 'rgba(17,19,24,.4)' }}>
                       <td className="px-3 py-3"><div className="flex items-center gap-2"><span className="grid h-8 w-8 shrink-0 place-items-center border font-mono text-[10px] font-bold" style={{ borderColor: 'rgba(255,153,0,.4)', background: 'rgba(255,153,0,.1)', color: 'var(--accent)' }}>{initials(profile.full_name)}</span><span className="min-w-0"><strong className="block truncate text-sm" style={{ color: 'var(--text)' }}>{profile.full_name}</strong><span className="font-mono text-[9px]" style={{ color: 'var(--accent)' }}>#{profile.registration_number}</span><span className="block text-[9px]" style={{ color: 'var(--dim)' }}>{profile.branch ?? 'Branch —'} · Year {profile.year ?? '—'}</span></span></div></td>
                       <td className="px-3 py-3">{choices.length ? choices.map((c) => <span key={c.subdomain_id} className="block font-mono text-[9px]" style={{ color: 'var(--accent)' }}>{choiceLabel(c)}</span>) : <span style={{ color: 'var(--dim)' }}>Unassigned</span>}</td>
                       <td className="px-3 py-3 font-mono">{pct == null ? <span style={{ color: 'var(--dim)' }}>{humanize(profile.round_0_status)}</span> : <><strong style={{ color: pct >= 70 ? 'var(--success)' : pct >= 40 ? 'var(--warning)' : 'var(--error)' }}>{attempt?.score}/{attempt?.total_marks} ({pct}%)</strong><span className="block text-[9px]" style={{ color: 'var(--dim)' }}>{attempt?.auto_submitted ? 'Auto-submitted' : humanize(attempt?.status)}</span></>}</td>
@@ -289,12 +235,6 @@ export default function AdminOperations() {
           </div>
         </main>
 
-        {/* Candidate inspector */}
-        <aside className={`${selected ? 'block' : 'hidden xl:block'} fixed inset-0 z-40 overflow-auto xl:static xl:z-auto`} style={{ background: '#080a0d' }}>
-          {selected
-            ? <CandidateInspector record={selected} onClose={() => setSelectedId(null)} releasing={releasingId === selected.attempt?.id} onReleaseMarks={setMarksRelease} onDelete={deleteCandidate} deleting={deletingId === selected.profile.id} />
-            : <div className="grid h-full place-items-center p-8 text-center"><div><Users style={{ color: 'var(--dim)' }} className="mx-auto" /><p className="mt-3 font-mono text-xs" style={{ color: 'var(--muted)' }}>SELECT A CANDIDATE<br />TO OPEN THE DOSSIER</p></div></div>}
-        </aside>
       </div>
 
       <footer className="flex flex-wrap justify-between gap-2 border-t px-4 py-2 font-mono text-[9px]" style={{ borderColor: 'var(--border)', background: '#060709', color: 'var(--dim)' }}>
@@ -303,84 +243,6 @@ export default function AdminOperations() {
       </footer>
 
       {showQuestionBank && <QuestionBank domains={payload.domains} onClose={() => setShowQuestionBank(false)} />}
-    </div>
-  );
-}
-
-function CandidateInspector({ record, onClose, releasing, onReleaseMarks, onDelete, deleting }) {
-  const { profile, attempt, assignments, submissions, bookings, writtenAnswers, result } = record;
-  const choices = [...(profile.subdomain_choices ?? [])].sort((a, b) => a.priority - b.priority);
-  const Section = ({ title, children }) => <section className="border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}><h3 className="mb-3 border-b pb-2 font-mono text-[10px] uppercase tracking-wider" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>{title}</h3>{children}</section>;
-  const Data = ({ label, value }) => <div><dt className="font-mono text-[9px] uppercase" style={{ color: 'var(--dim)' }}>{label}</dt><dd className="mt-1 break-words" style={{ color: 'var(--text)' }}>{value}</dd></div>;
-
-  return (
-    <div className="min-h-full" style={{ background: '#080a0d' }}>
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--border)', background: '#11141a' }}>
-        <p className="font-mono text-[10px] font-bold tracking-wider">CANDIDATE DOSSIER INSPECTOR</p>
-        <button onClick={onClose} aria-label="Close candidate dossier" style={{ color: 'var(--muted)' }}><X size={17} /></button>
-      </header>
-      <div className="space-y-4 p-4">
-        <Section title="Identity">
-          <div className="flex items-start gap-3">
-            <span className="grid h-12 w-12 shrink-0 place-items-center border font-mono font-bold" style={{ borderColor: 'rgba(255,153,0,.5)', background: 'rgba(255,153,0,.1)', color: 'var(--accent)' }}>{initials(profile.full_name)}</span>
-            <div className="min-w-0 flex-1">
-              <h2 className="truncate text-lg font-bold">{profile.full_name}</h2>
-              <p className="font-mono text-[10px]" style={{ color: 'var(--accent)' }}>#{profile.registration_number}</p>
-              <p className="mt-1 text-xs" style={{ color: 'var(--muted)' }}>{profile.branch ?? 'Branch not provided'} · Year {profile.year ?? '—'}</p>
-            </div>
-          </div>
-          <div className="mt-4"><a href={`mailto:${profile.email}`} className="inline-flex items-center gap-2 border px-3 py-2 text-[10px] transition" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}><Mail size={13} />EMAIL</a></div>
-          <dl className="mt-4 grid grid-cols-2 gap-3 border-t pt-3 text-xs" style={{ borderColor: 'var(--border)' }}>
-            <Data label="Phone" value={profile.phone ?? 'Not provided'} />
-            <Data label="Applied" value={formatDateTime(profile.created_at)} />
-          </dl>
-        </Section>
-
-        <Section title="Application choices">
-          <div className="space-y-2">{choices.length ? choices.map((c) => <div key={c.subdomain_id} className="border p-3" style={{ borderColor: 'var(--border)', background: 'rgba(0,0,0,.4)' }}><p className="font-mono text-[9px]" style={{ color: 'var(--accent)' }}>SELECTED</p><p className="mt-1 text-sm">{choiceLabel(c)}</p></div>) : <p className="text-xs" style={{ color: 'var(--muted)' }}>No choices submitted.</p>}</div>
-        </Section>
-
-        <Section title="Round 1 · Written responses">
-          <div className="space-y-3">{writtenAnswers == null ? <p className="text-xs" style={{ color: 'var(--muted)' }}>Loading written responses…</p> : writtenAnswers.length ? writtenAnswers.map((answer) => <article key={`${answer.domain_id}:${answer.question_id}`} className="border p-3" style={{ borderColor: 'var(--border)', background: 'rgba(0,0,0,.4)' }}><div className="flex justify-between gap-3"><p className="font-mono text-[9px]" style={{ color: 'var(--accent)' }}>{answer.domain?.name ?? 'Domain'}</p><span className="font-mono text-[9px]" style={{ color: answer.is_final ? 'var(--success)' : 'var(--warning)' }}>{answer.is_final ? 'FINAL' : 'DRAFT'}</span></div><h4 className="mt-2 text-xs font-semibold">{answer.question?.prompt ?? 'Question'}</h4><p className="mt-2 whitespace-pre-wrap text-xs leading-5" style={{ color: 'var(--muted)' }}>{answer.answer_text || 'No written explanation.'}</p>{answer.submission_links?.length > 0 && <div className="mt-2 space-y-1">{answer.submission_links.map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="block break-all text-xs hover:underline" style={{ color: 'var(--accent)' }}>{link} ↗</a>)}</div>}</article>) : <p className="text-xs" style={{ color: 'var(--muted)' }}>No written responses saved.</p>}</div>
-        </Section>
-
-        <Section title="Round 1 · Technical assessment">
-          {attempt ? <><dl className="grid grid-cols-2 gap-3 text-xs">
-            <Data label="Score" value={attempt.score == null ? 'Pending evaluation' : `${attempt.score} / ${attempt.total_marks ?? '—'} (${scorePercent(attempt) ?? 0}%)`} />
-            <Data label="Status" value={humanize(attempt.status)} />
-            <Data label="Admin decision" value={attempt.admin_qualified == null ? 'Pending' : attempt.admin_qualified ? 'Qualified' : 'Not qualified'} />
-            <Data label="Auto-submitted" value={attempt.auto_submitted ? 'Yes (time up)' : 'No'} />
-          </dl>
-          {attempt.status === 'submitted' && <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--border)' }}>
-            <button onClick={() => onReleaseMarks(attempt.id, !attempt.results_released_at)} disabled={releasing}
-              className="w-full border px-3 py-2 font-mono text-[10px] font-bold transition disabled:cursor-not-allowed disabled:opacity-40"
-              style={attempt.results_released_at ? { borderColor: 'rgba(245,158,11,.5)', color: 'var(--warning)' } : { borderColor: 'var(--accent)', background: 'var(--accent)', color: 'var(--bg)' }}>
-              {releasing ? 'SAVING…' : attempt.results_released_at ? 'HIDE MARKS FROM CANDIDATE' : attempt.score == null ? 'CALCULATE & RELEASE MARKS' : 'RELEASE MARKS TO CANDIDATE'}
-            </button>
-            <p className="mt-2 font-mono text-[9px]" style={{ color: 'var(--dim)' }}>{attempt.results_released_at ? `Released ${formatDateTime(attempt.results_released_at)}` : 'Candidate sees: Results will be released shortly.'}</p>
-          </div>}</> : <p className="text-xs" style={{ color: 'var(--muted)' }}>No Technical assessment required or started.</p>}
-        </Section>
-
-        <Section title="Round 2 · Project tracks">
-          <div className="space-y-3">{assignments.length ? assignments.map((assignment) => { const submission = submissions.find((s) => s.assignment_id === assignment.id); return <div key={assignment.id} className="border p-3" style={{ borderColor: 'var(--border)', background: 'rgba(0,0,0,.4)' }}><div className="flex justify-between gap-3"><div><p className="font-mono text-[9px]" style={{ color: 'var(--accent)' }}>{assignment.project?.code ?? 'PROJECT'}</p><p className="mt-1 text-sm font-semibold">{assignment.project?.title ?? 'Unavailable'}</p></div><span className="font-mono text-[9px]" style={{ color: 'var(--muted)' }}>{humanize(assignment.status)}</span></div>{submission ? <div className="mt-3 border-t pt-3 text-xs" style={{ borderColor: 'var(--border)' }}><a href={submission.github_url} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: 'var(--accent)' }}>Open GitHub ↗</a>{submission.evaluation ? <p className="mt-2 font-mono" style={{ color: 'var(--success)' }}>Evaluation: {submission.evaluation.total_score ?? '—'}/100 · {submission.evaluation.qualified ? 'Qualified' : 'Not qualified'}</p> : <p className="mt-2 font-mono" style={{ color: 'var(--warning)' }}>Awaiting evaluation</p>}</div> : <p className="mt-3 font-mono text-[10px]" style={{ color: 'var(--warning)' }}>Not submitted</p>}</div>; }) : <p className="text-xs" style={{ color: 'var(--muted)' }}>No projects assigned.</p>}</div>
-        </Section>
-
-        <Section title="Final decision">
-          <div className="flex items-center justify-between"><span className="text-sm" style={{ color: 'var(--muted)' }}>Current outcome</span><strong className="font-mono text-sm" style={{ color: result?.result === 'selected' ? 'var(--success)' : result?.result === 'not_selected' ? 'var(--error)' : 'var(--accent)' }}>{humanize(result?.result ?? profile.final_status ?? 'Pending')}</strong></div>
-          {result?.feedback && <p className="mt-3 border-t pt-3 text-xs leading-5" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>{result.feedback}</p>}
-        </Section>
-        <section className="border p-4" style={{ borderColor: 'rgba(239,68,68,.35)', background: 'rgba(239,68,68,.06)' }}>
-          <h3 className="mb-3 border-b pb-2 font-mono text-[10px] uppercase tracking-wider" style={{ borderColor: 'rgba(239,68,68,.25)', color: 'var(--error)' }}>Danger zone</h3>
-          <p className="text-xs leading-5" style={{ color: 'var(--muted)' }}>
-            Permanently removes this candidate, every answer and attempt they have, and their sign-in account.
-          </p>
-          <button type="button" onClick={() => onDelete?.(profile)} disabled={deleting}
-            className="mt-3 inline-flex items-center gap-2 border px-4 py-2 font-mono text-[10px] uppercase tracking-wider transition disabled:opacity-40"
-            style={{ borderColor: 'rgba(239,68,68,.5)', color: 'var(--error)' }}>
-            {deleting ? 'Deleting…' : 'Delete candidate'}
-          </button>
-        </section>
-      </div>
     </div>
   );
 }

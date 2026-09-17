@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createClient } from '../lib/supabase.js';
 import { fetchAll } from '../lib/fetch-all.js';
 import { statusLabel, statusColor, formatDate } from '../lib/utils.js';
 
 export default function AdminCandidates() {
+  const navigate = useNavigate();
   const [supabase] = useState(createClient);
   const [candidates, setCandidates] = useState([]);
   const [filtered, setFiltered] = useState([]);
@@ -115,7 +117,7 @@ export default function AdminCandidates() {
           </thead>
           <tbody>
             {filtered.map((c) => (
-              <tr key={c.id} className="border-b transition" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+              <tr key={c.id} onClick={() => navigate(`/recruitment/admin/candidates/${c.id}`)} className="cursor-pointer border-b transition hover:brightness-125" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
                 <td className="px-4 py-3">
                   <p className="font-medium" style={{ color: 'var(--text)' }}>{c.full_name}</p>
                   <p className="text-xs" style={{ color: 'var(--muted)' }}>{c.registration_number}</p>
@@ -142,7 +144,7 @@ export default function AdminCandidates() {
                 </td>
                 <td className="px-4 py-3 text-xs" style={{ color: 'var(--muted)' }}>{c.created_at ? formatDate(c.created_at) : '—'}</td>
                 <td className="px-4 py-3 text-right">
-                  <button type="button" onClick={() => deleteCandidate(c)} disabled={deletingId === c.id}
+                  <button type="button" onClick={(e) => { e.stopPropagation(); deleteCandidate(c); }} disabled={deletingId === c.id}
                     className="rounded-lg border px-3 py-1.5 text-xs transition hover:border-[var(--error)] hover:text-[var(--error)] disabled:opacity-40"
                     style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>
                     {deletingId === c.id ? 'Deleting…' : 'Delete'}
