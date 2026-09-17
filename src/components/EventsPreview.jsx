@@ -62,6 +62,33 @@ const events = [
     ],
     quiz: "Cloud Combat 3.0 — Case Study Activity",
   },
+  {
+    day: "12th & 13th Sept",
+    title: "HackQuest : AWS Mystery Box Hackathon",
+    time: "24-Hour Hackathon · HDFC Bank",
+    icon: "military_tech",
+    color: "#FF9900",
+    points: [
+      "24-hour mystery box hackathon with HDFC Bank.",
+      "3 rounds: Ideation, Development with Point Shop games & Chaos Card, and Final Demo.",
+      "Judged by Mr. Ranjithkumar S — awards for top 3 & Best UI/UX.",
+    ],
+    quiz: "3-Round Hackathon Structure",
+  },
+  {
+    day: "19th Sept",
+    title: "AWS 106 : Cloud Foundations Bootcamp",
+    time: "Speaker: Mr. Vignesh Devan · Amazon",
+    icon: "terminal",
+    color: "#FF9900",
+    points: [
+      "Led by Mr. Vignesh Devan, Sr. Data Scientist at Amazon.",
+      "Core computing, server architecture, IaaS/PaaS/SaaS & AWS Console.",
+      "Bridged Gen AI: LLMs, Bedrock, SageMaker, Amazon Q & AI Agents.",
+      "Hands-on labs: Launching EC2, S3 bucket creation, IAM & security.",
+    ],
+    quiz: "Hands-on Console Labs",
+  },
 ];
 
 /* ── Preview Event Card ── */
@@ -253,14 +280,14 @@ export default function EventsPreview() {
             className="text-[7px] tracking-[3px] uppercase"
             style={{ fontFamily: "'Space Mono', monospace", color: "#c1c6da" }}
           >
-            4-Day Workshop Series
+            Flagship Events & Workshop Series
           </span>
         </div>
         <p
           className="text-[11px] font-bold uppercase tracking-wide leading-tight"
           style={{ fontFamily: "'Space Mono', monospace", color: "#f1dfd1" }}
         >
-          AWS <span style={{ color: "#FF9900" }}>Week</span> Event Timeline
+          AWS Club <span style={{ color: "#FF9900" }}>Events</span> Timeline
         </p>
       </motion.div>
 
@@ -290,8 +317,8 @@ export default function EventsPreview() {
             className="text-[7px] tracking-wide"
             style={{ fontFamily: "'Inter', sans-serif", color: "#dbc2ad" }}
           >
-            4 days · 4 technical sessions · Cloud Combat series ·{" "}
-            <strong style={{ color: "#FF9900", textTransform: "uppercase" }}>aws week</strong>
+            6 Flagship Events · Hands-on Workshops · Hackathons ·{" "}
+            <strong style={{ color: "#FF9900", textTransform: "uppercase" }}>AWS SBG VIT</strong>
           </p>
         </motion.div>
       </div>

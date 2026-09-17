@@ -5,7 +5,7 @@
 
 /* ── Scroll Container (tall = provides the scrub zone) ── */
 .helix-wrap {
-  height: 400vh;
+  height: 560vh;
   position: relative;
   font-family: 'Inter', sans-serif;
 }
@@ -162,11 +162,11 @@
 ══════════════════════════════ */
 .helix-card {
   position: absolute;
-  width: 600px;
-  height: 290px;
+  width: 610px;
+  height: 310px;
   /* Cards centered on the stage origin */
-  top: -145px;
-  left: -300px;
+  top: -155px;
+  left: -305px;
   display: flex;
   overflow: hidden;
   background: rgba(10, 12, 18, 0.94);
@@ -290,7 +290,9 @@
   margin: 4px 0 0;
   padding: 0;
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 153, 0, 0.25) transparent;
 }
 
 .helix-card-points li {

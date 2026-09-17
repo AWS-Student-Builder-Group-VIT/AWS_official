@@ -119,6 +119,7 @@ function RecruitmentRedirect() {
 }
 
 export default function App() {
+  const navigate = useNavigate();
   const location = useLocation();
   const isHomePage = location.pathname === '/';
   const isGamesRoute = location.pathname.startsWith('/games');
@@ -149,9 +150,30 @@ export default function App() {
     { label: 'Why Us', ariaLabel: 'Why join us', link: '#why-join-us' },
     { label: 'Builders', ariaLabel: 'Meet the builders', link: '#builders' },
     { label: 'Blog', ariaLabel: 'Read our blog', link: '#blog' },
+    {
+      label: 'Join Cloud',
+      ariaLabel: 'Join Cloud recruitment',
+      link: '/recruitment',
+      onClick: (e) => {
+        e?.preventDefault();
+        navigate('/recruitment');
+      },
+    },
     user
-      ? { label: 'Account', ariaLabel: 'Manage your account', link: '/account' }
-      : { label: 'Join', ariaLabel: 'Join the club', onClick: () => window.dispatchEvent(new Event('open-login-modal')) },
+      ? {
+          label: 'Account',
+          ariaLabel: 'Manage your account',
+          link: '/account',
+          onClick: (e) => {
+            e?.preventDefault();
+            navigate('/account');
+          },
+        }
+      : {
+          label: 'Login',
+          ariaLabel: 'Login to your account',
+          onClick: () => window.dispatchEvent(new Event('open-login-modal')),
+        },
   ];
 
   const socialItems = [
