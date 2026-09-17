@@ -197,6 +197,39 @@ router.post('/profile/complete', async (req, res) => {
 const QUESTIONS_PER_TRACK = 10;
 const SECONDS_PER_TRACK = 600;
 
+/**
+ * Round 1 counts as complete only once every technical track and every
+ * written domain has been submitted. Called after either kind of submission.
+ * Admin decisions (qualified / not_qualified) are never overwritten.
+ */
+async function refreshRoundOneStatus(supabase, candidateId) {
+  const [{ data: profile }, tracks, { data: allAttempts }, { data: choices }] = await Promise.all([
+    supabase.from('candidate_profiles').select('round_0_status').eq('id', candidateId).maybeSingle(),
+    technicalTracks(supabase, candidateId),
+    supabase.from('assessment_attempts').select('subdomain_id,status').eq('candidate_id', candidateId),
+    supabase.from('candidate_subdomain_choices').select('subdomain:subdomains(domain:domains(id,slug))').eq('candidate_id', candidateId),
+  ]);
+  if (['qualified', 'not_qualified'].includes(profile?.round_0_status)) return;
+
+  const submittedTracks = new Set((allAttempts ?? []).filter((a) => a.status === 'submitted').map((a) => a.subdomain_id));
+  const technicalComplete = tracks.every((t) => submittedTracks.has(t.subdomainId));
+  const writtenDomainIds = Array.from(new Set((choices ?? []).flatMap((choice) => {
+    const domain = choice.subdomain?.domain;
+    return domain?.id && domain.slug !== 'technical' ? [domain.id] : [];
+  })));
+  let writtenComplete = writtenDomainIds.length === 0;
+  if (writtenDomainIds.length) {
+    const { data: finalAnswers } = await supabase.from('candidate_written_answers')
+      .select('domain_id').eq('candidate_id', candidateId).eq('is_final', true).in('domain_id', writtenDomainIds);
+    const done = new Set((finalAnswers ?? []).map((a) => a.domain_id));
+    writtenComplete = writtenDomainIds.every((id) => done.has(id));
+  }
+  await supabase.from('candidate_profiles').update({
+    round_0_status: technicalComplete && writtenComplete ? 'submitted' : 'in_progress',
+    domain_locked: true,
+  }).eq('id', candidateId);
+}
+
 /** Technical subdomain choices, ordered by priority. */
 async function technicalTracks(supabase, candidateId) {
   const { data, error } = await supabase
@@ -311,31 +344,7 @@ router.post('/assessment/submit', async (req, res) => {
     }).eq('id', attempt.id).eq('status', 'in_progress');
     if (updateError) return res.status(500).json({ error: updateError.message });
 
-    // Round 1 counts as complete only once every technical track and every
-    // written domain has been submitted.
-    const tracks = await technicalTracks(supabase, user.id);
-    const { data: allAttempts } = await supabase.from('assessment_attempts')
-      .select('subdomain_id,status').eq('candidate_id', user.id);
-    const submittedTracks = new Set((allAttempts ?? []).filter((a) => a.status === 'submitted').map((a) => a.subdomain_id));
-    const technicalComplete = tracks.every((t) => submittedTracks.has(t.subdomainId));
-
-    const { data: choices } = await supabase.from('candidate_subdomain_choices')
-      .select('subdomain:subdomains(domain:domains(id,slug))').eq('candidate_id', user.id);
-    const writtenDomainIds = Array.from(new Set((choices ?? []).flatMap((choice) => {
-      const domain = choice.subdomain?.domain;
-      return domain?.id && domain.slug !== 'technical' ? [domain.id] : [];
-    })));
-    let writtenComplete = writtenDomainIds.length === 0;
-    if (writtenDomainIds.length) {
-      const { data: finalAnswers } = await supabase.from('candidate_written_answers')
-        .select('domain_id').eq('candidate_id', user.id).eq('is_final', true).in('domain_id', writtenDomainIds);
-      const done = new Set((finalAnswers ?? []).map((a) => a.domain_id));
-      writtenComplete = writtenDomainIds.every((id) => done.has(id));
-    }
-    await supabase.from('candidate_profiles').update({
-      round_0_status: technicalComplete && writtenComplete ? 'submitted' : 'in_progress',
-      domain_locked: true,
-    }).eq('id', user.id);
+    await refreshRoundOneStatus(supabase, user.id);
 
     return res.json({ submitted: true });
   } catch (err) {
@@ -1219,8 +1228,8 @@ router.post('/round-1/written', async (req, res) => {
     if (rows.length > 0) {
       const { error } = await supabase.from('candidate_written_answers').upsert(rows, { onConflict: 'candidate_id,domain_id,question_id' });
       if (error) return res.status(400).json({ error: error.message });
-      await supabase.from('candidate_profiles').update({ domain_locked: true }).eq('id', user.id);
     }
+    await refreshRoundOneStatus(supabase, user.id);
     return res.json({ ok: true, submitted: true });
   } catch (err) {
     return res.status(500).json({ error: err.message });
