@@ -231,21 +231,6 @@ export default function CandidateDossier() {
             </div>
           </Section>
 
-          <Section title="Round 1 · Written responses">
-            <div className="space-y-3">
-              {writtenAnswers.length ? writtenAnswers.map((answer) => (
-                <article key={`${answer.domain_id}:${answer.question_id}`} className="border p-3" style={{ borderColor: 'var(--border)', background: 'rgba(0,0,0,.3)' }}>
-                  <div className="flex justify-between gap-3">
-                    <p className="font-mono text-[10px]" style={{ color: 'var(--accent)' }}>{answer.domain?.name ?? 'Domain'}</p>
-                    <span className="font-mono text-[10px]" style={{ color: answer.is_final ? 'var(--success)' : 'var(--warning)' }}>{answer.is_final ? 'FINAL' : 'NOT SUBMITTED'}</span>
-                  </div>
-                  <h3 className="mt-2 text-sm font-semibold">{answer.question?.prompt ?? 'Question'}</h3>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6" style={{ color: 'var(--muted)' }}>{answer.answer_text || 'No written explanation.'}</p>
-                  {answer.submission_links?.map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="mt-1 block break-all text-xs hover:underline" style={{ color: 'var(--accent)' }}>{link} ↗</a>)}
-                </article>
-              )) : <p className="text-xs" style={{ color: 'var(--muted)' }}>No written responses saved.</p>}
-            </div>
-          </Section>
 
           <section className="border p-5" style={{ borderColor: 'rgba(239,68,68,.35)', background: 'rgba(239,68,68,.06)' }}>
             <h2 className="mb-2 font-mono text-[11px] uppercase tracking-wider" style={{ color: 'var(--error)' }}>Danger zone</h2>
@@ -258,7 +243,62 @@ export default function CandidateDossier() {
           </section>
         </div>
       </div>
+      <div className="mt-5">
+        <WrittenResponses tracks={tracks} answers={writtenAnswers} />
+      </div>
       <p className="mt-8 text-center"><Link to="/recruitment/admin/operations" className="font-mono text-[10px] hover:underline" style={{ color: 'var(--dim)' }}>Operations console</Link></p>
     </main>
+  );
+}
+
+/** Written answers, one domain at a time: pick a domain on the left to read its answers. */
+function WrittenResponses({ tracks, answers }) {
+  const domains = [];
+  for (const track of tracks) {
+    if (!track.technical && track.domainId && !domains.some((d) => d.id === track.domainId)) {
+      domains.push({ id: track.domainId, name: track.domainName, decision: track.decision });
+    }
+  }
+  const [activeId, setActiveId] = useState(null);
+  const active = domains.find((d) => d.id === activeId) ?? domains[0] ?? null;
+  const shown = active ? answers.filter((a) => a.domain_id === active.id) : [];
+
+  return (
+    <Section title="Round 1 · Written responses">
+      {!domains.length ? <p className="text-xs" style={{ color: 'var(--muted)' }}>No written domains selected.</p> : (
+        <div className="grid gap-4 md:grid-cols-[220px_1fr]">
+          <nav className="flex gap-2 overflow-x-auto md:flex-col" aria-label="Written domains">
+            {domains.map((domain) => {
+              const count = answers.filter((a) => a.domain_id === domain.id).length;
+              const final = count > 0 && answers.filter((a) => a.domain_id === domain.id).every((a) => a.is_final);
+              const selected = domain.id === active.id;
+              return (
+                <button key={domain.id} type="button" onClick={() => setActiveId(domain.id)} aria-current={selected}
+                  className="shrink-0 border px-4 py-3 text-left transition"
+                  style={{ borderColor: selected ? 'var(--accent)' : 'var(--border)', background: selected ? 'rgba(255,153,0,.1)' : 'rgba(0,0,0,.3)' }}>
+                  <span className="block text-sm font-semibold" style={{ color: selected ? 'var(--accent)' : 'var(--text)' }}>{domain.name}</span>
+                  <span className="mt-1 block font-mono text-[10px]" style={{ color: 'var(--dim)' }}>
+                    {count === 0 ? 'No answers' : `${count} answer${count === 1 ? '' : 's'} · ${final ? 'final' : 'not submitted'}`}
+                  </span>
+                  <span className="mt-1 block font-mono text-[10px] uppercase" style={{ color: decisionStyle[String(domain.decision)].color }}>{decisionStyle[String(domain.decision)].text}</span>
+                </button>
+              );
+            })}
+          </nav>
+          <div className="space-y-3">
+            {shown.length ? shown.map((answer) => (
+              <article key={answer.question_id} className="border p-4" style={{ borderColor: 'var(--border)', background: 'rgba(0,0,0,.3)' }}>
+                <div className="flex justify-between gap-3">
+                  <h3 className="text-sm font-semibold">{answer.question?.prompt ?? 'Question'}</h3>
+                  <span className="shrink-0 font-mono text-[10px]" style={{ color: answer.is_final ? 'var(--success)' : 'var(--warning)' }}>{answer.is_final ? 'FINAL' : 'NOT SUBMITTED'}</span>
+                </div>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6" style={{ color: 'var(--muted)' }}>{answer.answer_text || 'No written explanation.'}</p>
+                {answer.submission_links?.map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="mt-1 block break-all text-xs hover:underline" style={{ color: 'var(--accent)' }}>{link} ↗</a>)}
+              </article>
+            )) : <p className="text-sm" style={{ color: 'var(--muted)' }}>No answers saved for {active.name}.</p>}
+          </div>
+        </div>
+      )}
+    </Section>
   );
 }
