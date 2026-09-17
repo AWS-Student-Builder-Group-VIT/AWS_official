@@ -2,6 +2,10 @@
 
 <div align="center">
 
+<img src="./src/assets/aws_icon.jpeg" alt="AWS Student Builder Group VIT Logo" width="130" style="border-radius: 50%;" />
+
+<br />
+
 ![AWS SBG VIT Banner](https://img.shields.io/badge/AWS%20Student%20Builder%20Group-VIT%20Vellore-FF9900?style=for-the-badge&logo=amazon-aws&logoColor=white)
 ![Motto](https://img.shields.io/badge/Motto-Learn%20%C2%B7%20Build%20%C2%B7%20Deploy-232F3E?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
