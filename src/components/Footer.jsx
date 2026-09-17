@@ -15,7 +15,7 @@ export default function Footer() {
     },
     {
       label: 'LinkedIn',
-      href: 'https://www.linkedin.com/company/awscc-vit/',
+      href: 'https://www.linkedin.com/company/awsbuilder-vit/',
       svg: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/>

@@ -174,8 +174,8 @@ export default function App() {
 
   const socialItems = [
     { label: 'GitHub', link: 'https://github.com/AWS-Student-Builder-Group-VIT' },
-    { label: 'LinkedIn', link: 'https://www.linkedin.com/company/aws-student-builder-group-vit' },
-    { label: 'Instagram', link: 'https://www.instagram.com/aws.sbg.vit' },
+    { label: 'LinkedIn', link: 'https://www.linkedin.com/company/awsbuilder-vit/' },
+    { label: 'Instagram', link: 'https://www.instagram.com/awsbuilder_vit' },
     ...(user ? [{ label: 'Logout', onClick: () => { logout(); window.dispatchEvent(new Event('auth-change')); } }] : [])
   ];
 

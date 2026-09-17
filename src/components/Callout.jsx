@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import awsIcon from '../assets/aws_icon.jpeg';
 
 export default function Callout() {
@@ -14,13 +15,12 @@ export default function Callout() {
             at VIT VELLORE
           </h2>
         </div>
-        <a
-          className="bg-background text-primary-container font-headline-md text-label-md px-8 py-4 hover:bg-white transition-all uppercase tracking-widest cursor-pointer"
-          href="#join"
-          onClick={(e) => { e.preventDefault(); window.dispatchEvent(new Event('open-login-modal')); }}
+        <Link
+          to="/recruitment"
+          className="bg-background text-primary-container font-headline-md text-label-md px-8 py-4 hover:bg-white transition-all uppercase tracking-widest cursor-pointer inline-flex items-center justify-center"
         >
           Join the Network
-        </a>
+        </Link>
       </div>
     </div>
   );
