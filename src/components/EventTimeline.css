@@ -20,8 +20,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  padding: 36px 24px 28px;
+  padding: 24px 24px 20px;
   background: var(--color-background, #0A0C10);
+  box-sizing: border-box;
 }
 
 /* ══════════════════════════════
@@ -30,7 +31,9 @@
 .helix-header {
   text-align: center;
   flex-shrink: 0;
-  z-index: 10;
+  z-index: 25;
+  position: relative;
+  margin-bottom: 12px;
 }
 
 .helix-eyebrow {
@@ -40,7 +43,7 @@
   letter-spacing: 3px;
   text-transform: uppercase;
   color: #c1c6da;
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -64,7 +67,7 @@
 
 .helix-title {
   font-family: 'Space Mono', monospace;
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   margin: 0;
   color: #f1dfd1;
@@ -84,9 +87,13 @@
   position: relative;
   flex: 1;
   width: 100%;
+  max-width: 1200px;
   /* Perspective from the viewer */
-  perspective: 1400px;
-  perspective-origin: 50% 48%;
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Decorative orbital rings — pure CSS 3D, outside preserve-3d context */
@@ -147,7 +154,7 @@
 /* ── 3D carousel stage — JS rotates this on scroll ── */
 .helix-stage {
   position: absolute;
-  top: 50%;
+  top: 54%;
   left: 50%;
   width: 0;
   height: 0;
@@ -162,17 +169,19 @@
 ══════════════════════════════ */
 .helix-card {
   position: absolute;
-  width: 610px;
-  height: 310px;
+  width: 580px;
+  height: 290px;
   /* Cards centered on the stage origin */
-  top: -155px;
-  left: -305px;
+  top: -145px;
+  left: -290px;
   display: flex;
   overflow: hidden;
-  background: rgba(10, 12, 18, 0.94);
-  border: 1px solid rgba(255, 153, 0, 0.12);
-  /* opacity is driven by JS (cosine of angle) */
-  transition: opacity 0.12s ease, box-shadow 0.4s ease, border-color 0.4s ease;
+  background: rgba(10, 12, 18, 0.98);
+  border: 1px solid rgba(255, 153, 0, 0.16);
+  border-radius: 6px;
+  box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.9);
+  /* opacity is driven by JS */
+  transition: opacity 0.15s ease, box-shadow 0.3s ease, border-color 0.3s ease;
   /* Back-facing cards are invisible → clean single-card reveal */
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
@@ -524,6 +533,8 @@
     left: auto !important;
     transform: none !important;
     opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
     flex-direction: column;
     backface-visibility: visible !important;
     -webkit-backface-visibility: visible !important;

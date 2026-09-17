@@ -196,24 +196,29 @@ export default function EventTimeline() {
           <div
             className="helix-stage"
             style={{
-              transform: `translate(-50%, -50%) rotateX(12deg) rotateY(${rotation}deg)`,
+              transform: `translate(-50%, -50%) rotateX(4deg) rotateY(${rotation}deg)`,
             }}
           >
             {timelineData.map((item, i) => {
               const cardBaseDeg = i * stepDeg;
               const normalizedDeg = normalizeDeg(cardBaseDeg + rotation);
-
-              /* Cosine-based opacity: 1 when face-on (0°), fades to ~0 at 90° */
-              const cardOpacity = Math.max(0.07, Math.cos(normalizedDeg * Math.PI / 180));
+              const absDeg = Math.abs(normalizedDeg);
               const isActive = i === activeIndex;
+
+              // Only cards within 44 degrees of front-facing are rendered; adjacent 60-deg cards are completely hidden
+              const isVisible = absDeg < 44;
+              const cardOpacity = isVisible ? Math.max(0, Math.cos((absDeg * Math.PI) / 88)) : 0;
+              const cardScale = isVisible ? Math.max(0.92, 1 - absDeg * 0.0018) : 0.88;
 
               return (
                 <div
                   key={item.day + i}
                   className={`helix-card${isActive ? ' helix-card--active' : ''}`}
                   style={{
-                    transform: `rotateY(${cardBaseDeg}deg) translateZ(420px)`,
+                    transform: `rotateY(${cardBaseDeg}deg) translateZ(270px) scale(${cardScale})`,
                     opacity: cardOpacity,
+                    visibility: isVisible ? 'visible' : 'hidden',
+                    pointerEvents: isActive ? 'auto' : 'none',
                   }}
                 >
                   {/* Left Panel — Day Number */}
