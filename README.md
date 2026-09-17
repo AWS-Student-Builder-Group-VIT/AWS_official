@@ -46,10 +46,10 @@ The **AWS Student Builder Group at VIT Vellore** is a premier student-led techni
 - **AWS 102 – Cloud Genesis:** Foundations of scalable digital services, AWS global infrastructure, and computing evolution.
 - **AWS 103 – The AI Cloud Stack:** Model training & deployment on AWS, SageMaker, EC2, LLMs, and Generative AI prompt engineering.
 - **AWS 104 – Data Nexus:** Relational vs. NoSQL databases, storage paradigms, Amazon RDS, and cloud-native data pipelines.
-- **AWS Workshop – Cloud Foundations Bootcamp:** Led by industry veterans (e.g., Senior Data Scientists from Amazon) covering IAM roles, S3 bucket security, Amazon Bedrock, and live console labs.
+- **AWS Workshop – Cloud Foundations Bootcamp:** Led by industry veterans (e.g., Senior Data Scientists from Amazon) · **POC:** Abhishek Kumar & Nivida · **Venue:** *KAMARAJ AUDITORIUM* — covering IAM roles, S3 bucket security, Amazon Bedrock, and live console labs.
 
 ### 🏆 Flagship Hackathons & Competitions
-- **HackQuest (AWS Mystery Box Hackathon):** A flagship 24-hour hackathon organized in association with **HDFC Bank** at *SAROJINI NAIDU AUDITORIUM*. Teams tackle unique surprise problem statements with live chaos twists, cloud point shops, and architectural pitches judged by industry panels.
+- **HackQuest (AWS Mystery Box Hackathon):** A flagship 24-hour hackathon organized in association with **HDFC Bank** · **POC:** Aesha Singh · **Venue:** *SAROJINI NAIDU AUDITORIUM*. Teams tackle unique surprise problem statements with live chaos twists, cloud point shops, and architectural pitches judged by industry panels.
 - **Cloud Combat Quiz Series:** Multi-round competitive cloud quizzes testing speed, core architecture principles, and situational troubleshooting.
 
 ### 💡 Community Perks

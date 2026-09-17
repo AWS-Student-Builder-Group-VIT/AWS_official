@@ -85,7 +85,7 @@ const timelineData = [
     time: 'Venue: KAMARAJ AUDITORIUM · Speaker: Mr. Vignesh Devan',
     icon: 'terminal',
     points: [
-      'Venue: KAMARAJ AUDITORIUM | Speaker: Mr. Vignesh Devan, Senior Data Scientist at Amazon.',
+      'POC: Abhishek Kumar & Nivida | Speaker: Mr. Vignesh Devan | Venue: KAMARAJ AUDITORIUM',
       'Core computing fundamentals, internet & server architectures, and scalable cloud deployments.',
       'Service models (IaaS, PaaS, SaaS), AWS global infra, pricing models & Management Console.',
       'Generative AI & cloud bridge: LLMs, Amazon Bedrock, SageMaker, Amazon Q & Autonomous AI Agents.',
@@ -106,7 +106,7 @@ const timelineData = [
     time: '24-Hour Hackathon · Venue: SAROJINI NAIDU AUDITORIUM · In Assoc. with HDFC Bank',
     icon: 'military_tech',
     points: [
-      'Venue: SAROJINI NAIDU AUDITORIUM | Organised by AWS SBG VIT with HDFC Bank.',
+      'POC: Aesha Singh | Venue: SAROJINI NAIDU AUDITORIUM | Organised by AWS SBG VIT with HDFC Bank.',
       'Teams of 2-4 tackle unique Mystery Box problem statements with Cloud Architecture builds.',
       'Round 1 (Ideation): Problem statement breakdown, approach formulation & tech panel review.',
       'Round 2 (Development): Cloud architecture build, 14 mini-games Point Shop & 30-min Chaos Card twist.',

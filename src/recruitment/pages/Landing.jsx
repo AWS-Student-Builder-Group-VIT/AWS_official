@@ -3,7 +3,7 @@ import { ArrowRight, CloudCog, Code2, Lightbulb, ClipboardList, RadioTower } fro
 import awsIcon from '../../assets/aws_icon.jpeg';
 
 const tracks = [
-  ['01', 'TECHNICAL', 'Web · App · Game · AI / ML', Code2],
+  ['01', 'TECHNICAL', 'Web · Game · AI / ML', Code2],
   ['02', 'EVENT IDEATION AND PLANNING', 'Concepts · Structure · Timelines · Engagement', Lightbulb],
   ['03', 'LOGISTICS AND PARTICIPANT MANAGEMENT', 'Venue · Equipment · Registration · Seating', ClipboardList],
   ['04', 'OPERATIONS & EXECUTION', 'Live delivery · Volunteers · Guests · Crowd', RadioTower],

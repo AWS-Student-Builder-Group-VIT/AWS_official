@@ -69,7 +69,7 @@ const events = [
     icon: "terminal",
     color: "#FF9900",
     points: [
-      "Venue: KAMARAJ AUDITORIUM | Led by Mr. Vignesh Devan, Sr. Data Scientist at Amazon.",
+      "POC: Abhishek Kumar & Nivida | Venue: KAMARAJ AUDITORIUM | Speaker: Mr. Vignesh Devan.",
       "Core computing, server architecture, IaaS/PaaS/SaaS & AWS Console.",
       "Bridged Gen AI: LLMs, Bedrock, SageMaker, Amazon Q & AI Agents.",
       "Hands-on labs: Launching EC2, S3 bucket creation, IAM & security.",
@@ -83,7 +83,7 @@ const events = [
     icon: "military_tech",
     color: "#FF9900",
     points: [
-      "Venue: SAROJINI NAIDU AUDITORIUM | Mystery box hackathon with HDFC Bank.",
+      "POC: Aesha Singh | Venue: SAROJINI NAIDU AUDITORIUM | Hackathon with HDFC Bank.",
       "3 rounds: Ideation, Development with Point Shop games & Chaos Card, and Final Demo.",
       "Judged by Mr. Ranjithkumar S — awards for top 3 & Best UI/UX.",
     ],
