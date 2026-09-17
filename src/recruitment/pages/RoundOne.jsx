@@ -9,6 +9,7 @@ const statusBorder = { not_started: 'var(--border)', draft: 'var(--border)', sub
 const statusTextColor = { not_started: 'var(--muted)', draft: 'var(--muted)', submitted: 'var(--success)', not_assessed: 'var(--error)' };
 
 // A written answer counts once it has text, or a link for link questions.
+const formatWhen = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 const isAnswered = (answer) => Boolean(answer?.answerText?.trim() || answer?.submissionLinks?.length);
 
 export default function RoundOne() {
@@ -65,7 +66,7 @@ export default function RoundOne() {
   }), [data, drafts]);
 
   const saveDomainDraft = useCallback(async (domainId) => {
-    if (!data || dirtyDomainId !== domainId || data.domainStates[domainId]?.final) return true;
+    if (!data || dirtyDomainId !== domainId || data.domainStates[domainId]?.final || data.closed) return true;
     setStatus('saving'); setError('');
     try {
       await request('PUT', domainPayload(domainId));
@@ -87,7 +88,7 @@ export default function RoundOne() {
   const activeState = activeDomainId ? data?.domainStates[activeDomainId] : null;
 
   function updateAnswer(answerKey, change) {
-    if (!activeDomainId || activeState?.final) return;
+    if (!activeDomainId || activeState?.final || data?.closed) return;
     setDrafts((curr) => { const prev = curr[answerKey] ?? { answerText: '', submissionLinks: [] }; return { ...curr, [answerKey]: { ...prev, ...change } }; });
     const next = { ...(drafts[answerKey] ?? { answerText: '', submissionLinks: [] }), ...change };
     if (isAnswered(next)) setMissingKeys((keys) => keys.filter((key) => key !== answerKey));
@@ -165,12 +166,12 @@ export default function RoundOne() {
                     <span className="mt-2 block text-base font-semibold" style={{ color: 'var(--text)' }}>{question.prompt}</span>
                     {question.instructions && <span className="mt-2 block text-sm leading-6" style={{ color: 'var(--muted)' }}>{question.instructions}</span>}
                   </label>
-                  <textarea id={question.answerKey} rows={question.group === 'design_tasks' ? 6 : 5} value={answer.answerText} disabled={activeState?.final}
+                  <textarea id={question.answerKey} rows={question.group === 'design_tasks' ? 6 : 5} value={answer.answerText} disabled={activeState?.final || data.closed}
                     onChange={(e) => updateAnswer(question.answerKey, { answerText: e.target.value })}
                     placeholder="Write your response here…" className="field mt-4 min-h-32 resize-y disabled:cursor-not-allowed disabled:opacity-70" />
                   {question.responseType === 'long_text_with_links' && (
                     <label className="mt-4 block"><span className="label">Shareable links</span>
-                      <input type="url" value={answer.submissionLinks.join(', ')} disabled={activeState?.final}
+                      <input type="url" value={answer.submissionLinks.join(', ')} disabled={activeState?.final || data.closed}
                         onChange={(e) => updateAnswer(question.answerKey, { submissionLinks: e.target.value.split(/[\n,]/).map((l) => l.trim()).filter(Boolean) })}
                         placeholder="https://drive.google.com/..." className="field disabled:cursor-not-allowed disabled:opacity-70" />
                     </label>
@@ -188,6 +189,8 @@ export default function RoundOne() {
         <div className="sticky bottom-4 mt-8 flex flex-wrap items-center justify-between gap-4 border p-4 shadow-2xl backdrop-blur" style={{ borderColor: 'var(--border)', background: 'rgba(17,19,24,.95)' }}>
           {activeState?.final
             ? <span className="inline-flex items-center gap-2 font-mono text-xs uppercase" style={{ color: 'var(--success)' }}><Check size={16} /> This domain is submitted and locked</span>
+            : data.closed
+            ? <span className="inline-flex items-center gap-2 font-mono text-xs uppercase" style={{ color: 'var(--error)' }}><AlertCircle size={16} /> The Round 1 deadline has passed. This domain was not submitted.</span>
             : <>
                 <span className="text-xs" style={{ color: 'var(--muted)' }}>All questions are required.</span>
                 <button type="button" onClick={submitDomain} disabled={status === 'submitting'} className="action inline-flex items-center gap-2"><Send size={15} /> {status === 'submitting' ? 'Submitting…' : `Submit ${activeDomain.name}`}</button>
@@ -228,9 +231,18 @@ export default function RoundOne() {
           <p className="mt-3 max-w-2xl text-sm leading-6" style={{ color: 'var(--muted)' }}>Open each selected domain, complete its questions, and submit it separately. Technical cards enter the combined timed assessment.</p>
         </div>
         <span className="status-chip self-start" style={{ borderColor: data.roundOneComplete ? 'rgba(34,197,94,.5)' : 'var(--border)', color: data.roundOneComplete ? 'var(--success)' : 'var(--accent)' }}>
-          {data.roundOneComplete ? 'Round 1 complete' : 'Round 1 in progress'}
+          {data.roundOneComplete ? 'Round 1 complete' : data.closed ? 'Round 1 closed' : 'Round 1 in progress'}
         </span>
       </header>
+      {data.deadlineAt && (
+        <p className="mt-6 border p-4 text-sm" style={data.closed
+          ? { borderColor: 'rgba(239,68,68,.5)', background: 'rgba(239,68,68,.1)', color: 'var(--error)' }
+          : { borderColor: 'rgba(255,153,0,.45)', background: 'rgba(255,153,0,.08)', color: 'var(--accent)' }}>
+          {data.closed
+            ? `The Round 1 deadline passed on ${formatWhen(data.deadlineAt)}. You can review what you submitted, but nothing new can be started or submitted.`
+            : `Deadline: ${formatWhen(data.deadlineAt)}. Submit every domain and finish every test before then.`}
+        </p>
+      )}
       {error && <p role="alert" className="mt-6 border p-4 text-sm" style={{ borderColor: 'rgba(239,68,68,.5)', background: 'rgba(239,68,68,.1)', color: 'var(--error)' }}>{error}</p>}
       <section className="mt-8 grid gap-4 sm:grid-cols-2">
         {cards.map((card, index) => {
@@ -269,7 +281,7 @@ export default function RoundOne() {
         })}
       </section>
 
-      {!data.domainLocked && !lockWarningSeen && (
+      {!data.domainLocked && !data.closed && !lockWarningSeen && (
         <div className="fixed inset-0 z-50 grid place-items-center p-5 backdrop-blur-sm" style={{ background: 'rgba(10,11,14,.8)' }}>
           <section role="alertdialog" aria-modal="true" aria-labelledby="lock-title" aria-describedby="lock-body" className="technical-panel w-full max-w-md p-6 shadow-2xl sm:p-7">
             <div className="flex items-start gap-4">

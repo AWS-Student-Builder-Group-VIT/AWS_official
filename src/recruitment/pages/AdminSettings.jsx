@@ -5,13 +5,14 @@ import { createClient } from '../lib/supabase.js';
 const scheduleFields = [
   { key: 'application_deadline', label: 'Application deadline', help: 'Students can revise their subdomain choices until this time.' },
   { key: 'round_0_start_at', label: 'Round 1 · Assessment', help: 'The assessment Start now button appears at this time.' },
+  { key: 'round_0_deadline_at', label: 'Round 1 · Submission deadline', help: 'After this time nobody can start a test or save/submit written answers. Tests already running may finish their own timer. Leave empty for no deadline. Press Save schedule after changing it.', deadline: true },
   { key: 'round_1_start_at', label: 'Round 2 · Project opens at', help: 'The date is when Round 2 opens (Open sets it to now). Close hides every project and blocks submissions; candidates see "Round 2 will start shortly".' },
   // A deadline is a moment, not an open/close switch, so it has no quick buttons.
   { key: 'round_1_deadline_at', label: 'Round 2 · Submission deadline', help: 'After this time nobody new can start a project and existing submissions can no longer be updated. Leave empty to keep submissions open. Press Save schedule after changing it.', deadline: true },
   { key: 'round_2_start_at', label: 'Round 3 · Interview', help: 'Qualified students can open interview booking at this time.' },
 ];
 
-const emptySchedule = { application_deadline: '', round_0_start_at: '', round_1_start_at: '', round_1_deadline_at: '', round_2_start_at: '' };
+const emptySchedule = { application_deadline: '', round_0_start_at: '', round_0_deadline_at: '', round_1_start_at: '', round_1_deadline_at: '', round_2_start_at: '' };
 
 function toLocalInput(iso) {
   if (!iso) return '';
@@ -88,6 +89,12 @@ export default function AdminSettings() {
               <span>
                 <span className="block font-mono text-sm uppercase" style={{ color: 'var(--text)' }}>{field.label}</span>
                 <span className="mt-1 block text-xs leading-5" style={{ color: 'var(--muted)' }}>{field.help}</span>
+                {/* The picker may show 24-hour time, so spell the chosen moment out with AM/PM. */}
+                {schedule[field.key] && (
+                  <span className="mt-2 block font-mono text-xs" style={{ color: 'var(--accent)' }}>
+                    = {new Date(schedule[field.key]).toLocaleString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                  </span>
+                )}
               </span>
               <span className="flex gap-2">
                 <input type="datetime-local" value={schedule[field.key]} disabled={loading || saving}
