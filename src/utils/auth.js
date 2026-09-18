@@ -368,6 +368,21 @@ export async function deleteCloudIntelligenceResult(adminToken, id) {
   }
 }
 
+/** Show or hide results for every participant */
+export async function releaseCloudIntelligenceResults(adminToken, released) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/cloud-intelligence/results/release`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ released }),
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, released: data.released } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to update result visibility' };
+  }
+}
+
 /** Reset all Cloud Intelligence submissions */
 export async function resetCloudIntelligenceResults(adminToken) {
   try {
@@ -413,7 +428,7 @@ export async function fetchParticipantSubmission(email) {
   try {
     const res = await fetch(`${API_URL}/api/cloud-intelligence/submission/${encodeURIComponent(email)}`);
     const data = await res.json();
-    return res.ok ? { ok: true, hasSubmitted: data.hasSubmitted, submission: data.submission } : { ok: false, error: data.error };
+    return res.ok ? { ok: true, hasSubmitted: data.hasSubmitted, submission: data.submission, review: data.review ?? [], resultsReleased: Boolean(data.resultsReleased) } : { ok: false, error: data.error };
   } catch (error) {
     return { ok: false, error: error.message || 'Failed to check submission history' };
   }
@@ -428,7 +443,7 @@ export async function submitPublicQuizAssessment(payload) {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    return res.ok ? { ok: true, submission: data.submission } : { ok: false, error: data.error, submission: data.submission };
+    return res.ok ? { ok: true, submission: data.submission, review: data.review ?? [] } : { ok: false, error: data.error, submission: data.submission };
   } catch (error) {
     return { ok: false, error: error.message || 'Failed to submit quiz responses' };
   }

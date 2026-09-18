@@ -144,6 +144,8 @@ export default function QuizParticipantPage() {
 
   // Submission Result & Attempt Tracking
   const [resultData, setResultData] = useState(null);
+  // Full paper for the review screen; only sent once an admin releases results.
+  const [review, setReview] = useState([]);
   const [existingSubmission, setExistingSubmission] = useState(null);
   const [checkingAttempt, setCheckingAttempt] = useState(false);
   const [authError, setAuthError] = useState('');
@@ -170,21 +172,6 @@ export default function QuizParticipantPage() {
   submittingRef.current = submitting;
   const timerRef = useRef(null);
 
-  // ── Safe Breakdown Parser ─────────────────────────────────────
-  const parsedBreakdown = useMemo(() => {
-    if (!resultData?.breakdown) return [];
-    if (Array.isArray(resultData.breakdown)) return resultData.breakdown;
-    if (typeof resultData.breakdown === 'string') {
-      try {
-        const parsed = JSON.parse(resultData.breakdown);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  }, [resultData?.breakdown]);
-
   // ── Check Existing Single Attempt ─────────────────────────────
   const checkExistingAttempt = useCallback(async (email) => {
     if (!email) return false;
@@ -194,6 +181,7 @@ export default function QuizParticipantPage() {
       if (res.ok && res.hasSubmitted && res.submission) {
         setExistingSubmission(res.submission);
         setResultData(res.submission);
+        setReview(res.review ?? []);
         setStage('result');
         setCheckingAttempt(false);
         return true;
@@ -227,6 +215,7 @@ export default function QuizParticipantPage() {
     setExternalData({ name: '', email: '', regNo: '', googleVerified: false });
     setExistingSubmission(null);
     setResultData(null);
+    setReview([]);
     setAnswers({});
     setQuestions([]);
     setProctoringViolationReason('');
@@ -306,6 +295,7 @@ export default function QuizParticipantPage() {
       if (res.submission) {
         setExistingSubmission(res.submission);
         setResultData(res.submission);
+        setReview(res.review ?? []);
         setStage('result');
       } else {
         const check = await fetchParticipantSubmission(cleanEmail);
@@ -1648,7 +1638,20 @@ export default function QuizParticipantPage() {
                 <h1 className="text-3xl font-bold text-white mb-2">{resultData.participant_name || participant.name}</h1>
                 <p className="text-xs text-[#dbc2ad]">Reg: {resultData.participant_reg_no || participant.regNo} | {resultData.participant_email || participant.email}</p>
 
-                {/* Score Grid (1-Mark System) */}
+                {/* Score Grid (1-Mark System) - only once an admin releases results */}
+                {!resultData.resultsReleased ? (
+                  <div className="mt-8 p-6 border border-[#FF9900]/30 bg-[#FF9900]/5">
+                    <span className="material-symbols-outlined text-3xl text-[#FF9900]">hourglass_top</span>
+                    <p className="mt-3 text-base font-semibold text-white">Your responses have been recorded</p>
+                    <p className="mt-2 text-xs text-[#dbc2ad] leading-relaxed">
+                      Marks and the answer review will be published by the organisers. Come back to this page with the same
+                      account once results are announced.
+                    </p>
+                    <p className="mt-3 text-[11px] text-white/40">
+                      Submitted on {resultData.submitted_at ? new Date(resultData.submitted_at).toLocaleString() : '-'}
+                    </p>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8">
                   <div className="bg-white/3 p-4 border border-white/10">
                     <span className="text-[10px] text-[#dbc2ad] uppercase tracking-wider block">Final Score</span>
@@ -1669,51 +1672,94 @@ export default function QuizParticipantPage() {
                     </span>
                   </div>
                 </div>
+                )}
               </div>
 
-              {/* Detailed Question Review */}
-              <div className="bg-[#12161f] border border-white/10 p-6 space-y-4">
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-white/10 pb-3">
-                  Question Review
-                </h3>
-
-                <div className="space-y-3">
-                  {parsedBreakdown.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className={`p-4 border text-xs flex flex-col md:flex-row md:items-center justify-between gap-3 ${
-                        item.isCorrect
-                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                          : item.isAnswered
-                          ? 'bg-red-500/10 border-red-500/30 text-red-200'
-                          : 'bg-white/2 border-white/10 text-white/50'
-                      }`}
-                    >
-                      <div className="space-y-1">
-                        <div className="font-bold flex items-center gap-2">
-                          <span>Question #{idx + 1}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 bg-black/40 border border-white/10">
-                            {item.isCorrect ? 'Correct (0.6 pts)' : item.isAnswered ? 'Incorrect (0 pts)' : 'Unanswered (0 pts)'}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-white/80">
-                          Your Response: <code className="bg-black/40 px-2 py-0.5 rounded text-white">{JSON.stringify(item.userAnswer) || 'None'}</code>
-                        </div>
-                      </div>
-
-                      {/* The answer key is only sent once the admin closes the quiz. */}
-                      {item.correctAnswer !== undefined && (
-                        <div className="text-right">
-                          <span className="text-[10px] text-emerald-400 block font-bold">Correct Solution:</span>
-                          <code className="bg-black/40 px-2 py-0.5 rounded text-white text-[11px]">
-                            {JSON.stringify(item.correctAnswer)}
-                          </code>
-                        </div>
-                      )}
+              {/* Full paper review: correct option in green, a wrong pick in red */}
+              {resultData.resultsReleased && review.length > 0 && (
+                <div className="bg-[#12161f] border border-white/10 p-6 space-y-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Answer Review</h3>
+                    <div className="flex items-center gap-3 text-[11px]">
+                      <span className="flex items-center gap-1.5 text-emerald-300">
+                        <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/60 border border-emerald-400" /> Correct answer
+                      </span>
+                      <span className="flex items-center gap-1.5 text-red-300">
+                        <span className="w-2.5 h-2.5 rounded-sm bg-red-500/60 border border-red-400" /> Your wrong answer
+                      </span>
                     </div>
-                  ))}
+                  </div>
+
+                  {review.map((item) => {
+                    const answerText = (value) => (Array.isArray(value) ? value.join(', ') : String(value ?? ''));
+                    const matches = (value, option) => {
+                      const target = String(option).trim().toLowerCase();
+                      if (Array.isArray(value)) return value.some((a) => String(a).trim().toLowerCase() === target);
+                      return String(value ?? '').trim().toLowerCase() === target;
+                    };
+                    return (
+                      <article key={item.questionId ?? item.number} className="border border-white/10 bg-black/30 p-5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-bold text-white">Question {item.number}</span>
+                          <span className={`text-[10px] px-2 py-0.5 border font-bold uppercase tracking-wider ${
+                            item.isCorrect
+                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                              : item.isAnswered
+                              ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                              : 'border-white/15 bg-white/5 text-white/50'
+                          }`}>
+                            {item.isCorrect ? 'Correct - 0.6 pts' : item.isAnswered ? 'Incorrect - 0 pts' : 'Unanswered - 0 pts'}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 border border-white/10 text-white/50 uppercase">{item.difficulty}</span>
+                        </div>
+
+                        {item.assertion ? (
+                          <div className="mt-3 space-y-2 text-sm">
+                            <p className="text-white/90"><strong className="text-[#FF9900]">Assertion (A):</strong> {item.assertion}</p>
+                            <p className="text-white/90"><strong className="text-[#00a8e0]">Reason (R):</strong> {item.reason}</p>
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm text-white/90 whitespace-pre-wrap leading-relaxed">{item.questionText}</p>
+                        )}
+
+                        {item.options.length > 0 ? (
+                          <ul className="mt-4 space-y-2">
+                            {item.options.map((option, oIdx) => {
+                              const right = matches(item.correctAnswer, option);
+                              const wrongPick = matches(item.userAnswer, option) && !right;
+                              return (
+                                <li key={oIdx} className={`flex items-start gap-3 p-3 border text-sm ${
+                                  right
+                                    ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-100'
+                                    : wrongPick
+                                    ? 'border-red-500/50 bg-red-500/10 text-red-100'
+                                    : 'border-white/10 bg-white/2 text-white/70'
+                                }`}>
+                                  <span className="font-bold text-xs mt-0.5">{String.fromCharCode(65 + oIdx)}.</span>
+                                  <span className="flex-1 leading-relaxed">{option}</span>
+                                  {right && <span className="text-[10px] font-bold uppercase text-emerald-300 whitespace-nowrap">Correct</span>}
+                                  {wrongPick && <span className="text-[10px] font-bold uppercase text-red-300 whitespace-nowrap">Your answer</span>}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <div className="mt-4 space-y-2 text-sm">
+                            <p className={item.isCorrect ? 'text-emerald-200' : 'text-red-200'}>
+                              Your answer: <strong>{answerText(item.userAnswer) || 'Not answered'}</strong>
+                            </p>
+                            <p className="text-emerald-200">Correct answer: <strong>{answerText(item.correctAnswer)}</strong></p>
+                          </div>
+                        )}
+
+                        {item.options.length > 0 && !item.isAnswered && (
+                          <p className="mt-3 text-[11px] text-white/50">You did not answer this question.</p>
+                        )}
+                      </article>
+                    );
+                  })}
                 </div>
-              </div>
+              )}
 
               {/* Return to Home Action Button */}
               <div className="flex flex-col items-center justify-center gap-3 pt-4">

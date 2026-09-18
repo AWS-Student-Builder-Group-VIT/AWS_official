@@ -32,6 +32,7 @@ export async function initializeCloudIntelligence(pool) {
     ['status', JSON.stringify('frozen')], // 'frozen' | 'unfrozen' (default is frozen)
     ['title', JSON.stringify('Cloud Intelligence Assessment')],
     ['duration_minutes', JSON.stringify(30)],
+    ['results_released', JSON.stringify(false)], // marks stay hidden until an admin releases them
   ];
 
   for (const [key, val] of defaultSettings) {
@@ -242,20 +243,73 @@ function hideAnswers(breakdown) {
   });
 }
 
-/** What a participant may see: no answer key while the quiz is open, never someone else's answers. */
-function publicSubmission(row, revealAnswers) {
+/** Everything that gives a score away, kept back until results are released. */
+const SCORE_FIELDS = [
+  'score', 'total_marks', 'percentage', 'composite_score', 'accuracy_score', 'speed_score',
+  'correct_count', 'incorrect_count', 'unanswered_count',
+];
+
+/**
+ * What a participant may see about their own submission. Until an admin
+ * releases the results this is only proof of submission: no marks, no answer
+ * key, and never someone else's raw answers.
+ */
+function publicSubmission(row, resultsReleased) {
   if (!row) return row;
   const safe = { ...row };
   delete safe.answers;
   delete safe.participant_reg_no;
-  safe.breakdown = revealAnswers ? row.breakdown : hideAnswers(row.breakdown);
+  safe.resultsReleased = Boolean(resultsReleased);
+  if (!resultsReleased) {
+    for (const field of SCORE_FIELDS) delete safe[field];
+    delete safe.breakdown;
+    return safe;
+  }
+  safe.breakdown = row.breakdown;
   return safe;
+}
+
+/**
+ * The full paper for the review screen: every question with its options, the
+ * correct one and what the participant chose. Only built once released.
+ */
+async function buildReview(pool, submission) {
+  const breakdown = Array.isArray(submission.breakdown) ? submission.breakdown : [];
+  if (!breakdown.length) return [];
+  const ids = breakdown.map((row) => row.questionId).filter(Boolean);
+  if (!ids.length) return [];
+  const { rows } = await pool.query(
+    'SELECT id, question_text, question_type, difficulty, assertion, reason, options, correct_answer FROM cloud_intelligence_questions WHERE id = ANY($1::int[])',
+    [ids]
+  );
+  const byId = new Map(rows.map((q) => [q.id, q]));
+  return breakdown.map((row, index) => {
+    const q = byId.get(row.questionId) ?? {};
+    return {
+      number: index + 1,
+      questionId: row.questionId,
+      questionText: q.question_text ?? 'Question no longer available',
+      questionType: q.question_type ?? 'mcq',
+      difficulty: q.difficulty ?? row.difficulty ?? 'medium',
+      assertion: q.assertion ?? null,
+      reason: q.reason ?? null,
+      options: Array.isArray(q.options) ? q.options : [],
+      correctAnswer: q.correct_answer ?? row.correctAnswer ?? null,
+      userAnswer: row.userAnswer ?? null,
+      isAnswered: Boolean(row.isAnswered),
+      isCorrect: Boolean(row.isCorrect),
+    };
+  });
 }
 
 export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) {
   const quizStatus = async () => {
     const r = await pool.query("SELECT value FROM cloud_intelligence_settings WHERE key = 'status'");
     return r.rows[0]?.value === 'unfrozen' ? 'unfrozen' : 'frozen';
+  };
+  const resultsReleased = async () => {
+    const r = await pool.query("SELECT value FROM cloud_intelligence_settings WHERE key = 'results_released'");
+    return r.rows[0]?.value === true;
   };
   // ── Public / Participant Quiz Endpoints ──────────────────────
 
@@ -276,6 +330,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       const allottedSeconds = Math.max(SECONDS_PER_QUESTION, totalQuestions * SECONDS_PER_QUESTION);
 
       res.json({
+        resultsReleased: settings.results_released === true,
         title: settings.title || 'Cloud Intelligence Assessment',
         durationMinutes,
         allottedSeconds,
@@ -352,7 +407,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       if (existing.rows.length > 0) {
         return res.status(409).json({
           error: 'You have already submitted this assessment.',
-          submission: publicSubmission(existing.rows[0], await quizStatus() !== 'unfrozen'),
+          submission: publicSubmission(existing.rows[0], await resultsReleased()),
         });
       }
 
@@ -417,9 +472,11 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
         [participantEmail.trim().toLowerCase()]
       ).catch(() => {});
 
+      const released = await resultsReleased();
       res.status(201).json({
         success: true,
-        submission: publicSubmission(insertRes.rows[0], await quizStatus() !== 'unfrozen'),
+        submission: publicSubmission(insertRes.rows[0], released),
+        review: released ? await buildReview(pool, insertRes.rows[0]) : [],
       });
     } catch (error) {
       // 23505: two submissions for the same email at the same moment.
@@ -446,9 +503,12 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
         return res.json({ hasSubmitted: false });
       }
 
+      const released = await resultsReleased();
       res.json({
         hasSubmitted: true,
-        submission: publicSubmission(result.rows[0], await quizStatus() !== 'unfrozen'),
+        resultsReleased: released,
+        submission: publicSubmission(result.rows[0], released),
+        review: released ? await buildReview(pool, result.rows[0]) : [],
       });
     } catch (error) {
       console.error('Check submission error:', error);
@@ -600,6 +660,23 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
     } catch (error) {
       console.error('Freeze toggle error:', error);
       res.status(500).json({ error: 'Failed to toggle freeze state' });
+    }
+  });
+
+  // Release / hide results for every participant
+  app.post('/api/admin/cloud-intelligence/results/release', adminMiddleware, async (req, res) => {
+    try {
+      const released = Boolean(req.body?.released);
+      await pool.query(
+        `INSERT INTO cloud_intelligence_settings (key, value, updated_at)
+         VALUES ('results_released', $1::jsonb, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
+        [JSON.stringify(released)]
+      );
+      res.json({ success: true, released });
+    } catch (error) {
+      console.error('Release results error:', error);
+      res.status(500).json({ error: 'Failed to update result visibility' });
     }
   });
 
