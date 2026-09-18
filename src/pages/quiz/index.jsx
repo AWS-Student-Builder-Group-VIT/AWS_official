@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
-import { splitVitName } from '../../recruitment/lib/vit-identity.js';
-
 // Time allowed per question: 0.5 minutes. Keep in step with the server.
 const SECONDS_PER_QUESTION = 30;
 import {
@@ -13,6 +11,28 @@ import {
 } from '../../utils/auth';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '225205318470-pn0cdqbs39jg8b60lem10e6fs9vh72q4.apps.googleusercontent.com';
+
+const REGISTRATION_REGEX = /(\d{2}[A-Za-z]{2,4}\d{4,5})/i;
+
+function extractVitIdentity(googleName, email = '') {
+  const raw = String(googleName ?? '').trim();
+  let match = raw.match(REGISTRATION_REGEX);
+  let name = raw;
+  let regNo = null;
+
+  if (match) {
+    regNo = match[1].toUpperCase();
+    name = raw.replace(REGISTRATION_REGEX, ' ').replace(/\s+/g, ' ').trim();
+  } else if (email) {
+    const emailPrefix = String(email).split('@')[0];
+    const emailMatch = emailPrefix.match(REGISTRATION_REGEX);
+    if (emailMatch) {
+      regNo = emailMatch[1].toUpperCase();
+    }
+  }
+
+  return { name: name || raw, registrationNumber: regNo };
+}
 
 function decodeGoogleJwt(token) {
   try {
@@ -37,13 +57,59 @@ export default function QuizParticipantPage() {
   // Stages: 'auth' | 'dashboard' | 'assessment' | 'result'
   const [stage, setStage] = useState('auth');
 
-  // Participant State
+  // Participant State (Decoupled Internal vs External)
+  const [participantType, setParticipantType] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('quiz_participant');
+      return saved ? (JSON.parse(saved).participantType || 'internal') : 'internal';
+    } catch {
+      return 'internal';
+    }
+  });
+
+  const [internalData, setInternalData] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('quiz_participant');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.participantType === 'internal') {
+          return {
+            name: parsed.name || '',
+            email: parsed.email || '',
+            regNo: parsed.regNo || '',
+            regNoFromGoogle: Boolean(parsed.regNoFromGoogle),
+            googleVerified: Boolean(parsed.googleVerified),
+          };
+        }
+      }
+    } catch {}
+    return { name: '', email: '', regNo: '', regNoFromGoogle: false, googleVerified: false };
+  });
+
+  const [externalData, setExternalData] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('quiz_participant');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.participantType === 'external') {
+          return {
+            name: parsed.name || '',
+            email: parsed.email || '',
+            regNo: parsed.regNo === 'EXTERNAL' ? '' : (parsed.regNo || ''),
+            googleVerified: Boolean(parsed.googleVerified),
+          };
+        }
+      }
+    } catch {}
+    return { name: '', email: '', regNo: '', googleVerified: false };
+  });
+
   const [participant, setParticipant] = useState(() => {
     try {
       const saved = sessionStorage.getItem('quiz_participant');
-      return saved ? JSON.parse(saved) : { name: '', email: '', regNo: '', googleVerified: false };
+      return saved ? JSON.parse(saved) : { name: '', email: '', regNo: '', participantType: 'internal', googleVerified: false };
     } catch {
-      return { name: '', email: '', regNo: '', googleVerified: false };
+      return { name: '', email: '', regNo: '', participantType: 'internal', googleVerified: false };
     }
   });
 
@@ -156,7 +222,9 @@ export default function QuizParticipantPage() {
   // ── Participant Logout / Switch Account ───────────────────────
   const handleLogoutParticipant = () => {
     sessionStorage.removeItem('quiz_participant');
-    setParticipant({ name: '', email: '', regNo: '', googleVerified: false });
+    setParticipant({ name: '', email: '', regNo: '', participantType: 'internal', googleVerified: false });
+    setInternalData({ name: '', email: '', regNo: '', regNoFromGoogle: false, googleVerified: false });
+    setExternalData({ name: '', email: '', regNo: '', googleVerified: false });
     setExistingSubmission(null);
     setResultData(null);
     setAnswers({});
@@ -255,7 +323,7 @@ export default function QuizParticipantPage() {
     }
   }, [participant.email, participant.name, participant.regNo]);
 
-  // ── 2. Handle Google OAuth & Student Identification ──────────
+  // ── 2. Handle Google OAuth & Candidate Identification ───────
   const handleGoogleSuccess = async (credentialResponse) => {
     setAuthError('');
     if (!credentialResponse?.credential) {
@@ -270,14 +338,10 @@ export default function QuizParticipantPage() {
     }
 
     const email = (payload.email || '').trim().toLowerCase();
-    // VIT Google accounts are named "Full Name 25BAI0156": take the registration
-    // number from there so nobody has to type it, and nobody can mistype it.
-    const identity = splitVitName(payload.name || payload.given_name || '');
-    const name = identity.name;
-
     const isVitEmail = email.endsWith('@vitstudent.ac.in') || email.endsWith('@vit.ac.in');
-    if (!isVitEmail) {
-      setAuthError(`Only official VIT student accounts (@vitstudent.ac.in / @vit.ac.in) are allowed. Detected: ${email}`);
+
+    if (participantType === 'internal' && !isVitEmail) {
+      setAuthError(`Only official VIT student accounts (@vitstudent.ac.in / @vit.ac.in) are allowed for Internal participants. If you are an external participant, select "External Participant" above. (Detected: ${email})`);
       return;
     }
 
@@ -285,14 +349,23 @@ export default function QuizParticipantPage() {
     const hasAlreadySubmitted = await checkExistingAttempt(email);
     if (hasAlreadySubmitted) return;
 
-    setParticipant((prev) => ({
-      ...prev,
-      email,
-      name: name || prev.name,
-      regNo: identity.registrationNumber || prev.regNo,
-      regNoFromGoogle: Boolean(identity.registrationNumber),
-      googleVerified: true,
-    }));
+    if (participantType === 'internal') {
+      const identity = extractVitIdentity(payload.name || payload.given_name || '', email);
+      setInternalData({
+        email,
+        name: identity.name || payload.name || payload.given_name || '',
+        regNo: identity.registrationNumber || '',
+        regNoFromGoogle: Boolean(identity.registrationNumber),
+        googleVerified: true,
+      });
+    } else {
+      setExternalData((prev) => ({
+        ...prev,
+        email,
+        name: payload.name || payload.given_name || prev.name || '',
+        googleVerified: true,
+      }));
+    }
   };
 
   const handleGoogleError = () => {
@@ -303,30 +376,68 @@ export default function QuizParticipantPage() {
     e.preventDefault();
     setAuthError('');
 
-    const cleanEmail = participant.email.trim().toLowerCase();
-    const cleanName = participant.name.trim();
-    const cleanRegNo = participant.regNo.trim().toUpperCase();
+    if (participantType === 'internal') {
+      const cleanEmail = internalData.email.trim().toLowerCase();
+      const cleanName = internalData.name.trim();
+      const cleanRegNo = internalData.regNo.trim().toUpperCase();
 
-    if (!cleanName || !cleanEmail || !cleanRegNo) {
-      setAuthError('Please fill in all required fields (Google Login, Name, and Registration Number).');
-      return;
+      if (!cleanName || !cleanEmail) {
+        setAuthError('Please fill in your name and email address.');
+        return;
+      }
+
+      if (!cleanRegNo) {
+        setAuthError('Please enter your official VIT registration number.');
+        return;
+      }
+
+      const isVitEmail = cleanEmail.endsWith('@vitstudent.ac.in') || cleanEmail.endsWith('@vit.ac.in');
+      if (!isVitEmail) {
+        setAuthError('Please use a valid VIT student email address (@vitstudent.ac.in or @vit.ac.in) for internal participation.');
+        return;
+      }
+
+      const hasAlreadySubmitted = await checkExistingAttempt(cleanEmail);
+      if (hasAlreadySubmitted) return;
+
+      const profile = {
+        name: cleanName,
+        email: cleanEmail,
+        regNo: cleanRegNo,
+        regNoFromGoogle: internalData.regNoFromGoogle,
+        participantType: 'internal',
+        googleVerified: internalData.googleVerified,
+      };
+      sessionStorage.setItem('quiz_participant', JSON.stringify(profile));
+      setParticipant(profile);
+      participantRef.current = profile;
+      setStage('dashboard');
+    } else {
+      const cleanEmail = externalData.email.trim().toLowerCase();
+      const cleanName = externalData.name.trim();
+      const cleanRegNo = (externalData.regNo || '').trim().toUpperCase() || 'EXTERNAL';
+
+      if (!cleanName || !cleanEmail) {
+        setAuthError('Please fill in your name and email address.');
+        return;
+      }
+
+      const hasAlreadySubmitted = await checkExistingAttempt(cleanEmail);
+      if (hasAlreadySubmitted) return;
+
+      const profile = {
+        name: cleanName,
+        email: cleanEmail,
+        regNo: cleanRegNo,
+        regNoFromGoogle: false,
+        participantType: 'external',
+        googleVerified: externalData.googleVerified,
+      };
+      sessionStorage.setItem('quiz_participant', JSON.stringify(profile));
+      setParticipant(profile);
+      participantRef.current = profile;
+      setStage('dashboard');
     }
-
-    const isVitEmail = cleanEmail.endsWith('@vitstudent.ac.in') || cleanEmail.endsWith('@vit.ac.in');
-    if (!isVitEmail) {
-      setAuthError('Please use a valid VIT student email address (@vitstudent.ac.in or @vit.ac.in).');
-      return;
-    }
-
-    // Check if already submitted before entering lobby
-    const hasAlreadySubmitted = await checkExistingAttempt(cleanEmail);
-    if (hasAlreadySubmitted) return;
-
-    const profile = { name: cleanName, email: cleanEmail, regNo: cleanRegNo, googleVerified: participant.googleVerified };
-    sessionStorage.setItem('quiz_participant', JSON.stringify(profile));
-    setParticipant(profile);
-    participantRef.current = profile;
-    setStage('dashboard');
   };
 
   // ── 3. Start Assessment & Enter Fullscreen ───────────────────
@@ -695,80 +806,214 @@ export default function QuizParticipantPage() {
                     </div>
                   )}
 
-                  {/* 1. Google OAuth Step */}
-                  {!participant.googleVerified ? (
-                    <div className="py-6 space-y-4 text-center">
-                      <p className="text-xs text-[#dbc2ad]">
-                        Please authenticate with your official VIT student Google account to proceed with the assessment.
-                      </p>
-                      <div className="flex justify-center pt-2">
-                        <GoogleLogin
-                          onSuccess={handleGoogleSuccess}
-                          onError={handleGoogleError}
-                          theme="filled_black"
-                          shape="rectangular"
-                          text="continue_with"
-                          size="large"
-                        />
-                      </div>
-                      <span className="text-[10px] text-white/40 block">
-                        Only @vitstudent.ac.in or @vit.ac.in accounts are authorized.
-                      </span>
-                    </div>
-                  ) : (
-                    /* 2. Candidate Details Confirmation after Google Auth */
-                    <form onSubmit={handleAuthSubmit} className="space-y-5 text-xs">
-                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-sm">verified</span>
-                          <span className="text-xs">Google Account: <strong>{participant.email}</strong></span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleLogoutParticipant}
-                          className="text-[10px] text-white/50 hover:text-white underline cursor-pointer"
-                        >
-                          Change
-                        </button>
-                      </div>
-
-                      <div>
-                        <label className="text-[#dbc2ad] uppercase tracking-wider block mb-1.5 font-bold">Candidate Full Name *</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Alex Johnson"
-                          value={participant.name}
-                          onChange={(e) => setParticipant({ ...participant, name: e.target.value })}
-                          className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white rounded-lg focus:outline-none focus:border-[#FF9900] transition-colors"
-                          required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[#dbc2ad] uppercase tracking-wider block mb-1.5 font-bold">Registration Number *</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. 22BCE1045"
-                          value={participant.regNo}
-                          onChange={(e) => setParticipant({ ...participant, regNo: e.target.value })}
-                          readOnly={participant.regNoFromGoogle}
-                          className={`w-full bg-white/5 border border-white/10 px-4 py-3 text-white uppercase rounded-lg focus:outline-none focus:border-[#FF9900] transition-colors ${participant.regNoFromGoogle ? 'opacity-70 cursor-not-allowed' : ''}`}
-                          required
-                        />
-                        <span className="text-[10px] text-white/40 mt-1 block">
-                          {participant.regNoFromGoogle
-                            ? 'Taken from your VIT Google account.'
-                            : 'Enter your official VIT student registration number.'}
-                        </span>
-                      </div>
-
+                  {/* Participant Category Selector */}
+                  <div className="mb-6">
+                    <label className="text-[11px] font-bold text-[#dbc2ad] uppercase tracking-wider block mb-2">
+                      Participant Category:
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 border border-white/10 rounded-xl">
                       <button
-                        type="submit"
-                        className="w-full mt-3 py-3.5 bg-[#FF9900] hover:bg-[#ffb86f] text-black font-bold uppercase tracking-wider cursor-pointer shadow-lg shadow-[#FF9900]/20 transition-all text-xs"
+                        type="button"
+                        onClick={() => {
+                          setParticipantType('internal');
+                          setAuthError('');
+                        }}
+                        className={`py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          participantType === 'internal'
+                            ? 'bg-[#FF9900] text-black shadow-md'
+                            : 'text-white/70 hover:text-white hover:bg-white/5'
+                        }`}
                       >
-                        Enter Assessment Lobby
+                        <span className="material-symbols-outlined text-sm">school</span>
+                        <span>Internal (VIT)</span>
                       </button>
-                    </form>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setParticipantType('external');
+                          setAuthError('');
+                        }}
+                        className={`py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          participantType === 'external'
+                            ? 'bg-[#FF9900] text-black shadow-md'
+                            : 'text-white/70 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-sm">public</span>
+                        <span>External</span>
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-white/50 mt-1.5 text-center font-mono">
+                      {participantType === 'internal'
+                        ? '🔒 Only official VIT email accounts (@vitstudent.ac.in / @vit.ac.in) are authorized.'
+                        : '🌐 Open to everyone (any valid Google account is accepted).'}
+                    </p>
+                  </div>
+
+                  {/* ─────────────────────────────────────────────────────────
+                      INTERNAL (VIT) FLOW
+                     ───────────────────────────────────────────────────────── */}
+                  {participantType === 'internal' && (
+                    <>
+                      {!internalData.googleVerified ? (
+                        <div className="py-4 space-y-4 text-center">
+                          <p className="text-xs text-[#dbc2ad]">
+                            Please authenticate with your official VIT student Google account to proceed.
+                          </p>
+                          <div className="flex justify-center pt-1">
+                            <GoogleLogin
+                              onSuccess={handleGoogleSuccess}
+                              onError={handleGoogleError}
+                              theme="filled_black"
+                              shape="rectangular"
+                              text="continue_with"
+                              size="large"
+                            />
+                          </div>
+                          <span className="text-[10px] text-white/40 block">
+                            Only @vitstudent.ac.in or @vit.ac.in accounts are permitted.
+                          </span>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleAuthSubmit} className="space-y-5 text-xs">
+                          <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-sm">verified</span>
+                              <span className="text-xs">Account: <strong>{internalData.email}</strong> (Internal VIT)</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setInternalData({ name: '', email: '', regNo: '', regNoFromGoogle: false, googleVerified: false });
+                              }}
+                              className="text-[10px] text-white/50 hover:text-white underline cursor-pointer"
+                            >
+                              Change
+                            </button>
+                          </div>
+
+                          <div>
+                            <label className="text-[#dbc2ad] uppercase tracking-wider block mb-1.5 font-bold">Candidate Full Name *</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Alex Johnson"
+                              value={internalData.name}
+                              onChange={(e) => setInternalData((prev) => ({ ...prev, name: e.target.value }))}
+                              className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white rounded-lg focus:outline-none focus:border-[#FF9900] transition-colors"
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[#dbc2ad] uppercase tracking-wider block mb-1.5 font-bold">
+                              Registration Number *
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="e.g. 22BCE1045"
+                              value={internalData.regNo}
+                              onChange={(e) => setInternalData((prev) => ({ ...prev, regNo: e.target.value }))}
+                              readOnly={internalData.regNoFromGoogle}
+                              className={`w-full bg-white/5 border border-white/10 px-4 py-3 text-white uppercase rounded-lg focus:outline-none focus:border-[#FF9900] transition-colors ${internalData.regNoFromGoogle ? 'opacity-70 cursor-not-allowed' : ''}`}
+                              required
+                            />
+                            <span className="text-[10px] text-white/40 mt-1 block">
+                              {internalData.regNoFromGoogle
+                                ? 'Auto-fetched from your VIT Google account.'
+                                : 'Enter your official VIT student registration number.'}
+                            </span>
+                          </div>
+
+                          <button
+                            type="submit"
+                            className="w-full mt-3 py-3.5 bg-[#FF9900] hover:bg-[#ffb86f] text-black font-bold uppercase tracking-wider cursor-pointer shadow-lg shadow-[#FF9900]/20 transition-all text-xs"
+                          >
+                            Enter Assessment Lobby
+                          </button>
+                        </form>
+                      )}
+                    </>
+                  )}
+
+                  {/* ─────────────────────────────────────────────────────────
+                      EXTERNAL FLOW
+                     ───────────────────────────────────────────────────────── */}
+                  {participantType === 'external' && (
+                    <>
+                      {!externalData.googleVerified ? (
+                        <div className="py-4 space-y-4 text-center">
+                          <p className="text-xs text-[#dbc2ad]">
+                            Please authenticate with your Google account to proceed with the assessment.
+                          </p>
+                          <div className="flex justify-center pt-1">
+                            <GoogleLogin
+                              onSuccess={handleGoogleSuccess}
+                              onError={handleGoogleError}
+                              theme="filled_black"
+                              shape="rectangular"
+                              text="continue_with"
+                              size="large"
+                            />
+                          </div>
+                          <span className="text-[10px] text-white/40 block">
+                            Any valid Google email account is accepted.
+                          </span>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleAuthSubmit} className="space-y-5 text-xs">
+                          <div className="p-3 bg-blue-500/10 border border-blue-500/30 text-blue-300 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-sm">verified</span>
+                              <span className="text-xs">Account: <strong>{externalData.email}</strong> (External)</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExternalData({ name: '', email: '', regNo: '', googleVerified: false });
+                              }}
+                              className="text-[10px] text-white/50 hover:text-white underline cursor-pointer"
+                            >
+                              Change
+                            </button>
+                          </div>
+
+                          <div>
+                            <label className="text-[#dbc2ad] uppercase tracking-wider block mb-1.5 font-bold">Candidate Full Name *</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Alex Johnson"
+                              value={externalData.name}
+                              onChange={(e) => setExternalData((prev) => ({ ...prev, name: e.target.value }))}
+                              className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white rounded-lg focus:outline-none focus:border-[#FF9900] transition-colors"
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[#dbc2ad] uppercase tracking-wider block mb-1.5 font-bold">
+                              Registration No. / College / Organization (Optional)
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="e.g. MIT / Tech Club / Freelancer (Optional)"
+                              value={externalData.regNo}
+                              onChange={(e) => setExternalData((prev) => ({ ...prev, regNo: e.target.value }))}
+                              className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white uppercase rounded-lg focus:outline-none focus:border-[#FF9900] transition-colors"
+                            />
+                            <span className="text-[10px] text-white/40 mt-1 block">
+                              Optionally provide your institutional or organization identity.
+                            </span>
+                          </div>
+
+                          <button
+                            type="submit"
+                            className="w-full mt-3 py-3.5 bg-[#FF9900] hover:bg-[#ffb86f] text-black font-bold uppercase tracking-wider cursor-pointer shadow-lg shadow-[#FF9900]/20 transition-all text-xs"
+                          >
+                            Enter Assessment Lobby
+                          </button>
+                        </form>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -812,18 +1057,29 @@ export default function QuizParticipantPage() {
               <div className="lg:col-span-1 flex flex-col gap-6">
                 {/* Profile Card */}
                 <div className="bg-[#12161f] border border-white/10 p-5 space-y-4">
-                  <div className="border-b border-white/10 pb-2">
-                    <span className="text-[10px] font-bold text-[#dbc2ad] uppercase tracking-wider">Candidate Profile</span>
-                    <h3 className="text-base font-bold text-white mt-0.5 truncate">{participant.name}</h3>
+                  <div className="border-b border-white/10 pb-2 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-[#dbc2ad] uppercase tracking-wider">Candidate Profile</span>
+                      <h3 className="text-base font-bold text-white mt-0.5 truncate">{participant.name}</h3>
+                    </div>
+                    <span className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border rounded ${
+                      participant.participantType === 'external'
+                        ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    }`}>
+                      {participant.participantType === 'external' ? 'External' : 'VIT Student'}
+                    </span>
                   </div>
                   
                   <div>
-                    <span className="text-[10px] text-white/50 uppercase tracking-wider block">Registration No</span>
-                    <span className="text-sm font-bold text-[#FF9900]">{participant.regNo}</span>
+                    <span className="text-[10px] text-white/50 uppercase tracking-wider block">
+                      {participant.participantType === 'external' ? 'Reg No. / Organization' : 'Registration No'}
+                    </span>
+                    <span className="text-sm font-bold text-[#FF9900]">{participant.regNo || 'N/A'}</span>
                   </div>
 
                   <div>
-                    <span className="text-[10px] text-white/50 uppercase tracking-wider block">VIT Email</span>
+                    <span className="text-[10px] text-white/50 uppercase tracking-wider block">Email Address</span>
                     <span className="text-xs text-[#dbc2ad] break-all leading-relaxed">{participant.email}</span>
                   </div>
                 </div>
