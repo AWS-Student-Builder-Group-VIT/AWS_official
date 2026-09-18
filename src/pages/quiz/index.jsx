@@ -63,7 +63,7 @@ export default function QuizParticipantPage() {
   const [answers, setAnswers] = useState({}); // { [qId]: value }
   const [markedForReview, setMarkedForReview] = useState({}); // { [qId]: boolean }
   const [timeRemaining, setTimeRemaining] = useState(270); // Total Quiz Timer
-  const [questionTimeMap, setQuestionTimeMap] = useState({}); // { [qId]: remainingSeconds out of 90s }
+  const [questionTimeMap, setQuestionTimeMap] = useState({}); // { [qId]: remaining seconds for that question }
   const [timeTaken, setTimeTaken] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
@@ -360,7 +360,7 @@ export default function QuizParticipantPage() {
       const qCount = res.questions.length;
       const dynamicAllottedSeconds = qCount * SECONDS_PER_QUESTION; // 30s per question (0.5 * n minutes)
 
-      // Initialize persistent 90s timer per question
+      // Initialize the persistent per-question timer
       const initialMap = {};
       res.questions.forEach((q) => {
         initialMap[q.id] = SECONDS_PER_QUESTION;
@@ -832,7 +832,7 @@ export default function QuizParticipantPage() {
                   {/* Key Stats Bar */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <div className="bg-white/3 p-4 border border-white/5">
-                      <span className="text-[10px] text-[#dbc2ad] uppercase tracking-wider block">Duration (90s / Q)</span>
+                      <span className="text-[10px] text-[#dbc2ad] uppercase tracking-wider block">Duration ({SECONDS_PER_QUESTION}s / Q)</span>
                       <span className="text-xl font-bold text-white">{quizInfo.durationMinutes} Minutes</span>
                     </div>
                     <div className="bg-white/3 p-4 border border-white/5">
@@ -958,14 +958,14 @@ export default function QuizParticipantPage() {
 
               {/* Two Timers Display: Question Timer + Total Assessment Timer & Sole Submit Button */}
               <div className="flex items-center gap-2 sm:gap-4">
-                {/* 1. Current Question Persistent Timer (out of 90s) */}
+                {/* 1. Current Question Persistent Timer */}
                 <div
                   className={`flex items-center gap-2 px-3 py-1.5 border font-bold text-xs ${
                     (questionTimeMap[currentQuestion.id] ?? SECONDS_PER_QUESTION) <= 10
                       ? 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse'
                       : 'bg-white/5 text-[#00a8e0] border-[#00a8e0]/40'
                   }`}
-                  title="Remaining time for this question (out of 90s)"
+                  title={`Remaining time for this question (out of ${SECONDS_PER_QUESTION}s)`}
                 >
                   <span className="material-symbols-outlined text-sm">schedule</span>
                   <div className="flex flex-col text-[10px] leading-tight">
@@ -974,7 +974,7 @@ export default function QuizParticipantPage() {
                   </div>
                 </div>
 
-                {/* 2. Total Assessment Timer (Total questions × 90s) */}
+                {/* 2. Total Assessment Timer (Total questions × per-question seconds) */}
                 <div
                   className={`flex items-center gap-2 px-3 py-1.5 border font-bold text-xs ${
                     timeRemaining < 300
