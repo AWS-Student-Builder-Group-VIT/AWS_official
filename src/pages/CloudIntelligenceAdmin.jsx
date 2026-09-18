@@ -25,6 +25,10 @@ const DIFFICULTY_LEVELS = [
   { id: 'hard', label: 'Hard', color: '#f87171', bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.4)' },
 ];
 
+// Time allowed per question: 0.5 minutes. Keep in step with the server.
+const SECONDS_PER_QUESTION = 30;
+const MINUTES_PER_QUESTION = SECONDS_PER_QUESTION / 60;
+
 const DEFAULT_ASSERTION_REASON_OPTIONS = [
   'Both Assertion (A) and Reason (R) are true, and (R) is the correct explanation of (A).',
   'Both Assertion (A) and Reason (R) are true, but (R) is NOT the correct explanation of (A).',
@@ -235,10 +239,10 @@ export default function CloudIntelligenceAdmin({ token }) {
       const selectedOptionIdx = Number(formState.correct_answer) || 0;
       payload.correct_answer = validOptions[selectedOptionIdx] !== undefined ? validOptions[selectedOptionIdx] : validOptions[0];
     } else if (formState.question_type === 'assertion_reason') {
-      const opts = formState.options.length ? formState.options : DEFAULT_ASSERTION_REASON_OPTIONS;
+      const opts = [...DEFAULT_ASSERTION_REASON_OPTIONS];
       payload.options = opts;
       const idx = Number(formState.correct_answer) || 0;
-      payload.correct_answer = opts[idx] || opts[0];
+      payload.correct_answer = opts[idx] ?? opts[0];
       payload.question_text = `Assertion (A): ${formState.assertion}\nReason (R): ${formState.reason}`;
     } else if (formState.question_type === 'multi_select') {
       const validOptions = formState.options.map((o) => String(o).trim()).filter(Boolean);
@@ -442,8 +446,8 @@ export default function CloudIntelligenceAdmin({ token }) {
             <span className="text-xl font-bold text-[#a8e063]">{totalPossiblePoints.toFixed(1)} Marks</span>
           </div>
           <div className="bg-white/3 p-3 border border-white/5">
-            <span className="text-[10px] text-[#dbc2ad] uppercase tracking-wider block">Duration (90s / Q)</span>
-            <span className="text-xl font-bold text-white">{(questions.length * 1.5).toFixed(1)} mins</span>
+            <span className="text-[10px] text-[#dbc2ad] uppercase tracking-wider block">Duration ({SECONDS_PER_QUESTION}s / Q)</span>
+            <span className="text-xl font-bold text-white">{(questions.length * MINUTES_PER_QUESTION).toFixed(1)} mins</span>
           </div>
           <div className="bg-white/3 p-3 border border-white/5">
             <span className="text-[10px] text-[#dbc2ad] uppercase tracking-wider block">Participants</span>
@@ -868,10 +872,10 @@ export default function CloudIntelligenceAdmin({ token }) {
                 Automatic Dynamic Duration Rule
               </span>
               <p className="text-xs text-white/90">
-                Duration = <strong>Total Questions × 1.5 Minutes (90 seconds per question)</strong>.
+                Duration = <strong>Total Questions × {MINUTES_PER_QUESTION} Minutes ({SECONDS_PER_QUESTION} seconds per question)</strong>.
               </p>
               <p className="text-[11px] text-[#dbc2ad]">
-                Current Allotted Duration: <strong>{(questions.length * 1.5).toFixed(1)} Minutes ({questions.length * 90}s)</strong> for <strong>{questions.length} Question(s)</strong> in question bank.
+                Current Allotted Duration: <strong>{(questions.length * MINUTES_PER_QUESTION).toFixed(1)} Minutes ({questions.length * SECONDS_PER_QUESTION}s)</strong> for <strong>{questions.length} Question(s)</strong> in question bank.
               </p>
             </div>
           </div>
@@ -932,11 +936,12 @@ export default function CloudIntelligenceAdmin({ token }) {
                         key={t.id}
                         onClick={() => {
                           let newAns = formState.correct_answer;
-                          if (t.id === 'assertion_reason') newAns = 0;
+                          let newOptions = formState.options;
+                          if (t.id === 'assertion_reason') { newAns = 0; newOptions = [...DEFAULT_ASSERTION_REASON_OPTIONS]; }
                           else if (t.id === 'mcq') newAns = 0;
                           else if (t.id === 'multi_select') newAns = [];
                           else if (t.id === 'objective') newAns = '';
-                          setFormState({ ...formState, question_type: t.id, correct_answer: newAns });
+                          setFormState({ ...formState, question_type: t.id, options: newOptions, correct_answer: newAns });
                         }}
                         className={`p-3 border text-left cursor-pointer flex flex-col gap-1 transition-all ${
                           isSelected
