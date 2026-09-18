@@ -10,6 +10,7 @@ import {
   fetchCloudIntelligenceResults,
   deleteCloudIntelligenceResult,
   resetCloudIntelligenceResults,
+  releaseCloudIntelligenceResults,
 } from '../utils/auth';
 
 const QUESTION_TYPES = [
@@ -118,6 +119,18 @@ export default function CloudIntelligenceAdmin({ token }) {
       showToast(newStatus === 'unfrozen' ? '⚡ Quiz is now UNFROZEN (Live for students)' : '🔒 Quiz is now FROZEN (Locked)');
     } else {
       showToast(res.error || 'Failed to update freeze status', 'error');
+    }
+  };
+
+  // ── Show / Hide Results For Participants ─────────────────────
+  const handleToggleResults = async () => {
+    const next = !settings.results_released;
+    const res = await releaseCloudIntelligenceResults(token, next);
+    if (res.ok) {
+      setSettings((prev) => ({ ...prev, results_released: next }));
+      showToast(next ? 'Results are now visible to participants' : 'Results are hidden from participants');
+    } else {
+      showToast(res.error || 'Failed to update result visibility', 'error');
     }
   };
 
@@ -417,8 +430,22 @@ export default function CloudIntelligenceAdmin({ token }) {
             </p>
           </div>
 
-          {/* Freeze / Unfreeze Action Button */}
-          <div className="flex items-center gap-3">
+          {/* Freeze / Unfreeze + Result Visibility */}
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleToggleResults}
+              className={`px-5 py-3 font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-all border ${
+                settings.results_released
+                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+                  : 'border-white/15 bg-white/5 text-white/70 hover:text-white hover:bg-white/10'
+              }`}
+              title="Participants only see their marks and answer review once you release them"
+            >
+              <span className="material-symbols-outlined text-base">
+                {settings.results_released ? 'visibility' : 'visibility_off'}
+              </span>
+              {settings.results_released ? 'Results Released (Hide)' : 'Release Results'}
+            </button>
             <button
               onClick={handleToggleFreeze}
               className={`px-6 py-3 font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-all shadow-lg ${
