@@ -771,4 +771,144 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       res.status(500).json({ error: 'Failed to delete result' });
     }
   });
+
+  // Update submission answers, add/remove questions, and recalculate score
+  app.put('/api/admin/cloud-intelligence/submissions/:id', adminMiddleware, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { items } = req.body;
+
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ error: 'Items array is required' });
+      }
+
+      // Fetch existing submission
+      const existingRes = await pool.query('SELECT * FROM cloud_intelligence_submissions WHERE id = $1', [id]);
+      if (existingRes.rows.length === 0) {
+        return res.status(404).json({ error: 'Submission not found' });
+      }
+      const existing = existingRes.rows[0];
+
+      // Fetch question details for all questionIds in items
+      const questionIds = items.map(it => it.questionId).filter(Boolean);
+      let questionsMap = new Map();
+      if (questionIds.length > 0) {
+        const qRes = await pool.query(
+          'SELECT id, question_text, question_type, difficulty, assertion, reason, options, correct_answer FROM cloud_intelligence_questions WHERE id = ANY($1::int[])',
+          [questionIds]
+        );
+        questionsMap = new Map(qRes.rows.map(q => [q.id, q]));
+      }
+
+      let correctCount = 0;
+      let incorrectCount = 0;
+      let unansweredCount = 0;
+      const newAnswers = {};
+      const newBreakdown = [];
+
+      for (const it of items) {
+        const qId = it.questionId;
+        const q = questionsMap.get(qId) || {};
+        const qType = q.question_type || it.questionType || 'mcq';
+        const diff = (q.difficulty || it.difficulty || 'medium').toLowerCase();
+        const uAns = it.userAnswer;
+        const cAns = q.correct_answer !== undefined ? q.correct_answer : it.correctAnswer;
+
+        const isAnswered = uAns !== undefined && uAns !== null && uAns !== '' && !(Array.isArray(uAns) && uAns.length === 0);
+        let isCorrect = false;
+
+        if (!isAnswered) {
+          unansweredCount++;
+        } else {
+          // If caller explicitly passed isCorrect, honor it, otherwise compute from answer matching
+          if (typeof it.isCorrect === 'boolean') {
+            isCorrect = it.isCorrect;
+          } else {
+            if (qType === 'mcq' || qType === 'assertion_reason') {
+              const correctText = typeof cAns === 'object' ? JSON.stringify(cAns) : String(cAns).trim();
+              const userText = typeof uAns === 'object' ? JSON.stringify(uAns) : String(uAns).trim();
+              isCorrect = correctText.toLowerCase() === userText.toLowerCase();
+            } else if (qType === 'multi_select') {
+              const correctArr = Array.isArray(cAns) ? cAns.map(s => String(s).trim().toLowerCase()).sort() : [];
+              const userArr = Array.isArray(uAns) ? uAns.map(s => String(s).trim().toLowerCase()).sort() : [];
+              isCorrect = correctArr.length > 0 && correctArr.length === userArr.length && correctArr.every((val, index) => val === userArr[index]);
+            } else if (qType === 'objective') {
+              const cleanUser = String(uAns).trim().toLowerCase();
+              if (Array.isArray(cAns)) {
+                isCorrect = cAns.some(ans => String(ans).trim().toLowerCase() === cleanUser);
+              } else {
+                isCorrect = cleanUser === String(cAns).trim().toLowerCase();
+              }
+            }
+          }
+
+          if (isCorrect) {
+            correctCount++;
+          } else {
+            incorrectCount++;
+          }
+        }
+
+        newAnswers[qId] = isAnswered ? uAns : null;
+        newBreakdown.push({
+          questionId: qId,
+          difficulty: diff,
+          isAnswered,
+          isCorrect,
+          userAnswer: isAnswered ? uAns : null,
+          correctAnswer: cAns,
+        });
+      }
+
+      const totalQuestions = Math.max(1, items.length);
+      const totalMaxMarks = totalQuestions * 1.0;
+
+      // 1. Correctness Score (0.6 pts per correct question)
+      const accuracyScore = parseFloat((correctCount * 0.6).toFixed(2));
+
+      // 2. Speed Score stays strictly UNCHANGED
+      const speedScore = parseFloat(Number(existing.speed_score || 0).toFixed(2));
+
+      // Final score = accuracy + speed
+      const totalFinalScore = parseFloat((accuracyScore + speedScore).toFixed(2));
+      const percentage = parseFloat(((totalFinalScore / totalMaxMarks) * 100).toFixed(2));
+
+      const updateRes = await pool.query(
+        `UPDATE cloud_intelligence_submissions
+         SET answers = $1::jsonb,
+             breakdown = $2::jsonb,
+             score = $3,
+             total_marks = $4,
+             percentage = $5,
+             composite_score = $6,
+             accuracy_score = $7,
+             correct_count = $8,
+             incorrect_count = $9,
+             unanswered_count = $10
+         WHERE id = $11
+         RETURNING *`,
+        [
+          JSON.stringify(newAnswers),
+          JSON.stringify(newBreakdown),
+          totalFinalScore,
+          totalMaxMarks,
+          percentage,
+          totalFinalScore,
+          accuracyScore,
+          correctCount,
+          incorrectCount,
+          unansweredCount,
+          id,
+        ]
+      );
+
+      res.json({
+        success: true,
+        submission: updateRes.rows[0],
+      });
+    } catch (error) {
+      console.error('Update submission error:', error);
+      res.status(500).json({ error: 'Failed to update submission: ' + error.message });
+    }
+  });
 }

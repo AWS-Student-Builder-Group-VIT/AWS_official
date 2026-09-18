@@ -448,3 +448,22 @@ export async function submitPublicQuizAssessment(payload) {
     return { ok: false, error: error.message || 'Failed to submit quiz responses' };
   }
 }
+
+/** Update participant submission answers and recalculate score (Admin) */
+export async function updateCloudIntelligenceSubmission(adminToken, id, items) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/cloud-intelligence/submissions/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({ items }),
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, submission: data.submission } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to update submission' };
+  }
+}
+

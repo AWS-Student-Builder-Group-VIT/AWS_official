@@ -1636,7 +1636,17 @@ export default function QuizParticipantPage() {
                 </div>
 
                 <h1 className="text-3xl font-bold text-white mb-2">{resultData.participant_name || participant.name}</h1>
-                <p className="text-xs text-[#dbc2ad]">Reg: {resultData.participant_reg_no || participant.regNo} | {resultData.participant_email || participant.email}</p>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <p className="text-xs text-[#dbc2ad]">Reg: {resultData.participant_reg_no || participant.regNo} | {resultData.participant_email || participant.email}</p>
+                  <button
+                    type="button"
+                    onClick={() => checkExistingAttempt(participant.email || resultData.participant_email)}
+                    className="font-mono text-[10px] text-[#FF9900] hover:text-white uppercase tracking-widest flex items-center gap-1 cursor-pointer bg-transparent border-none transition-colors"
+                    title="Refresh your submission score and review"
+                  >
+                    <span className="material-symbols-outlined text-xs">refresh</span> Check for Updates
+                  </button>
+                </div>
 
                 {/* Score Grid (1-Mark System) - only once an admin releases results */}
                 {!resultData.resultsReleased ? (

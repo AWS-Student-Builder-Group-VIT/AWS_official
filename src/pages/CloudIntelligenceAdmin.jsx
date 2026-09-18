@@ -11,6 +11,7 @@ import {
   deleteCloudIntelligenceResult,
   resetCloudIntelligenceResults,
   releaseCloudIntelligenceResults,
+  updateCloudIntelligenceSubmission,
 } from '../utils/auth';
 
 const QUESTION_TYPES = [
@@ -72,6 +73,196 @@ export default function CloudIntelligenceAdmin({ token }) {
   const [resultSearch, setResultSearch] = useState('');
   const [viewSubmissionModal, setViewSubmissionModal] = useState(null);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+
+  // Review & Edit Submission State
+  const [reviewItems, setReviewItems] = useState([]);
+  const [selectedAddQuestionId, setSelectedAddQuestionId] = useState('');
+  const [savingSubmission, setSavingSubmission] = useState(false);
+  const [reviewModalError, setReviewModalError] = useState('');
+
+  const checkAnswerCorrect = (qType, uAns, cAns) => {
+    if (uAns === undefined || uAns === null || uAns === '' || (Array.isArray(uAns) && uAns.length === 0)) {
+      return false;
+    }
+    if (qType === 'mcq' || qType === 'assertion_reason') {
+      const cText = typeof cAns === 'object' && cAns !== null ? JSON.stringify(cAns) : String(cAns || '').trim();
+      const uText = typeof uAns === 'object' && uAns !== null ? JSON.stringify(uAns) : String(uAns || '').trim();
+      return cText.toLowerCase() === uText.toLowerCase();
+    }
+    if (qType === 'multi_select') {
+      const cArr = Array.isArray(cAns) ? cAns.map(s => String(s).trim().toLowerCase()).sort() : [];
+      const uArr = Array.isArray(uAns) ? uAns.map(s => String(s).trim().toLowerCase()).sort() : [];
+      return cArr.length > 0 && cArr.length === uArr.length && cArr.every((v, i) => v === uArr[i]);
+    }
+    if (qType === 'objective') {
+      const clean = String(uAns || '').trim().toLowerCase();
+      if (Array.isArray(cAns)) {
+        return cAns.some(a => String(a).trim().toLowerCase() === clean);
+      }
+      return clean === String(cAns || '').trim().toLowerCase();
+    }
+    return false;
+  };
+
+  const handleOpenReviewModal = (sub) => {
+    const qMap = new Map((questions || []).map(q => [q.id, q]));
+    const breakdown = Array.isArray(sub.breakdown) ? sub.breakdown : [];
+    const items = breakdown.map((item) => {
+      const q = qMap.get(item.questionId) || {};
+      return {
+        questionId: item.questionId,
+        difficulty: q.difficulty || item.difficulty || 'medium',
+        isAnswered: Boolean(item.isAnswered),
+        isCorrect: Boolean(item.isCorrect),
+        userAnswer: item.userAnswer ?? sub.answers?.[item.questionId] ?? null,
+        correctAnswer: q.correct_answer !== undefined ? q.correct_answer : item.correctAnswer,
+        questionText: q.question_text || (q.assertion ? `Assertion: ${q.assertion}` : `Question #${item.questionId}`),
+        questionType: q.question_type || 'mcq',
+        assertion: q.assertion || null,
+        reason: q.reason || null,
+        options: Array.isArray(q.options) ? q.options : [],
+      };
+    });
+
+    setReviewItems(items);
+    setSelectedAddQuestionId('');
+    setReviewModalError('');
+    setViewSubmissionModal(sub);
+  };
+
+  const handleUpdateItemAnswer = (index, newAnswer) => {
+    setReviewItems(prev => {
+      const next = [...prev];
+      const item = { ...next[index] };
+      const isAnswered = newAnswer !== null && newAnswer !== undefined && newAnswer !== '' && !(Array.isArray(newAnswer) && newAnswer.length === 0);
+      item.userAnswer = isAnswered ? newAnswer : null;
+      item.isAnswered = isAnswered;
+      item.isCorrect = checkAnswerCorrect(item.questionType, newAnswer, item.correctAnswer);
+      next[index] = item;
+      return next;
+    });
+  };
+
+  const handleToggleMultiSelectOption = (index, option) => {
+    setReviewItems(prev => {
+      const next = [...prev];
+      const item = { ...next[index] };
+      const currentList = Array.isArray(item.userAnswer) ? [...item.userAnswer] : (item.userAnswer ? [item.userAnswer] : []);
+      const exists = currentList.some(v => String(v).trim().toLowerCase() === String(option).trim().toLowerCase());
+      const updatedList = exists
+        ? currentList.filter(v => String(v).trim().toLowerCase() !== String(option).trim().toLowerCase())
+        : [...currentList, option];
+      
+      const isAnswered = updatedList.length > 0;
+      item.userAnswer = isAnswered ? updatedList : null;
+      item.isAnswered = isAnswered;
+      item.isCorrect = checkAnswerCorrect(item.questionType, item.userAnswer, item.correctAnswer);
+      next[index] = item;
+      return next;
+    });
+  };
+
+  const handleMarkCorrect = (index) => {
+    setReviewItems(prev => {
+      const next = [...prev];
+      const item = { ...next[index] };
+      let defaultCorrect = item.correctAnswer;
+      if (item.questionType === 'multi_select' && !Array.isArray(defaultCorrect)) {
+        defaultCorrect = defaultCorrect ? [defaultCorrect] : [];
+      } else if (item.questionType === 'objective' && Array.isArray(defaultCorrect)) {
+        defaultCorrect = defaultCorrect[0] || '';
+      }
+      item.userAnswer = defaultCorrect;
+      item.isAnswered = true;
+      item.isCorrect = true;
+      next[index] = item;
+      return next;
+    });
+  };
+
+  const handleMarkIncorrect = (index) => {
+    setReviewItems(prev => {
+      const next = [...prev];
+      const item = { ...next[index] };
+      item.isCorrect = false;
+      next[index] = item;
+      return next;
+    });
+  };
+
+  const handleClearAnswer = (index) => {
+    setReviewItems(prev => {
+      const next = [...prev];
+      const item = { ...next[index] };
+      item.userAnswer = null;
+      item.isAnswered = false;
+      item.isCorrect = false;
+      next[index] = item;
+      return next;
+    });
+  };
+
+  const handleAddQuestionToSubmission = () => {
+    if (!selectedAddQuestionId) return;
+    const q = questions.find(item => String(item.id) === String(selectedAddQuestionId));
+    if (!q) return;
+    if (reviewItems.some(it => String(it.questionId) === String(q.id))) {
+      showToast('This question is already in the submission list.', 'error');
+      return;
+    }
+    const newItem = {
+      questionId: q.id,
+      difficulty: q.difficulty || 'medium',
+      isAnswered: false,
+      isCorrect: false,
+      userAnswer: null,
+      correctAnswer: q.correct_answer,
+      questionText: q.question_text || (q.assertion ? `Assertion: ${q.assertion}` : `Question #${q.id}`),
+      questionType: q.question_type || 'mcq',
+      assertion: q.assertion || null,
+      reason: q.reason || null,
+      options: Array.isArray(q.options) ? q.options : [],
+    };
+    setReviewItems(prev => [...prev, newItem]);
+    setSelectedAddQuestionId('');
+    showToast('Question added to submission breakdown.');
+  };
+
+  const handleRemoveQuestionFromSubmission = (index) => {
+    setReviewItems(prev => prev.filter((_, i) => i !== index));
+    showToast('Question removed from submission breakdown.');
+  };
+
+  const handleSaveSubmission = async () => {
+    if (!viewSubmissionModal) return;
+    setSavingSubmission(true);
+    setReviewModalError('');
+    try {
+      const itemsPayload = reviewItems.map(it => ({
+        questionId: it.questionId,
+        difficulty: it.difficulty,
+        isAnswered: it.isAnswered,
+        isCorrect: it.isCorrect,
+        userAnswer: it.userAnswer,
+        correctAnswer: it.correctAnswer,
+        questionType: it.questionType,
+      }));
+
+      const res = await updateCloudIntelligenceSubmission(token, viewSubmissionModal.id, itemsPayload);
+      if (res.ok && res.submission) {
+        setSubmissions(prev => prev.map(s => s.id === res.submission.id ? res.submission : s));
+        showToast('✓ Submission answers updated & score recalculated!');
+        setViewSubmissionModal(null);
+        void loadResults();
+      } else {
+        setReviewModalError(res.error || 'Failed to save submission changes');
+      }
+    } catch (err) {
+      setReviewModalError(err.message || 'An unexpected error occurred');
+    } finally {
+      setSavingSubmission(false);
+    }
+  };
 
   // Toast Notification
   const [toast, setToast] = useState(null);
@@ -846,7 +1037,7 @@ export default function CloudIntelligenceAdmin({ token }) {
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
-                              onClick={() => setViewSubmissionModal(sub)}
+                              onClick={() => handleOpenReviewModal(sub)}
                               className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-[#00a8e0] border border-[#00a8e0]/30 text-[10px] uppercase font-bold cursor-pointer"
                             >
                               Review
@@ -1332,75 +1523,396 @@ export default function CloudIntelligenceAdmin({ token }) {
       )}
 
       {/* ═══════════════════════════════════════════════════════════
-          MODAL: INSPECT SUBMISSION BREAKDOWN
+          MODAL: INSPECT & EDIT SUBMISSION BREAKDOWN & ANSWERS
          ═══════════════════════════════════════════════════════════ */}
-      {viewSubmissionModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#12161f] border border-white/20 max-w-2xl w-full p-6 font-mono text-xs shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-white">{viewSubmissionModal.participant_name}</h3>
-                <p className="text-[10px] text-[#dbc2ad]">
-                  {viewSubmissionModal.participant_email} | Reg: {viewSubmissionModal.participant_reg_no || 'N/A'}
-                </p>
-              </div>
-              <button onClick={() => setViewSubmissionModal(null)} className="text-white/40 hover:text-white">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
+      {viewSubmissionModal && (() => {
+        const previewCorrectCount = reviewItems.filter(it => it.isCorrect).length;
+        const previewTotal = Math.max(1, reviewItems.length);
+        const previewTotalMarks = previewTotal * 1.0;
+        const previewAccuracyScore = parseFloat((previewCorrectCount * 0.6).toFixed(2));
+        const previewSpeedScore = parseFloat(Number(viewSubmissionModal.speed_score || 0).toFixed(2));
+        const previewFinalScore = parseFloat((previewAccuracyScore + previewSpeedScore).toFixed(2));
+        const previewPercentage = parseFloat(((previewFinalScore / previewTotalMarks) * 100).toFixed(2));
+        const previewTimeTaken = viewSubmissionModal.time_taken_seconds || 0;
 
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="bg-white/3 p-2 border border-white/5">
-                <span className="text-[10px] text-[#dbc2ad] block">Final Score</span>
-                <span className="text-base font-bold text-[#a8e063]">{viewSubmissionModal.score} / {viewSubmissionModal.total_marks}</span>
-              </div>
-              <div className="bg-white/3 p-2 border border-white/5">
-                <span className="text-[10px] text-[#dbc2ad] block">Correctness (60%)</span>
-                <span className="text-base font-bold text-[#FF9900]">+{viewSubmissionModal.accuracy_score}</span>
-              </div>
-              <div className="bg-white/3 p-2 border border-white/5">
-                <span className="text-[10px] text-[#dbc2ad] block">Speed Bonus (40%)</span>
-                <span className="text-base font-bold text-[#00a8e0]">+{viewSubmissionModal.speed_score}</span>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-[11px] font-bold text-[#dbc2ad] uppercase tracking-wider mb-2">Question Breakdown</h4>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {(viewSubmissionModal.breakdown || []).map((item, bIdx) => (
-                  <div
-                    key={bIdx}
-                    className={`p-2 border text-[11px] flex items-center justify-between ${
-                      item.isCorrect
-                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                        : item.isAnswered
-                        ? 'bg-red-500/10 border-red-500/30 text-red-300'
-                        : 'bg-white/2 border-white/5 text-white/50'
-                    }`}
-                  >
-                    <div>
-                      <span className="font-bold">Q{bIdx + 1}:</span>{' '}
-                      {item.isCorrect ? 'Correct (0.6 pts)' : item.isAnswered ? 'Incorrect (0 pts)' : 'Unanswered (0 pts)'}
-                    </div>
-                    <div className="text-[10px]">
-                      Your Response: <code className="bg-black/40 px-1 py-0.5 rounded">{JSON.stringify(item.userAnswer)}</code>
-                    </div>
+        return (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
+            <div className="bg-[#12161f] border border-white/20 max-w-4xl w-full p-5 sm:p-6 font-mono text-xs shadow-2xl flex flex-col max-h-[92vh]">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-white/10 pb-4 shrink-0">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#FF9900] animate-pulse" />
+                    <h3 className="text-base font-bold text-white tracking-wide">
+                      Review &amp; Edit Submission: <span className="text-[#FF9900]">{viewSubmissionModal.participant_name}</span>
+                    </h3>
                   </div>
-                ))}
+                  <p className="text-[11px] text-[#dbc2ad] mt-0.5">
+                    {viewSubmissionModal.participant_email} {viewSubmissionModal.participant_reg_no ? `| Reg: ${viewSubmissionModal.participant_reg_no}` : ''} | Submitted: {new Date(viewSubmissionModal.submitted_at).toLocaleString()}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setViewSubmissionModal(null)}
+                  className="text-white/40 hover:text-white p-1 transition-colors cursor-pointer bg-transparent border-none"
+                  title="Close"
+                >
+                  <span className="material-symbols-outlined text-xl">close</span>
+                </button>
               </div>
-            </div>
 
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={() => setViewSubmissionModal(null)}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold cursor-pointer"
-              >
-                Close
-              </button>
+              {/* Dynamic Score Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 my-4 shrink-0">
+                <div className="bg-white/3 p-3 border border-white/10 text-center">
+                  <span className="text-[10px] text-[#dbc2ad] uppercase tracking-wider block font-bold">Final Score</span>
+                  <span className="text-xl font-bold text-[#a8e063] block mt-0.5">
+                    {previewFinalScore.toFixed(2)} <span className="text-xs text-white/50">/ {previewTotalMarks.toFixed(2)}</span>
+                  </span>
+                  <span className="text-[9px] text-[#dbc2ad]">({previewPercentage}%)</span>
+                </div>
+
+                <div className="bg-white/3 p-3 border border-amber-500/30 text-center bg-amber-500/5">
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="text-[10px] text-[#FF9900] uppercase tracking-wider font-bold">Correctness (60%)</span>
+                  </div>
+                  <span className="text-xl font-bold text-[#FF9900] block mt-0.5">
+                    +{previewAccuracyScore.toFixed(2)} <span className="text-xs text-white/50">pts</span>
+                  </span>
+                  <span className="text-[9px] text-[#dbc2ad]">
+                    {previewCorrectCount} of {previewTotal} correct (×0.6)
+                  </span>
+                </div>
+
+                <div className="bg-white/3 p-3 border border-sky-500/20 text-center">
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="text-[10px] text-[#00a8e0] uppercase tracking-wider font-bold">Speed Bonus (40%)</span>
+                  </div>
+                  <span className="text-xl font-bold text-[#00a8e0] block mt-0.5">
+                    +{previewSpeedScore.toFixed(2)} <span className="text-xs text-white/50">pts</span>
+                  </span>
+                  <span className="text-[9px] text-white/40 uppercase tracking-widest font-bold">Unchanged</span>
+                </div>
+
+                <div className="bg-white/3 p-3 border border-white/10 text-center">
+                  <span className="text-[10px] text-[#dbc2ad] uppercase tracking-wider block font-bold">Time Taken</span>
+                  <span className="text-xl font-bold text-white block mt-0.5">
+                    {Math.floor(previewTimeTaken / 60)}m {previewTimeTaken % 60}s
+                  </span>
+                  <span className="text-[9px] text-white/40 uppercase tracking-widest font-bold">Unchanged</span>
+                </div>
+              </div>
+
+              {/* Add Question to Submission Bar */}
+              <div className="p-3 bg-white/4 border border-white/10 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0 mb-3">
+                <span className="text-[11px] text-[#dbc2ad] font-bold whitespace-nowrap flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm text-[#FF9900]">add_circle</span>
+                  Add Question to Attempt:
+                </span>
+                <select
+                  value={selectedAddQuestionId}
+                  onChange={(e) => setSelectedAddQuestionId(e.target.value)}
+                  className="flex-1 bg-black/50 border border-white/15 px-3 py-1.5 font-mono text-xs text-white focus:outline-none focus:border-[#FF9900]"
+                >
+                  <option value="">-- Choose question from Question Bank to include --</option>
+                  {questions
+                    .filter((q) => !reviewItems.some((it) => String(it.questionId) === String(q.id)))
+                    .map((q) => (
+                      <option key={q.id} value={q.id}>
+                        #{q.id} [{q.question_type?.toUpperCase()}] - {String(q.question_text || q.assertion || '').slice(0, 80)}...
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleAddQuestionToSubmission}
+                  disabled={!selectedAddQuestionId}
+                  className="px-4 py-1.5 bg-[#FF9900] text-black font-bold uppercase tracking-wider text-[10px] hover:bg-[#ffaa22] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer border-none whitespace-nowrap transition-all"
+                >
+                  + Add Question
+                </button>
+              </div>
+
+              {/* Scrollable Questions & Answers List */}
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                {reviewItems.length === 0 ? (
+                  <div className="text-center py-12 text-white/40">No questions found in this submission.</div>
+                ) : (
+                  reviewItems.map((item, idx) => {
+                    const qType = item.questionType;
+                    const diffBadge = DIFFICULTY_LEVELS.find((d) => d.id === item.difficulty) || DIFFICULTY_LEVELS[1];
+                    const typeBadge = QUESTION_TYPES.find((t) => t.id === qType) || QUESTION_TYPES[0];
+
+                    return (
+                      <div
+                        key={item.questionId || idx}
+                        className={`border p-4 transition-colors ${
+                          item.isCorrect
+                            ? 'bg-emerald-950/15 border-emerald-500/40'
+                            : item.isAnswered
+                            ? 'bg-red-950/15 border-red-500/40'
+                            : 'bg-white/2 border-white/10'
+                        }`}
+                      >
+                        {/* Question Top Toolbar */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/8 mb-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-white text-xs">Question #{idx + 1}</span>
+                            <span
+                              className="text-[9px] px-1.5 py-0.5 uppercase tracking-wider font-bold"
+                              style={{ background: typeBadge.bg, color: typeBadge.color, border: `1px solid ${typeBadge.border}` }}
+                            >
+                              {typeBadge.label}
+                            </span>
+                            <span
+                              className="text-[9px] px-1.5 py-0.5 uppercase tracking-wider font-bold"
+                              style={{ background: diffBadge.bg, color: diffBadge.color, border: `1px solid ${diffBadge.border}` }}
+                            >
+                              {diffBadge.label}
+                            </span>
+                            <span
+                              className={`text-[9px] px-2 py-0.5 font-bold uppercase tracking-wider rounded-sm ${
+                                item.isCorrect
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                  : item.isAnswered
+                                  ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                                  : 'bg-white/10 text-white/50 border border-white/15'
+                              }`}
+                            >
+                              {item.isCorrect ? '✓ Correct (+0.6 pts)' : item.isAnswered ? '✕ Incorrect (0 pts)' : '○ Unanswered (0 pts)'}
+                            </span>
+                          </div>
+
+                          {/* Quick Marking Buttons */}
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleMarkCorrect(idx)}
+                              className="px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[9px] font-bold uppercase tracking-wider cursor-pointer"
+                              title="Mark as correct (sets answer to correct key)"
+                            >
+                              ✓ Correct
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMarkIncorrect(idx)}
+                              className="px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 text-[9px] font-bold uppercase tracking-wider cursor-pointer"
+                              title="Mark as incorrect"
+                            >
+                              ✕ Wrong
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleClearAnswer(idx)}
+                              className="px-2 py-1 bg-white/5 hover:bg-white/10 text-white/60 border border-white/15 text-[9px] uppercase tracking-wider cursor-pointer"
+                              title="Clear answer (mark unanswered)"
+                            >
+                              Clear
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveQuestionFromSubmission(idx)}
+                              className="px-2 py-1 bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-500/30 text-[9px] cursor-pointer"
+                              title="Remove question from this submission"
+                            >
+                              <span className="material-symbols-outlined text-xs">delete</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Question Statement */}
+                        {item.assertion ? (
+                          <div className="space-y-1.5 mb-3 text-[11px] leading-relaxed">
+                            <p className="text-white/90">
+                              <strong className="text-[#FF9900]">Assertion (A):</strong> {item.assertion}
+                            </p>
+                            <p className="text-white/90">
+                              <strong className="text-[#00a8e0]">Reason (R):</strong> {item.reason}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-white/95 text-[11px] leading-relaxed mb-3 font-medium whitespace-pre-wrap">
+                            {item.questionText}
+                          </p>
+                        )}
+
+                        {/* Interactive Option Selection / Answer Inputs */}
+                        <div className="mt-2 space-y-1.5">
+                          <span className="text-[10px] text-[#dbc2ad] uppercase tracking-wider font-bold block mb-1">
+                            Participant Response (Click to change ticked answer):
+                          </span>
+
+                          {/* MCQ or Assertion Reason options */}
+                          {(qType === 'mcq' || qType === 'assertion_reason') && (
+                            <div className="space-y-1.5">
+                              {(item.options || []).map((opt, optIdx) => {
+                                const isUserPicked =
+                                  String(item.userAnswer ?? '').trim().toLowerCase() === String(opt).trim().toLowerCase();
+                                const isRightAnswer =
+                                  String(item.correctAnswer ?? '').trim().toLowerCase() === String(opt).trim().toLowerCase();
+
+                                return (
+                                  <label
+                                    key={optIdx}
+                                    onClick={() => handleUpdateItemAnswer(idx, opt)}
+                                    className={`flex items-start gap-2.5 p-2.5 border text-[11px] cursor-pointer transition-colors ${
+                                      isUserPicked && isRightAnswer
+                                        ? 'bg-emerald-500/20 border-emerald-400 text-emerald-100 font-medium'
+                                        : isUserPicked
+                                        ? 'bg-red-500/20 border-red-400 text-red-100 font-medium'
+                                        : isRightAnswer
+                                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+                                        : 'bg-black/30 border-white/10 text-white/70 hover:bg-white/5'
+                                    }`}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name={`question_${item.questionId || idx}`}
+                                      checked={isUserPicked}
+                                      onChange={() => handleUpdateItemAnswer(idx, opt)}
+                                      className="mt-0.5 accent-[#FF9900]"
+                                    />
+                                    <span className="font-bold text-xs">{String.fromCharCode(65 + optIdx)}.</span>
+                                    <span className="flex-1 leading-snug">{opt}</span>
+                                    {isUserPicked && (
+                                      <span className="text-[9px] px-1.5 py-0.5 bg-white/15 text-white font-bold uppercase rounded-xs">
+                                        Ticked
+                                      </span>
+                                    )}
+                                    {isRightAnswer && (
+                                      <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/30 text-emerald-300 font-bold uppercase rounded-xs">
+                                        Correct Key
+                                      </span>
+                                    )}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* Multi Select checkboxes */}
+                          {qType === 'multi_select' && (
+                            <div className="space-y-1.5">
+                              {(item.options || []).map((opt, optIdx) => {
+                                const userList = Array.isArray(item.userAnswer) ? item.userAnswer : [];
+                                const isUserPicked = userList.some(
+                                  (v) => String(v).trim().toLowerCase() === String(opt).trim().toLowerCase()
+                                );
+                                const isRightAnswer =
+                                  Array.isArray(item.correctAnswer) &&
+                                  item.correctAnswer.some(
+                                    (v) => String(v).trim().toLowerCase() === String(opt).trim().toLowerCase()
+                                  );
+
+                                return (
+                                  <label
+                                    key={optIdx}
+                                    onClick={() => handleToggleMultiSelectOption(idx, opt)}
+                                    className={`flex items-start gap-2.5 p-2.5 border text-[11px] cursor-pointer transition-colors ${
+                                      isUserPicked && isRightAnswer
+                                        ? 'bg-emerald-500/20 border-emerald-400 text-emerald-100 font-medium'
+                                        : isUserPicked
+                                        ? 'bg-red-500/20 border-red-400 text-red-100 font-medium'
+                                        : isRightAnswer
+                                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+                                        : 'bg-black/30 border-white/10 text-white/70 hover:bg-white/5'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isUserPicked}
+                                      onChange={() => handleToggleMultiSelectOption(idx, opt)}
+                                      className="mt-0.5 accent-[#FF9900]"
+                                    />
+                                    <span className="font-bold text-xs">{String.fromCharCode(65 + optIdx)}.</span>
+                                    <span className="flex-1 leading-snug">{opt}</span>
+                                    {isUserPicked && (
+                                      <span className="text-[9px] px-1.5 py-0.5 bg-white/15 text-white font-bold uppercase rounded-xs">
+                                        Ticked
+                                      </span>
+                                    )}
+                                    {isRightAnswer && (
+                                      <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/30 text-emerald-300 font-bold uppercase rounded-xs">
+                                        Correct Key
+                                      </span>
+                                    )}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* Objective text input */}
+                          {qType === 'objective' && (
+                            <div className="space-y-2">
+                              <div>
+                                <label className="text-[10px] text-[#dbc2ad] block mb-1">User Typed Answer:</label>
+                                <input
+                                  type="text"
+                                  value={item.userAnswer || ''}
+                                  onChange={(e) => handleUpdateItemAnswer(idx, e.target.value)}
+                                  placeholder="Type participant answer..."
+                                  className="w-full bg-black/40 border border-white/20 p-2.5 font-mono text-xs text-white focus:outline-none focus:border-[#FF9900]"
+                                />
+                              </div>
+                              <div className="text-[10px] text-emerald-300 bg-emerald-950/20 border border-emerald-500/20 p-2">
+                                <span className="font-bold uppercase tracking-wider">Official Correct Key:</span>{' '}
+                                {Array.isArray(item.correctAnswer)
+                                  ? item.correctAnswer.join(' OR ')
+                                  : String(item.correctAnswer || 'N/A')}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Error Display */}
+              {reviewModalError && (
+                <div className="p-2.5 mt-3 bg-red-950/40 border border-red-500/40 text-red-300 text-xs shrink-0">
+                  {reviewModalError}
+                </div>
+              )}
+
+              {/* Modal Footer Controls */}
+              <div className="border-t border-white/10 pt-4 mt-3 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <p className="text-[10px] text-[#dbc2ad]">
+                  Changing answers will update the participant&apos;s score. Speed Bonus &amp; Time Taken remain intact.
+                </p>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setViewSubmissionModal(null)}
+                    className="flex-1 sm:flex-none px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold cursor-pointer transition-colors border-none uppercase tracking-wider text-[11px]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveSubmission}
+                    disabled={savingSubmission}
+                    className="flex-1 sm:flex-none px-6 py-2.5 bg-[#FF9900] hover:bg-[#ffaa22] text-black font-bold uppercase tracking-wider text-[11px] cursor-pointer transition-all border-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-[#FF9900]/20"
+                  >
+                    {savingSubmission ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-base">save</span>
+                        <span>Save Changes &amp; Recalculate</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
