@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
-import { splitVitName } from '../../recruitment/lib/vit-identity.js';
-
 // Time allowed per question: 0.5 minutes. Keep in step with the server.
 const SECONDS_PER_QUESTION = 30;
 import {
@@ -13,6 +11,28 @@ import {
 } from '../../utils/auth';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '225205318470-pn0cdqbs39jg8b60lem10e6fs9vh72q4.apps.googleusercontent.com';
+
+const REGISTRATION_REGEX = /(\d{2}[A-Za-z]{2,4}\d{4,5})/i;
+
+function extractVitIdentity(googleName, email = '') {
+  const raw = String(googleName ?? '').trim();
+  let match = raw.match(REGISTRATION_REGEX);
+  let name = raw;
+  let regNo = null;
+
+  if (match) {
+    regNo = match[1].toUpperCase();
+    name = raw.replace(REGISTRATION_REGEX, ' ').replace(/\s+/g, ' ').trim();
+  } else if (email) {
+    const emailPrefix = String(email).split('@')[0];
+    const emailMatch = emailPrefix.match(REGISTRATION_REGEX);
+    if (emailMatch) {
+      regNo = emailMatch[1].toUpperCase();
+    }
+  }
+
+  return { name: name || raw, registrationNumber: regNo };
+}
 
 function decodeGoogleJwt(token) {
   try {
@@ -330,7 +350,7 @@ export default function QuizParticipantPage() {
     if (hasAlreadySubmitted) return;
 
     if (participantType === 'internal') {
-      const identity = splitVitName(payload.name || payload.given_name || '', email);
+      const identity = extractVitIdentity(payload.name || payload.given_name || '', email);
       setInternalData({
         email,
         name: identity.name || payload.name || payload.given_name || '',

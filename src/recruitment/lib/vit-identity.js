@@ -1,23 +1,12 @@
-// VIT Google accounts are named "Full Name 25BAI0156" or have registration numbers
-// in their email address (2-digit year, 2-4 letter branch, 4-5 digit roll, e.g. 22BCE1045, 25BAI0156, 21BDS0021).
-const REGISTRATION_REGEX = /(\d{2}[A-Za-z]{2,4}\d{4,5})/i;
+// VIT Google accounts are named "Full Name 25BAI0156". Split that into the
+// person's name and their registration number (2-digit year, 3-letter
+// programme, 4-digit roll).
+const REGISTRATION_IN_NAME = /\s*\b(\d{2}[A-Za-z]{3}\d{4})\b\s*/;
 
-export function splitVitName(googleName, email = '') {
+export function splitVitName(googleName) {
   const raw = String(googleName ?? '').trim();
-  let match = raw.match(REGISTRATION_REGEX);
-  let name = raw;
-  let regNo = null;
-
-  if (match) {
-    regNo = match[1].toUpperCase();
-    name = raw.replace(REGISTRATION_REGEX, ' ').replace(/\s+/g, ' ').trim();
-  } else if (email) {
-    const emailPrefix = String(email).split('@')[0];
-    const emailMatch = emailPrefix.match(REGISTRATION_REGEX);
-    if (emailMatch) {
-      regNo = emailMatch[1].toUpperCase();
-    }
-  }
-
-  return { name: name || raw, registrationNumber: regNo };
+  const match = raw.match(REGISTRATION_IN_NAME);
+  if (!match) return { name: raw, registrationNumber: null };
+  const name = raw.replace(REGISTRATION_IN_NAME, ' ').replace(/\s+/g, ' ').trim();
+  return { name: name || raw, registrationNumber: match[1].toUpperCase() };
 }
