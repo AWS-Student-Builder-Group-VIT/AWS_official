@@ -25,10 +25,16 @@ dist-ssr
 **/node_modules/
 **/dist/
 **/.vite/
+**/.next/
+**/.next-dev/
+**/.next-build/
 *.log
+*.tsbuildinfo
 tmp/
 .env
 .env.local
 .env.*.local
 .pglite_data/
 server/.pglite_data/
+.claude/
+AWS_official 3/

@@ -2,43 +2,22 @@ import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { OAuth2Client } from 'google-auth-library';
 import pool from './db.js';
 import { initializeVersionedSchema } from './databaseInitialization.js';
-import {
-  applyAdminAdjustment,
-  initializeHackathonScoring,
-  listHackathonMembers,
-  registerHackathonScoringRoutes,
-  normalizeTeamCode,
-  upsertHackathonMember,
-} from './hackathonScoring.js';
-import {
-  assignBalancedChallengeForNewTeam,
-  createTeamChallengeSnapshot,
-  getChallengeById,
-  listAdminChallenges,
-} from './challengeCatalog.js';
-import {
-  createReturningHackathonSession,
-  findReturningHackathonTeamRows,
-  formatHackathonTeam,
-  getTeamRegistrationConflict,
-  isSingleTeamMembershipConflict,
-} from './hackathonTeam.js';
-import { initializeEventRewards, registerEventRewardRoutes } from './eventRewards.js';
 import { initializeCloudIntelligence, registerCloudIntelligenceRoutes } from './cloudIntelligence.js';
 import { isAllowedOrigin } from './corsOrigins.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import recruitmentRouter from './recruitmentRoutes.js';
 
+// The workspace keeps a single .env.local at the repository root; plain
+// .env is loaded afterwards so it can fill any gaps without overriding.
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-const HACKATHON_JWT_SECRET = `${process.env.JWT_SECRET || 'development-only-change-me'}:hackathon`;
 
 const ADMIN_ID = process.env.ADMIN_ID;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -51,7 +30,8 @@ const allowedOrigins = [
   'http://localhost:5176',
   'http://localhost:3000',
   'https://aws-official.onrender.com',
-  process.env.CORS_ORIGIN,
+  // Comma-separated, e.g. "https://example.com,https://www.example.com"
+  ...(process.env.CORS_ORIGIN ?? '').split(',').map((o) => o.trim()),
 ].filter(Boolean);
 
 app.use(cors({
@@ -63,6 +43,10 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '35mb' }));
 app.use(express.urlencoded({ extended: true, limit: '35mb' }));
+
+// ── Recruitment API ───────────────────────────────────────────
+app.use('/api/recruitment', recruitmentRouter);
+
 
 // ── Auth middleware ───────────────────────────────────────────
 function authMiddleware(req, res, next) {
@@ -87,29 +71,7 @@ function adminMiddleware(req, res, next) {
   }
 }
 
-function hackathonAuth(req, res, next) {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Hackathon sign-in required' });
-  try { req.hackathonUser = jwt.verify(token, HACKATHON_JWT_SECRET); next(); }
-  catch { res.status(401).json({ error: 'Hackathon session expired. Sign in with Google again.' }); }
-}
-
-async function withTransaction(operation) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const value = await operation(client);
-    await client.query('COMMIT');
-    return value;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
-// ── Init quiz_scores table ────────────────────────────────────
+// ── Database init ─────────────────────────────────────────────
 async function runDatabaseMigrations() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -137,521 +99,38 @@ async function runDatabaseMigrations() {
       attempted_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
-  // Handle existing DBs where columns might be missing
   await pool.query(`
     ALTER TABLE quiz_scores ADD COLUMN IF NOT EXISTS time_taken INTEGER DEFAULT 0;
     ALTER TABLE quiz_scores ADD COLUMN IF NOT EXISTS composite_score NUMERIC(5,2) DEFAULT 0;
-  `).catch(() => console.log('ALTER columns for time/composite failed (probably already exists).'));
-  
-  // Initialize global settings table
+  `).catch(() => {});
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS global_settings (
       key VARCHAR(64) PRIMARY KEY,
       value VARCHAR(255) NOT NULL
     );
   `);
-  // Initialize hackathon teams table
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS hackathon_teams (
-      id SERIAL PRIMARY KEY,
-      code VARCHAR(16) UNIQUE,
-      team_name VARCHAR(128),
-      mystery_question JSONB,
-      is_opened BOOLEAN DEFAULT FALSE,
-      points INTEGER DEFAULT 0,
-      chaos_event JSONB,
-      is_chaos_opened BOOLEAN DEFAULT FALSE,
-      is_chaos_resolved BOOLEAN DEFAULT FALSE,
-      owned_items JSONB DEFAULT '[]'::jsonb,
-      members JSONB DEFAULT '[]'::jsonb,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    );
-  `);
-  await pool.query(`
-    DO $$
-    DECLARE
-      col RECORD;
-    BEGIN
-      FOR col IN (SELECT column_name FROM information_schema.columns WHERE table_name = 'hackathon_teams' AND is_nullable = 'NO' AND column_name != 'id') LOOP
-        EXECUTE 'ALTER TABLE hackathon_teams ALTER COLUMN ' || quote_ident(col.column_name) || ' DROP NOT NULL';
-      END LOOP;
-    END $$;
-  `).catch(err => console.log('Drop NOT NULL constraints error:', err.message));
-  await pool.query(`
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS code VARCHAR(16) UNIQUE;
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS team_name VARCHAR(128);
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS mystery_question JSONB;
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS is_opened BOOLEAN DEFAULT FALSE;
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS points INTEGER DEFAULT 0;
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS chaos_event JSONB;
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS is_chaos_opened BOOLEAN DEFAULT FALSE;
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS is_chaos_resolved BOOLEAN DEFAULT FALSE;
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS owned_items JSONB DEFAULT '[]'::jsonb;
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS members JSONB DEFAULT '[]'::jsonb;
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS has_changed_question BOOLEAN DEFAULT FALSE;
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS max_game_attempts INTEGER NOT NULL DEFAULT 5;
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS presentation JSONB;
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS board_scores JSONB DEFAULT '[]'::jsonb;
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
-    ALTER TABLE hackathon_teams ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
-    CREATE TABLE IF NOT EXISTS hackathon_team_presentations (
-      team_code VARCHAR(16) PRIMARY KEY,
-      file_name TEXT,
-      file_size BIGINT,
-      mime_type TEXT,
-      file_data TEXT,
-      link TEXT,
-      uploaded_by TEXT,
-      uploaded_at TIMESTAMPTZ DEFAULT NOW()
-    );
-
-    CREATE TABLE IF NOT EXISTS hackathon_activity_logs (
-      id SERIAL PRIMARY KEY,
-      team_code VARCHAR(16),
-      team_name VARCHAR(128),
-      event_type VARCHAR(64),
-      message TEXT,
-      details JSONB DEFAULT '{}'::jsonb,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-  `).catch(err => console.log('ALTER columns for hackathon_teams error:', err.message));
-  await initializeHackathonScoring(pool);
-  await initializeEventRewards(pool);
   await initializeCloudIntelligence(pool);
 }
 
 async function initDb() {
   const result = await initializeVersionedSchema({
     pool,
-    version: 'v9-cloud-intelligence',
+    version: 'v11-cloud-intelligence',
     migrate: runDatabaseMigrations,
   });
-  console.log(result.migrated ? 'Database tables ready (migrated to v8)' : 'Database schema already ready');
-}
-export const dbReady = initDb();
-
-// ── Activity Logger Helper ────────────────────────────────────
-async function logHackathonActivity(teamCode, teamName, eventType, message, details = {}) {
-  try {
-    await pool.query(
-      `INSERT INTO hackathon_activity_logs (team_code, team_name, event_type, message, details)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [teamCode || 'SYSTEM', teamName || 'Unknown Squad', eventType || 'ACTION', message, JSON.stringify(details)]
-    );
-  } catch (e) {
-    console.error('Error logging hackathon activity:', e.message);
-  }
+  console.log(result.migrated ? 'Database tables ready (migrated to v11)' : 'Database schema already ready');
 }
 
-async function sendSingleTeamConflict(res, error, user, action) {
-  if (!isSingleTeamMembershipConflict(error)) return false;
-  let teamCode;
-  try {
-    teamCode = (await findReturningHackathonTeamRows(pool, user))[0]?.code;
-  } catch (lookupError) {
-    console.error('Could not resolve existing team after membership conflict:', lookupError);
-  }
-  res.status(409).json({
-    error: action === 'join'
-      ? 'You already belong to a different HackQuest team'
-      : 'You already belong to a HackQuest team',
-    ...(teamCode ? { teamCode } : {}),
-  });
-  return true;
-}
-
-// ── Mystery Box Hackathon Team Endpoints ──────────────────────
-app.post('/api/mystery-box/session', async (req, res) => {
-  let payload;
-  try {
-    const ticket = await googleClient.verifyIdToken({ idToken: req.body?.credential, audience: process.env.GOOGLE_CLIENT_ID });
-    payload = ticket.getPayload();
-  } catch {
-    return res.status(401).json({ error: 'Invalid Google credential' });
-  }
-  if (!payload?.email_verified || !payload.email || !payload.sub) {
-    return res.status(401).json({ error: 'Verified Google identity required' });
-  }
-  try {
-    const user = { email: payload.email.toLowerCase(), sub: payload.sub, name: payload.name || 'Participant', picture: payload.picture || '' };
-    const session = await createReturningHackathonSession(pool, user, {
-      signToken: (claims) => jwt.sign(claims, HACKATHON_JWT_SECRET, { expiresIn: '2h' }),
-    });
-    res.json(session);
-  } catch (error) {
-    console.error('HackQuest session membership lookup failed:', error);
-    res.status(500).json({ error: 'Could not restore HackQuest membership. Please try again.' });
-  }
+// An unhandled module-scope rejection kills the whole serverless function before
+// any handler runs, taking the Supabase-only recruitment routes down with it —
+// so a Postgres outage must not be fatal to the rest of the API.
+export const dbReady = initDb().catch((error) => {
+  console.error('Database initialisation failed:', error);
 });
 
-app.post('/api/mystery-box/teams/create', hackathonAuth, async (req, res) => {
-  try {
-    const { code, teamName, regNo } = req.body;
-    if (!code || !teamName || !regNo) {
-      return res.status(400).json({ error: 'Missing required team fields' });
-    }
-
-    const memberships = await findReturningHackathonTeamRows(pool, req.hackathonUser);
-    const membershipConflict = getTeamRegistrationConflict(memberships, { action: 'create' });
-    if (membershipConflict) return res.status(membershipConflict.status).json(membershipConflict);
-
-    const upperCode = code.toUpperCase().trim();
-    const existing = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [upperCode]);
-    if (existing.rows.length > 0) {
-      return res.status(400).json({ error: 'Team code already exists' });
-    }
-
-    const { row, members } = await withTransaction(async (client) => {
-      await client.query("SELECT value FROM hackathon_event_settings WHERE key='chaos_enabled' FOR SHARE");
-      const snapshot = await assignBalancedChallengeForNewTeam(client);
-      const result = await client.query(
-        `INSERT INTO hackathon_teams (code, team_name, mystery_question, chaos_event, is_chaos_opened, is_opened, points, members, chaos_version)
-         VALUES ($1, $2, $3, $4,
-           (SELECT value = 'true'::jsonb FROM hackathon_event_settings WHERE key='chaos_enabled'),
-           $5, $6, $7, (SELECT (value::text)::integer FROM hackathon_event_settings WHERE key='chaos_version'))
-         RETURNING *`,
-        [upperCode, teamName, JSON.stringify(snapshot.challenge), JSON.stringify(snapshot.chaosEvent), false, 0, JSON.stringify([{ email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: true }])]
-      );
-      const created = result.rows[0];
-      await upsertHackathonMember(client, { teamId: created.id, email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo).toUpperCase(), isLeader: true });
-      return { row: created, members: await listHackathonMembers(client, created.id) };
-    });
-    void logHackathonActivity(upperCode, teamName, 'TEAM_CREATED', `Squad "${teamName}" registered with code #${upperCode}`, { membersCount: members.length });
-    res.status(201).json({ success: true, team: formatHackathonTeam(row, members) });
-  } catch (error) {
-    if (await sendSingleTeamConflict(res, error, req.hackathonUser, 'create')) return;
-    console.error('Create team error:', error);
-    res.status(500).json({ error: 'Failed to create team' });
-  }
-});
-
-app.post('/api/mystery-box/teams/join', hackathonAuth, async (req, res) => {
-  try {
-    const { code, teamCode, member, regNo } = req.body;
-    const searchCode = normalizeTeamCode(code || teamCode || '');
-    if (!searchCode) {
-      return res.status(400).json({ error: 'Team code is required' });
-    }
-
-    const memberships = await findReturningHackathonTeamRows(pool, req.hackathonUser);
-    const membershipConflict = getTeamRegistrationConflict(memberships, { action: 'join', teamCode: searchCode });
-    if (membershipConflict) return res.status(membershipConflict.status).json(membershipConflict);
-
-    const existingTeam = memberships.find((team) => team.code === searchCode);
-    if (existingTeam) {
-      return res.json({
-        success: true,
-        team: formatHackathonTeam(existingTeam, await listHackathonMembers(pool, existingTeam.id)),
-        resumed: true,
-      });
-    }
-
-    const result = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [searchCode]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Team code not found' });
-    }
-
-    const row = result.rows[0];
-    let currentMembers = Array.isArray(row.members) ? row.members : [];
-    
-    let joinMember = member;
-    if (!joinMember && req.hackathonUser) {
-      joinMember = { email: req.hackathonUser.email, googleSub: req.hackathonUser.sub, regNo: String(regNo || '').toUpperCase(), isLeader: false };
-    }
-
-    if (!joinMember || !joinMember.email) {
-      return res.status(400).json({ error: 'Member email is required to join team' });
-    }
-
-    // Check if already in team
-    const existingIndex = currentMembers.findIndex(m => (m.email && m.email.toLowerCase() === joinMember.email.toLowerCase()) || (m.googleSub && joinMember.googleSub && m.googleSub === joinMember.googleSub));
-    if (existingIndex >= 0) {
-      currentMembers[existingIndex] = { ...currentMembers[existingIndex], ...joinMember };
-    } else {
-      currentMembers.push({ ...joinMember, isLeader: false });
-    }
-
-    const { updatedRow, normalizedMembers } = await withTransaction(async (client) => {
-      const updateRes = await client.query(
-        `UPDATE hackathon_teams
-         SET members = $1, updated_at = NOW()
-         WHERE code = $2
-         RETURNING *`,
-        [JSON.stringify(currentMembers), searchCode]
-      );
-      const updated = updateRes.rows[0];
-      await upsertHackathonMember(client, {
-        teamId: updated.id,
-        email: req.hackathonUser.email,
-        googleSub: req.hackathonUser.sub,
-        regNo: String(regNo || '').toUpperCase(),
-        isLeader: false,
-      });
-      return { updatedRow: updated, normalizedMembers: await listHackathonMembers(client, updated.id) };
-    });
-    void logHackathonActivity(searchCode, updatedRow.team_name, 'MEMBER_JOINED', `${joinMember.name || joinMember.email} joined squad "${updatedRow.team_name}"`, { email: joinMember.email });
-    res.json({ success: true, team: formatHackathonTeam(updatedRow, normalizedMembers) });
-  } catch (error) {
-    if (await sendSingleTeamConflict(res, error, req.hackathonUser, 'join')) return;
-    console.error('Join team error:', error);
-    res.status(500).json({ error: 'Failed to join team' });
-  }
-});
-
-app.get('/api/mystery-box/teams/:code', hackathonAuth, async (req, res) => {
-  try {
-    const { code } = req.params;
-    const result = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [code.toUpperCase().trim()]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Team not found' });
-    }
-
-    const row = result.rows[0];
-    let members = await listHackathonMembers(pool, row.id);
-    const member = members.find((entry) => entry.googleSub === req.hackathonUser.sub || (!entry.googleSub && entry.email?.toLowerCase() === req.hackathonUser.email));
-    if (!member) return res.status(403).json({ error: 'Not a team member' });
-    if (!member.googleSub) {
-      await upsertHackathonMember(pool, { teamId: row.id, email: member.email, googleSub: req.hackathonUser.sub, regNo: member.regNo, isLeader: member.isLeader });
-      members = await listHackathonMembers(pool, row.id);
-    }
-    res.json(formatHackathonTeam(row, members));
-  } catch (error) {
-    console.error('Get team error:', error);
-    res.status(500).json({ error: 'Failed to retrieve team' });
-  }
-});
-
-registerEventRewardRoutes(app, { pool, hackathonAuth, adminMiddleware });
-registerHackathonScoringRoutes(app, { pool, hackathonAuth, adminMiddleware });
 registerCloudIntelligenceRoutes(app, { pool, adminMiddleware });
-
-// ── Presentation Upload / Management Endpoints ───────────────
-app.post('/api/mystery-box/teams/:code/presentation', async (req, res) => {
-  try {
-    const rawCode = String(req.params.code || req.body.code || '').trim();
-    const code = normalizeTeamCode(rawCode);
-    const { fileName, fileSize, mimeType, fileData, link, uploaderName, uploaderEmail } = req.body;
-
-    if (!code) return res.status(400).json({ error: 'Team code is required' });
-    if (!fileData && !link) return res.status(400).json({ error: 'Please provide either a presentation file or a presentation link' });
-
-    // Check if submissions are frozen by admin
-    const freezeCheck = await pool.query("SELECT value FROM global_settings WHERE key = 'submissions_frozen'");
-    if (freezeCheck.rows.length > 0 && freezeCheck.rows[0].value === 'true') {
-      return res.status(403).json({ error: 'Submissions are currently frozen by the organizing committee. Edits are disabled.' });
-    }
-
-    const teamCheck = await pool.query('SELECT * FROM hackathon_teams WHERE code = $1', [code]);
-    if (teamCheck.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
-
-    const team = teamCheck.rows[0];
-    const uploadedBy = uploaderName ? `${uploaderName}${uploaderEmail ? ` (${uploaderEmail})` : ''}` : (uploaderEmail || 'Team Member');
-    const uploadedAt = new Date().toISOString();
-
-    const presentationMeta = {
-      fileName: fileName || (link ? 'External Presentation Link' : 'Presentation.pptx'),
-      fileSize: fileSize || null,
-      mimeType: mimeType || (link ? 'link' : 'application/vnd.openxmlformats-officedocument.presentationml.presentation'),
-      link: link || null,
-      hasFile: Boolean(fileData),
-      uploadedBy,
-      uploadedAt,
-    };
-
-    await pool.query(`
-      INSERT INTO hackathon_team_presentations (team_code, file_name, file_size, mime_type, file_data, link, uploaded_by, uploaded_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-      ON CONFLICT (team_code) DO UPDATE SET
-        file_name = EXCLUDED.file_name,
-        file_size = EXCLUDED.file_size,
-        mime_type = EXCLUDED.mime_type,
-        file_data = EXCLUDED.file_data,
-        link = EXCLUDED.link,
-        uploaded_by = EXCLUDED.uploaded_by,
-        uploaded_at = NOW()
-    `, [code, presentationMeta.fileName, presentationMeta.fileSize, presentationMeta.mimeType, fileData || null, link || null, uploadedBy]);
-
-    await pool.query(
-      'UPDATE hackathon_teams SET presentation = $1, updated_at = NOW() WHERE code = $2',
-      [JSON.stringify(presentationMeta), code]
-    );
-
-    await logHackathonActivity(
-      team.code,
-      team.team_name,
-      'PRESENTATION_UPLOADED',
-      link ? `Submitted project link: ${link}` : `Uploaded deliverable: ${presentationMeta.fileName}`,
-      { fileName: presentationMeta.fileName, link, uploadedBy }
-    );
-
-    res.json({ ok: true, success: true, presentation: presentationMeta });
-  } catch (error) {
-    console.error('Presentation upload error:', error);
-    res.status(500).json({ error: 'Failed to upload presentation' });
-  }
-});
-
-app.get('/api/mystery-box/teams/:code/presentation/download', async (req, res) => {
-  try {
-    const rawCode = String(req.params.code || '').trim();
-    const code = normalizeTeamCode(rawCode);
-    if (!code) return res.status(400).json({ error: 'Team code is required' });
-
-    const result = await pool.query(
-      'SELECT file_name, file_size, mime_type, file_data, link FROM hackathon_team_presentations WHERE team_code = $1',
-      [code]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'No presentation found for this team' });
-    }
-
-    const row = result.rows[0];
-    if (row.link && !row.file_data) {
-      return res.redirect(row.link);
-    }
-
-    if (!row.file_data) {
-      return res.status(404).json({ error: 'Presentation file data not available' });
-    }
-
-    let base64Clean = row.file_data;
-    if (base64Clean.includes('base64,')) {
-      base64Clean = base64Clean.split('base64,')[1];
-    }
-
-    const fileBuffer = Buffer.from(base64Clean, 'base64');
-    const safeFilename = encodeURIComponent(row.file_name || `team_${code}_presentation.pptx`).replace(/['()]/g, escape);
-    
-    res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${row.file_name || `team_${code}_presentation.pptx`}"; filename*=UTF-8''${safeFilename}`);
-    res.setHeader('Content-Length', fileBuffer.length);
-    return res.send(fileBuffer);
-  } catch (error) {
-    console.error('Presentation download error:', error);
-    res.status(500).json({ error: 'Failed to download presentation' });
-  }
-});
-
-app.get('/api/admin/mystery-box/teams/:code/presentation/download', adminMiddleware, async (req, res) => {
-  const code = normalizeTeamCode(String(req.params.code || '').trim());
-  return res.redirect(`/api/mystery-box/teams/${code}/presentation/download`);
-});
-
-app.post('/api/mystery-box/activity/log', async (req, res) => {
-  try {
-    const { code, teamName, eventType, message, details } = req.body;
-    await logHackathonActivity(code, teamName, eventType, message, details);
-    res.json({ success: true });
-  } catch {
-    res.status(500).json({ error: 'Failed to record activity log' });
-  }
-});
-
-// ── Mystery Box Global Settings & Freeze Controls ───────────
-app.get('/api/mystery-box/settings', async (req, res) => {
-  try {
-    const result = await pool.query("SELECT key, value FROM global_settings WHERE key IN ('submissions_frozen', 'quiz_status')");
-    const settings = {};
-    result.rows.forEach(r => { settings[r.key] = r.value; });
-    res.json({
-      submissionsFrozen: settings.submissions_frozen === 'true',
-      quizStatus: settings.quiz_status || 'active',
-    });
-  } catch (error) {
-    console.error('Fetch mystery box settings error:', error);
-    res.status(500).json({ error: 'Failed to fetch settings' });
-  }
-});
-
-app.post('/api/admin/mystery-box/submissions-freeze', adminMiddleware, async (req, res) => {
-  try {
-    const { frozen } = req.body;
-    const isFrozen = Boolean(frozen);
-    await pool.query(`
-      INSERT INTO global_settings (key, value) VALUES ('submissions_frozen', $1)
-      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-    `, [String(isFrozen)]);
-
-    await logHackathonActivity(
-      'GLOBAL',
-      'ADMIN_CONTROL',
-      'SUBMISSIONS_FREEZE_TOGGLED',
-      isFrozen ? 'Project submission links have been frozen by admin' : 'Project submission links have been unfrozen by admin',
-      { frozen: isFrozen, actor: req.admin?.role || 'admin' }
-    );
-
-    res.json({ ok: true, success: true, submissionsFrozen: isFrozen });
-  } catch (error) {
-    console.error('Toggle submissions freeze error:', error);
-    res.status(500).json({ error: 'Failed to update submissions freeze state' });
-  }
-});
-
-// ── Admin Board Score Review Controls ─────────────────────────
-app.put('/api/admin/mystery-box/teams/:code/board-scores', adminMiddleware, async (req, res) => {
-  try {
-    const rawCode = String(req.params.code || '').trim();
-    const code = normalizeTeamCode(rawCode);
-    if (!code) return res.status(400).json({ error: 'Team code is required' });
-
-    const { boardScores } = req.body;
-    if (!Array.isArray(boardScores)) {
-      return res.status(400).json({ error: 'boardScores must be an array' });
-    }
-
-    // Sanitize and ensure format
-    const sanitized = boardScores.map((item, index) => {
-      const title = String(item?.title ?? '').trim() || `Review ${index + 1}`;
-      const rawVal = item?.marks !== undefined && item?.marks !== '' 
-        ? item.marks 
-        : (item?.score !== undefined && item?.score !== '' ? item.score : 0);
-      const numericVal = typeof rawVal === 'number' ? rawVal : (parseFloat(rawVal) || 0);
-      return {
-        id: item?.id || `rev_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 6)}`,
-        title,
-        marks: numericVal,
-        score: numericVal,
-        updatedAt: new Date().toISOString(),
-        updatedBy: req.admin?.role || 'admin',
-      };
-    });
-
-    const totalBoardScore = sanitized.reduce((sum, item) => sum + (Number(item.marks) || 0), 0);
-
-    const updateRes = await pool.query(
-      'UPDATE hackathon_teams SET board_scores = $1, updated_at = NOW() WHERE code = $2 RETURNING team_name, board_scores',
-      [JSON.stringify(sanitized), code]
-    );
-
-    if (updateRes.rows.length === 0) {
-      return res.status(404).json({ error: 'Team not found' });
-    }
-
-    const team = updateRes.rows[0];
-
-    await logHackathonActivity(
-      code,
-      team.team_name,
-      'POINTS_ADJUSTED',
-      `Updated board score (${totalBoardScore} pts across ${sanitized.length} review sections)`,
-      { totalBoardScore, reviewsCount: sanitized.length, updatedBy: req.admin?.role || 'admin' }
-    );
-
-    res.json({
-      ok: true,
-      success: true,
-      code,
-      boardScores: sanitized,
-      totalBoardScore,
-    });
-  } catch (error) {
-    console.error('Update board scores error:', error);
-    res.status(500).json({ error: 'Failed to update board scores' });
-  }
-});
 
 // ── Register ─────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
@@ -726,7 +205,6 @@ app.put('/api/user/password', authMiddleware, async (req, res) => {
     const userResult = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
     const valid = await bcrypt.compare(oldPassword, userResult.rows[0].password_hash);
     if (!valid) return res.status(400).json({ error: 'Incorrect old password' });
-    
     const hash = await bcrypt.hash(newPassword, 10);
     await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.user.id]);
     res.json({ message: 'Password updated successfully' });
@@ -741,20 +219,12 @@ app.post('/api/quiz-scores', authMiddleware, async (req, res) => {
     const { quizId, quizTitle, quizType, score, total, timeTaken } = req.body;
     if (quizId === undefined || score === undefined || !total)
       return res.status(400).json({ error: 'Missing required fields' });
-      
+
     const pct = Math.round((score / total) * 100);
-    const maxTime = total * 60; // 60 seconds per question
-    
-    // Calculate composite score (70% accuracy, 30% time)
+    const maxTime = total * 60;
     const accuracyComponent = (score / total) * 100 * 0.7;
-    let timeComponent = 0;
-    
     const validTimeTaken = timeTaken !== undefined ? timeTaken : maxTime;
-    
-    if (validTimeTaken < maxTime) {
-      timeComponent = (1 - (validTimeTaken / maxTime)) * 100 * 0.3;
-    }
-    
+    const timeComponent = validTimeTaken < maxTime ? (1 - (validTimeTaken / maxTime)) * 100 * 0.3 : 0;
     const compositeScore = Math.min(100, Math.max(0, accuracyComponent + timeComponent)).toFixed(2);
 
     const result = await pool.query(
@@ -782,78 +252,49 @@ app.get('/api/quiz-scores/me', authMiddleware, async (req, res) => {
   }
 });
 
-// ── Quiz Scores — Qualification Status ─────────────────────────
+// ── Quiz Scores — Qualification Status ───────────────────────
 app.get('/api/quiz-scores/round-status', authMiddleware, async (req, res) => {
   try {
-    // 1. Get user's own scores
     const myScoresResult = await pool.query(
       'SELECT quiz_id, MAX(composite_score) as best_score, MAX(pct) as best_pct FROM quiz_scores WHERE user_id = $1 GROUP BY quiz_id',
       [req.user.id]
     );
-    
-    // Convert to a map for easy lookup
     const myScores = {};
     myScoresResult.rows.forEach(r => {
-      myScores[r.quiz_id] = {
-        attempted: true,
-        bestScore: parseFloat(r.best_score || 0),
-        bestPct: parseInt(r.best_pct || 0)
-      };
+      myScores[r.quiz_id] = { attempted: true, bestScore: parseFloat(r.best_score || 0), bestPct: parseInt(r.best_pct || 0) };
     });
 
-    // 2. Fetch all scores for each quiz to determine cutoffs
-    // Currently, only 'fundamentals' and 'advanced' act as gates.
-    // 'fundamentals' -> top 70%
-    // 'advanced' -> top 40%
     const gates = [
       { id: 'fundamentals', cutoffPct: 0.70 },
       { id: 'advanced', cutoffPct: 0.40 }
     ];
-
     const statusMap = {
-      fundamentals: { attempted: !!myScores['fundamentals'], qualified: true }, // base state
+      fundamentals: { attempted: !!myScores['fundamentals'], qualified: true },
       advanced: { attempted: !!myScores['advanced'], qualified: false },
       security: { attempted: !!myScores['security'], qualified: false }
     };
-    
-    // We only need to compute qualification for a round if they attempted it.
+
     for (const gate of gates) {
       if (myScores[gate.id]) {
-        // Find how many total users attempted this quiz
         const allScores = await pool.query(
           'SELECT user_id, MAX(composite_score) as best_score FROM quiz_scores WHERE quiz_id = $1 GROUP BY user_id ORDER BY best_score DESC',
           [gate.id]
         );
-        
         const totalParticipants = allScores.rows.length;
-        // e.g. 70% of 10 people = top 7
         const cutoffRank = Math.max(1, Math.floor(totalParticipants * gate.cutoffPct));
-        
         let userRank = -1;
         for (let i = 0; i < allScores.rows.length; i++) {
-          if (allScores.rows[i].user_id === req.user.id) {
-            userRank = i + 1; // 1-indexed
-            break;
-          }
+          if (allScores.rows[i].user_id === req.user.id) { userRank = i + 1; break; }
         }
-        
-        const qualified = userRank > 0 && userRank <= cutoffRank;
-        
-        statusMap[gate.id].qualified = qualified;
+        statusMap[gate.id].qualified = userRank > 0 && userRank <= cutoffRank;
         statusMap[gate.id].rank = userRank;
         statusMap[gate.id].total = totalParticipants;
         statusMap[gate.id].cutoffRank = cutoffRank;
       } else {
-        // If they haven't attempted the gate, they definitely aren't qualified.
         statusMap[gate.id].qualified = false;
       }
     }
-    
-    // Add in case studies which are independent (always qualified to attempt)
-    // Actually, for simplicity we can just return the map.
-    
     res.json(statusMap);
-
   } catch (error) {
     console.error('Round status error:', error);
     res.status(500).json({ error: 'Failed to fetch round status' });
@@ -898,8 +339,7 @@ app.get('/api/admin/stats', adminMiddleware, async (req, res) => {
       pool.query(`
         WITH user_best AS (
           SELECT user_id, quiz_id, MAX(COALESCE(composite_score, pct)) as best_score
-          FROM quiz_scores
-          GROUP BY user_id, quiz_id
+          FROM quiz_scores GROUP BY user_id, quiz_id
         )
         SELECT u.first_name, u.last_name, u.email,
                ROUND(SUM(ub.best_score)) as total_score,
@@ -922,13 +362,13 @@ app.get('/api/admin/stats', adminMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch stats' });
   }
 });
+
 // ── Global Quiz Status ───────────────────────────────────────
 let cachedQuizStatus = 'inactive';
 let lastStatusFetchTime = 0;
 
 app.get('/api/quiz-status', async (req, res) => {
   try {
-    // Only query the DB at most once every 2 seconds
     if (Date.now() - lastStatusFetchTime > 2000) {
       const result = await pool.query("SELECT value FROM global_settings WHERE key = 'quiz_status'");
       cachedQuizStatus = result.rows.length > 0 ? result.rows[0].value : 'inactive';
@@ -944,20 +384,15 @@ app.get('/api/quiz-status', async (req, res) => {
 app.post('/api/admin/quiz-control', adminMiddleware, async (req, res) => {
   try {
     const { action } = req.body;
-    if (!['initiate', 'terminate'].includes(action)) {
+    if (!['initiate', 'terminate'].includes(action))
       return res.status(400).json({ error: 'Invalid action' });
-    }
     const status = action === 'initiate' ? 'active' : 'inactive';
-    
     await pool.query(`
       INSERT INTO global_settings (key, value) VALUES ('quiz_status', $1)
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
     `, [status]);
-    
-    // Invalidate cache
     cachedQuizStatus = status;
     lastStatusFetchTime = Date.now();
-
     res.json({ message: `Quiz ${status} successfully`, status });
   } catch (error) {
     console.error('Quiz control error:', error);
@@ -965,241 +400,11 @@ app.post('/api/admin/quiz-control', adminMiddleware, async (req, res) => {
   }
 });
 
-// ── Mystery Box Hackathon — Admin Operations ──────────────────
-app.get('/api/admin/mystery-box/teams', adminMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT id, code, team_name, mystery_question, is_opened, points,
-             members, chaos_event, is_chaos_opened, is_chaos_resolved,
-             owned_items, has_changed_question, max_game_attempts, created_at, updated_at,
-             spins_used, free_change_cards, chaos_version, presentation, board_scores,
-             COALESCE((SELECT jsonb_agg(s ORDER BY s.created_at DESC) FROM team_wheel_spins s WHERE s.team_id=hackathon_teams.id),'[]'::jsonb) AS spin_history,
-             COALESCE((
-               SELECT jsonb_agg(jsonb_build_object(
-                 'attemptId', a.id,
-                 'gameSlug', a.game_slug,
-                 'slotNumber', a.slot_number,
-                 'status', a.status,
-                 'points', a.awarded_points,
-                 'startedAt', a.started_at,
-                 'completedAt', a.completed_at,
-                 'voidedAt', a.voided_at,
-                 'voidReason', a.void_reason,
-                 'voidedBy', a.voided_by
-               ) ORDER BY a.slot_number ASC, a.started_at ASC)
-               FROM team_game_attempts a
-               WHERE a.team_id = hackathon_teams.id
-             ), '[]'::jsonb) AS game_attempts,
-             COALESCE((
-               SELECT jsonb_agg(jsonb_build_object(
-                 'sourceType', l.source_type,
-                 'sourceRef', l.source_ref,
-                 'delta', l.delta,
-                 'balanceAfter', l.balance_after,
-                 'reason', l.reason,
-                 'createdAt', l.created_at
-               ) ORDER BY l.created_at DESC, l.id DESC)
-               FROM team_point_ledger l
-               WHERE l.team_id = hackathon_teams.id
-             ), '[]'::jsonb) AS point_ledger
-      FROM hackathon_teams
-      ORDER BY points DESC, created_at DESC
-    `);
-    const formatted = result.rows.map(row => ({
-      id: row.id,
-      spinsUsed: row.spins_used,
-      remainingSpins: 5-row.spins_used,
-      freeChangeCards: row.free_change_cards,
-      chaosVersion: row.chaos_version,
-      spinHistory: row.spin_history,
-      code: row.code,
-      teamName: row.team_name,
-      mysteryQuestion: row.mystery_question,
-      isOpened: row.is_opened,
-      points: row.points || 0,
-      members: row.members || [],
-      chaosEvent: row.chaos_event,
-      isChaosOpened: row.is_chaos_opened,
-      isChaosResolved: row.is_chaos_resolved,
-      ownedItems: row.owned_items || [],
-      hasChangedQuestion: row.has_changed_question || false,
-      maxGameAttempts: row.max_game_attempts ?? 5,
-      presentation: row.presentation || null,
-      boardScores: row.board_scores || [],
-      gameAttempts: row.game_attempts || [],
-      pointLedger: row.point_ledger || [],
-      registeredAt: new Date(row.created_at).getTime(),
-      updatedAt: new Date(row.updated_at).getTime()
-    }));
-    res.json(formatted);
-  } catch (error) {
-    console.error('Admin fetch hackathon teams error:', error);
-    res.status(500).json({ error: 'Failed to fetch hackathon teams' });
-  }
-});
-
-app.post('/api/admin/mystery-box/teams/points', adminMiddleware, async (req, res) => {
-  try {
-    const { code, delta, reason } = req.body;
-    if (!code) return res.status(400).json({ error: 'Team code is required' });
-    const result = await applyAdminAdjustment(pool, {
-      code,
-      delta,
-      reason: reason || `Admin point adjustment (${Number(delta) >= 0 ? '+' : ''}${Number(delta) || 0})`,
-      actor: { sub: `admin:${req.admin?.role || 'organizer'}` },
-    });
-    res.json({ success: true, ...result });
-  } catch (error) {
-    console.error('Admin update points error:', error);
-    res.status(error.status || 500).json({ error: error.status ? error.message : 'Failed to update team points' });
-  }
-});
-
-app.get('/api/admin/mystery-box/challenges', adminMiddleware, async (req, res) => {
-  try {
-    const setting = await pool.query("SELECT key,value FROM hackathon_event_settings WHERE key IN ('chaos_mode_revealed_at','chaos_enabled','chaos_version')");
-    const settings = Object.fromEntries(setting.rows.map(row => [row.key,row.value]));
-    res.json({ challenges: listAdminChallenges(), chaosRevealedAt: settings.chaos_mode_revealed_at || null, chaosEnabled: settings.chaos_enabled === true, chaosVersion: settings.chaos_version });
-  } catch {
-    res.status(500).json({ error: 'Could not load the challenge catalog' });
-  }
-});
-
-app.post('/api/admin/mystery-box/chaos/reveal', adminMiddleware, async (req, res) => {
-  try {
-    const result = await withTransaction(async (client) => {
-      const setting = await client.query("SELECT value FROM hackathon_event_settings WHERE key='chaos_mode_revealed_at' FOR UPDATE");
-      if (setting.rows[0]?.value && setting.rows[0].value !== 'null') {
-        const error = new Error('Chaos Mode has already been revealed'); error.status = 409; throw error;
-      }
-      const revealedAt = new Date().toISOString();
-      const teams = await client.query('UPDATE hackathon_teams SET is_chaos_opened=TRUE, is_chaos_resolved=FALSE, updated_at=NOW() RETURNING code, team_name');
-      await client.query(
-        `INSERT INTO hackathon_event_settings (key, value, updated_at) VALUES ('chaos_mode_revealed_at', $1, NOW())
-         ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW()`,
-        [JSON.stringify(revealedAt)],
-      );
-      return { revealedAt, teams: teams.rows };
-    });
-    for (const team of result.teams) void logHackathonActivity(team.code, team.team_name, 'CHAOS_REVEALED', 'Chaos Mode has been revealed for this team');
-    res.json({ success: true, revealedAt: result.revealedAt, updatedCount: result.teams.length });
-  } catch (error) { res.status(error.status || 500).json({ error: error.status ? error.message : 'Could not reveal Chaos Mode' }); }
-});
-
-app.post('/api/admin/mystery-box/teams/:code/chaos/resolve', adminMiddleware, async (req, res) => {
-  try {
-    const code = normalizeTeamCode(req.params.code);
-    const result = await pool.query(
-      'UPDATE hackathon_teams SET is_chaos_resolved=TRUE, updated_at=NOW() WHERE code=$1 AND is_chaos_opened=TRUE RETURNING *',
-      [code],
-    );
-    if (!result.rows.length) return res.status(409).json({ error: 'Team does not have an active Chaos Mode challenge' });
-    void logHackathonActivity(code, result.rows[0].team_name, 'CHAOS_RESOLVED', 'Chaos adaptation marked resolved by organizer');
-    res.json({ success: true, team: result.rows[0] });
-  } catch { res.status(500).json({ error: 'Could not resolve Chaos Mode for this team' }); }
-});
-
-app.post('/api/admin/mystery-box/teams/reassign', adminMiddleware, async (req, res) => {
-  try {
-    const { code, challengeId, resetSwapUsed } = req.body;
-    const challenge = getChallengeById(challengeId);
-    if (!code || !challenge) return res.status(400).json({ error: 'A valid team code and challengeId are required' });
-
-    const upperCode = code.toUpperCase().trim();
-    const snapshot = createTeamChallengeSnapshot(challenge);
-    const result = await pool.query(
-      `UPDATE hackathon_teams
-       SET mystery_question = $1,
-           chaos_event = $2,
-           has_changed_question = CASE WHEN $3 = true THEN FALSE ELSE has_changed_question END,
-           updated_at = NOW()
-       WHERE code = $4
-       RETURNING *`,
-      [JSON.stringify(snapshot.challenge), JSON.stringify(snapshot.chaosEvent), resetSwapUsed || false, upperCode]
-    );
-
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
-    void logHackathonActivity(upperCode, result.rows[0].team_name, 'CHALLENGE_REASSIGNED', `Challenge reassigned to ${snapshot.challenge.title}`, { challengeId, resetSwapUsed: Boolean(resetSwapUsed) });
-    res.json({ success: true, team: result.rows[0] });
-  } catch (error) {
-    console.error('Admin reassign question error:', error);
-    res.status(500).json({ error: 'Failed to reassign team question' });
-  }
-});
-
-app.post('/api/admin/mystery-box/teams/:code/members/remove', adminMiddleware, async (req, res) => {
-  try {
-    const code = req.params.code;
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    if (!email) return res.status(400).json({ error: 'Member email is required' });
-    const result = await withTransaction(async (client) => {
-      const teamResult = await client.query('SELECT * FROM hackathon_teams WHERE code=$1 FOR UPDATE', [code.toUpperCase().trim()]);
-      if (!teamResult.rows.length) { const error = new Error('Team not found'); error.status = 404; throw error; }
-      const team = teamResult.rows[0];
-      const members = await listHackathonMembers(client, team.id);
-      const member = members.find((entry) => String(entry.email || '').toLowerCase() === email);
-      if (!member) { const error = new Error('Member not found'); error.status = 404; throw error; }
-      if (member.isLeader) { const error = new Error('Cannot remove the team leader'); error.status = 409; throw error; }
-      await client.query('DELETE FROM hackathon_team_members WHERE team_id=$1 AND LOWER(email)=$2', [team.id, email]);
-      const nextMembers = (Array.isArray(team.members) ? team.members : []).filter((entry) => String(entry.email || '').toLowerCase() !== email);
-      const updated = await client.query(
-        'UPDATE hackathon_teams SET members=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
-        [JSON.stringify(nextMembers), team.id],
-      );
-      return { team: updated.rows[0], removedEmail: email };
-    });
-    void logHackathonActivity(result.team.code, result.team.team_name, 'MEMBER_REMOVED', `${email} removed from squad "${result.team.team_name}" by admin`, { email });
-    res.json({ success: true, team: formatHackathonTeam(result.team, await listHackathonMembers(pool, result.team.id)) });
-  } catch (error) {
-    res.status(error.status || 500).json({ error: error.status ? error.message : 'Failed to remove member' });
-  }
-});
-
-app.delete('/api/admin/mystery-box/teams/:code', adminMiddleware, async (req, res) => {
-  try {
-    const { code } = req.params;
-    if (!code) return res.status(400).json({ error: 'Team code is required' });
-
-    const upperCode = code.toUpperCase().trim();
-    const result = await pool.query('DELETE FROM hackathon_teams WHERE code = $1 RETURNING *', [upperCode]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Team not found' });
-
-    res.json({ success: true, message: `Team ${upperCode} deleted successfully` });
-  } catch (error) {
-    console.error('Admin delete team error:', error);
-    res.status(500).json({ error: 'Failed to delete team' });
-  }
-});
-
-app.get('/api/admin/mystery-box/activity', adminMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM hackathon_activity_logs ORDER BY created_at DESC LIMIT 80');
-    const formatted = result.rows.map(r => ({
-      id: r.id,
-      teamCode: r.team_code,
-      teamName: r.team_name,
-      eventType: r.event_type,
-      message: r.message,
-      details: r.details || {},
-      createdAt: new Date(r.created_at).getTime()
-    }));
-    res.json(formatted);
-  } catch (error) {
-    console.error('Admin fetch activity error:', error);
-    res.status(500).json({ error: 'Failed to fetch activity logs' });
-  }
-});
-
 // ── Health check ─────────────────────────────────────────────
 app.get('/api/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
-    res.json({
-      status: 'ok',
-      backend: 'running',
-      database: 'connected',
-      timestamp: new Date().toISOString(),
-    });
+    res.json({ status: 'ok', backend: 'running', database: 'connected', timestamp: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ status: 'error', backend: 'running', database: 'disconnected', error: err.message });
   }
@@ -1216,27 +421,28 @@ if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
 }
 
 if (!process.env.VERCEL) {
-  dbReady.then(() => {
+  const startServer = () => {
     const server = app.listen(PORT, () => {
-    console.log('\n┌──────────────────────────────────────────┐');
-    console.log(`│  ✅ Backend running  →  http://localhost:${PORT}  │`);
-    console.log('│  📡 Database        →  Neon PostgreSQL    │');
-    console.log('│  🔑 Admin login     →  /admin              │');
-    console.log('│  ❤️  Health check   →  /api/health         │');
-    console.log('└──────────────────────────────────────────┘\n');
+      console.log('\n┌──────────────────────────────────────────┐');
+      console.log(`│  ✅ Backend running  →  http://localhost:${PORT}  │`);
+      console.log('│  🔑 Admin login     →  /admin              │');
+      console.log('│  ❤️  Health check   →  /api/health         │');
+      console.log('└──────────────────────────────────────────┘\n');
     });
-
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
-        console.error(`\n❌ Port ${PORT} is already in use. Kill the process using it and restart.\n`);
+        console.error(`\n❌ Port ${PORT} is already in use.\n`);
       } else {
         console.error('❌ Server error:', err);
       }
-      process.exit(1);
     });
+  };
+
+  dbReady.then(() => {
+    startServer();
   }).catch((error) => {
-    console.error('❌ Database initialization failed:', error);
-    process.exitCode = 1;
+    console.warn('⚠️ Database connection deferred/offline:', error.message || error);
+    startServer();
   });
 }
 

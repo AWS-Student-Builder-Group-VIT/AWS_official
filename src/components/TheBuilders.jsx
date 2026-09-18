@@ -22,17 +22,17 @@ import pihuPopupImg from '../assets/Board memb/pihu_generated.png';
 
 const BUILDERS = [
   // Outer Ring (5 members) — indices 0-4
-  { id: 1, initials: 'AS', fullName: 'Ankit Subedi', role: 'CHAIRPERSON', desc: 'Leads the club vision and drives the AWS community forward.', color: '#FF9900', insta: 'https://www.instagram.com/nepaliguy.np/', linkedin: 'https://www.linkedin.com/in/npankitsubedi/', image: ankitImg },
-  { id: 2, initials: 'AS', fullName: 'Aesha Singh', role: 'VICE CHAIRPERSON', desc: 'Orchestrates operations and strategic community growth.', color: '#008296', insta: 'https://www.instagram.com/__aesha.06?igsh=MWwydms5M3JtbnllcA%3D%3D&utm_source=qr', linkedin: 'https://www.linkedin.com/in/aesha-singh-b2b497353?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app', image: aeshaImg, popupImage: aeshaPopupImg },
-  { id: 3, initials: 'VJ', fullName: 'Vidhi Prashant Jain', role: 'SECRETARY', desc: 'Manages documentation, communication, and club coordination.', color: '#E1523D', insta: 'https://www.instagram.com/vidhi.j0606?igsh=bThwN25vamIzMjZm&utm_source=qr', linkedin: 'https://www.linkedin.com/in/vidhi-jain0606/', image: vidiImg, popupImage: vidiPopupImg },
-  { id: 4, initials: 'TR', fullName: 'Tanishi Raj', role: 'CO-SECRETARY', desc: 'Supports administrative operations and event logistics.', color: '#8A2BE2', insta: 'https://www.instagram.com/tanishi_raj115/', linkedin: 'https://www.linkedin.com/in/tanishiraj/', image: tanishaImg, popupImage: tanishaPopupImg },
-  { id: 5, initials: 'PG', fullName: 'Pihu Gupta', role: 'DESIGN HEAD', desc: 'Creates the visual identity and design language of the club.', color: '#C2185B', insta: 'https://www.instagram.com/_eroda_h/', linkedin: 'https://www.linkedin.com/in/pihu-gupta-676514353/', image: pihuImg, popupImage: pihuPopupImg },
+  { id: 1, initials: 'AS', fullName: 'Ankit Subedi', role: 'CHAIRPERSON', desc: 'Leads the club vision and drives the AWS community forward.', color: '#FF9900', linkedin: 'https://www.linkedin.com/in/npankitsubedi/', image: ankitImg },
+  { id: 2, initials: 'AS', fullName: 'Aesha Singh', role: 'VICE CHAIRPERSON', desc: 'Orchestrates operations and strategic community growth.', color: '#008296', linkedin: 'https://www.linkedin.com/in/aesha-singh-b2b497353?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app', image: aeshaImg, popupImage: aeshaPopupImg },
+  { id: 3, initials: 'VJ', fullName: 'Vidhi Prashant Jain', role: 'SECRETARY', desc: 'Manages documentation, communication, and club coordination.', color: '#E1523D', linkedin: 'https://www.linkedin.com/in/vidhi-jain0606/', image: vidiImg, popupImage: vidiPopupImg },
+  { id: 4, initials: 'TR', fullName: 'Tanishi Raj', role: 'CO-SECRETARY', desc: 'Supports administrative operations and event logistics.', color: '#8A2BE2', linkedin: 'https://www.linkedin.com/in/tanishiraj/', image: tanishaImg, popupImage: tanishaPopupImg },
+  { id: 5, initials: 'PG', fullName: 'Pihu Gupta', role: 'DESIGN HEAD', desc: 'Creates the visual identity and design language of the club.', color: '#C2185B', linkedin: 'https://www.linkedin.com/in/pihu-gupta-676514353/', image: pihuImg, popupImage: pihuPopupImg },
   // Inner Ring (5 members) — indices 5-9
-  { id: 6, initials: 'AS', fullName: 'Arshi Saxena', role: 'EVENTS HEAD', desc: 'Plans and executes large-scale bootcamps and hackathons.', color: '#D13212', insta: 'https://www.instagram.com/arshi_saxenaa/', linkedin: 'https://www.linkedin.com/in/arshi-saxena-59268130a', image: arshiImg, popupImage: arshiPopupImg },
-  { id: 7, initials: 'AN', fullName: 'Ayush Naugariya', role: 'FINANCE HEAD', desc: 'Manages budgets, sponsorships, and financial planning.', color: '#6A0DAD', insta: 'https://www.instagram.com/ayushnaugariya/', linkedin: 'https://www.linkedin.com/in/ayushnaugariya', image: ayushImg, popupImage: ayushPopupImg },
-  { id: 8, initials: 'JB', fullName: 'Jaanya Bagdi', role: 'OUTREACH HEAD', desc: 'Builds partnerships and expands the club network.', color: '#0052CC', insta: 'https://www.instagram.com/jaanya._.08?igsh=dzhvMDZmNGYxM3lx', linkedin: 'https://www.linkedin.com/in/jaanya-bagdi-929228222?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app', image: jaanyaImg, popupImage: jaanyaPopupImg },
-  { id: 9, initials: 'VK', fullName: 'Vivek Kashyap', role: 'PUBLICITY HEAD', desc: 'Drives social media presence and campus outreach.', color: '#0070BA', insta: 'https://www.instagram.com/vivek_kashyap121?igsh=MXA1ejI4bXJ1NHp0eA%3D%3D&utm_source=qr', linkedin: 'https://www.linkedin.com/in/vivek-kashyap-402101325?utm_source=share_via&utm_content=profile&utm_medium=member_ios', image: vivekImg, popupImage: vivekPopupImg },
-  { id: 10, initials: 'AB', fullName: 'Abhishek Kumar', role: 'TECHNICAL HEAD', desc: 'Architects hands-on cloud workshops and technical infrastructure.', color: '#2E7D32', insta: 'https://www.instagram.com/abhishek_is_error/', linkedin: 'https://www.linkedin.com/in/abhishek-kumar-740171345/', image: abhishekImg, popupImage: abhishekPopupImg },
+  { id: 6, initials: 'AS', fullName: 'Arshi Saxena', role: 'EVENTS HEAD', desc: 'Plans and executes large-scale bootcamps and hackathons.', color: '#D13212', linkedin: 'https://www.linkedin.com/in/arshi-saxena-59268130a', image: arshiImg, popupImage: arshiPopupImg },
+  { id: 7, initials: 'AN', fullName: 'Ayush Naugariya', role: 'FINANCE HEAD', desc: 'Manages budgets, sponsorships, and financial planning.', color: '#6A0DAD', linkedin: 'https://www.linkedin.com/in/ayushnaugariya', image: ayushImg, popupImage: ayushPopupImg },
+  { id: 8, initials: 'JB', fullName: 'Jaanya Bagdi', role: 'OUTREACH HEAD', desc: 'Builds partnerships and expands the club network.', color: '#0052CC', linkedin: 'https://www.linkedin.com/in/jaanya-bagdi-929228222?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app', image: jaanyaImg, popupImage: jaanyaPopupImg },
+  { id: 9, initials: 'VK', fullName: 'Vivek Kashyap', role: 'PUBLICITY HEAD', desc: 'Drives social media presence and campus outreach.', color: '#0070BA', linkedin: 'https://www.linkedin.com/in/vivek-kashyap-402101325?utm_source=share_via&utm_content=profile&utm_medium=member_ios', image: vivekImg, popupImage: vivekPopupImg },
+  { id: 10, initials: 'AB', fullName: 'Abhishek Kumar', role: 'TECHNICAL HEAD', desc: 'Architects hands-on cloud workshops and technical infrastructure.', color: '#2E7D32', linkedin: 'https://www.linkedin.com/in/abhishek-kumar-740171345/', image: abhishekImg, popupImage: abhishekPopupImg },
 ];
 
 const OUTER_R_DESKTOP = 250;
@@ -395,7 +395,6 @@ export default function TheBuilders() {
         }
         .tb-popup-social-btn:hover { background: #1e1e1e; }
         .tb-popup-social-btn .social-icon { font-size: 16px; }
-        .tb-popup-social-btn.insta .social-icon { color: #e1306c; }
         .tb-popup-social-btn.linkedin .social-icon { color: #0a66c2; }
 
         /* ═══════════════════════════════════════════
@@ -541,10 +540,6 @@ export default function TheBuilders() {
                 <p className="tb-popup-role">{selectedBuilder.role}</p>
               </div>
               <div className="tb-popup-socials">
-                <a className="tb-popup-social-btn insta" href={selectedBuilder.insta} target="_blank" rel="noreferrer">
-                  <i className="ti ti-brand-instagram social-icon"></i>
-                  Instagram
-                </a>
                 <a className="tb-popup-social-btn linkedin" href={selectedBuilder.linkedin} target="_blank" rel="noreferrer">
                   <i className="ti ti-brand-linkedin social-icon"></i>
                   LinkedIn

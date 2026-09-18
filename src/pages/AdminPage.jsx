@@ -66,29 +66,48 @@ function AdminLogin({ onLogin }) {
           <div>
             <label className="font-mono text-[10px] text-[#dbc2ad] uppercase tracking-widest block mb-2 font-bold">Admin ID</label>
             <input
-              type="text" value={adminId} onChange={e => setAdminId(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 px-4 py-3.5 font-mono text-sm text-white focus:outline-none focus:border-[#FF9900] transition-colors"
-              placeholder="aws_admin" autoComplete="off"
+              type="text"
+              value={adminId}
+              onChange={(e) => setAdminId(e.target.value)}
+              placeholder="Enter admin ID"
+              className="w-full bg-white/5 border border-white/10 px-4 py-3 font-mono text-sm text-white focus:outline-none focus:border-[#FF9900] transition-colors placeholder-white/20"
+              autoComplete="username"
             />
           </div>
+
           <div>
             <label className="font-mono text-[10px] text-[#dbc2ad] uppercase tracking-widest block mb-2 font-bold">Password</label>
             <div className="relative">
               <input
-                type={showPwd ? 'text' : 'password'} value={pwd} onChange={e => setPwd(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 px-4 py-3.5 font-mono text-sm text-white focus:outline-none focus:border-[#FF9900] transition-colors pr-12"
-                placeholder="••••••••"
+                type={showPwd ? 'text' : 'password'}
+                value={pwd}
+                onChange={(e) => setPwd(e.target.value)}
+                placeholder="Enter admin password"
+                className="w-full bg-white/5 border border-white/10 px-4 py-3 font-mono text-sm text-white focus:outline-none focus:border-[#FF9900] transition-colors placeholder-white/20 pr-10"
+                autoComplete="current-password"
               />
-              <button type="button" onClick={() => setShowPwd(s => !s)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#dbc2ad] hover:text-white cursor-pointer">
-                <span className="material-symbols-outlined text-lg">{showPwd ? 'visibility' : 'visibility_off'}</span>
+              <button
+                type="button"
+                onClick={() => setShowPwd(!showPwd)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#dbc2ad] hover:text-white transition-colors cursor-pointer bg-transparent border-none"
+              >
+                <span className="material-symbols-outlined text-lg">{showPwd ? 'visibility_off' : 'visibility'}</span>
               </button>
             </div>
           </div>
-          {err && <div className="font-mono text-xs text-[#f87171] bg-red-500/10 border border-red-500/20 px-3.5 py-2.5">{err}</div>}
-          <button type="submit" disabled={loading}
-            className="w-full bg-[#FF9900] text-[#111] font-mono text-sm font-bold py-3.5 hover:bg-[#ffc082] transition-colors uppercase tracking-widest disabled:opacity-50 cursor-pointer shadow-lg">
-            {loading ? 'Authenticating...' : 'Access Dashboard'}
+
+          {err && (
+            <div className="bg-[#E24B4A]/10 border border-[#E24B4A]/40 px-4 py-2.5 font-mono text-xs text-[#f87171]">
+              {err}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-[#FF9900] text-[#111] font-mono text-xs font-bold py-3.5 uppercase tracking-widest hover:bg-[#ffaa22] transition-colors disabled:opacity-50 cursor-pointer border-none"
+          >
+            {loading ? 'Authenticating...' : 'Sign In'}
           </button>
         </form>
       </div>

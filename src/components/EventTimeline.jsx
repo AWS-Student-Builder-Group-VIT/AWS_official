@@ -79,6 +79,49 @@ const timelineData = [
       rounds: [],
     },
   },
+  {
+    day: '28th Aug',
+    title: 'AWS Workshop : Cloud Foundations Bootcamp',
+    time: 'Venue: KAMARAJ AUDITORIUM · Speaker: Mr. Vignesh Devan',
+    icon: 'terminal',
+    points: [
+      'POC: Abhishek Kumar & Nivida | Speaker: Mr. Vignesh Devan | Venue: KAMARAJ AUDITORIUM',
+      'Core computing fundamentals, internet & server architectures, and scalable cloud deployments.',
+      'Service models (IaaS, PaaS, SaaS), AWS global infra, pricing models & Management Console.',
+      'Generative AI & cloud bridge: LLMs, Amazon Bedrock, SageMaker, Amazon Q & Autonomous AI Agents.',
+      'Live AWS Console lab: Launching EC2 instances, creating S3 buckets, IAM roles & security policies.',
+    ],
+    quiz: {
+      label: 'Hands-on Console Labs & Topics',
+      rounds: [
+        'EC2 & S3 Deployment',
+        'IAM Security & Roles',
+        'Bedrock, SageMaker & Q',
+      ],
+    },
+  },
+  {
+    day: '12th & 13th Sept',
+    title: 'HackQuest : AWS Mystery Box Hackathon',
+    time: '24-Hour Hackathon · Venue: SAROJINI NAIDU AUDITORIUM · In Assoc. with HDFC Bank',
+    icon: 'military_tech',
+    points: [
+      'POC: Aesha Singh | Venue: SAROJINI NAIDU AUDITORIUM | Organised by AWS SBG VIT with HDFC Bank.',
+      'Teams of 2-4 tackle unique Mystery Box problem statements with Cloud Architecture builds.',
+      'Round 1 (Ideation): Problem statement breakdown, approach formulation & tech panel review.',
+      'Round 2 (Development): Cloud architecture build, 14 mini-games Point Shop & 30-min Chaos Card twist.',
+      'Round 3 (Final Build): Full project completion, live deployment demo & pitch to judging panel.',
+      'Judged by Mr. Ranjithkumar S — prizes for top 3 teams and special recognition for Best UI/UX.',
+    ],
+    quiz: {
+      label: '3-Round Hackathon Structure',
+      rounds: [
+        'R1: Ideation Phase',
+        'R2: Development & Chaos Card',
+        'R3: Final Pitch & Demo',
+      ],
+    },
+  },
 ];
 
 /* ─────────────────────────────────────────────
@@ -92,17 +135,18 @@ export default function EventTimeline() {
   const wrapRef = useRef(null);
   const [scrollProgress, setScrollProgress] = useState(0);
 
-  /* Helix rotation: sweeps 270° across the full scroll distance
-     (0° → -270°), bringing each card (90° apart) to the front. */
-  const rotation = -scrollProgress * 270;
+  /* Helix rotation: sweeps dynamically based on number of cards */
+  const stepDeg = 360 / timelineData.length;
+  const totalSweep = (timelineData.length - 1) * stepDeg;
+  const rotation = -scrollProgress * totalSweep;
 
   /* Which card is most face-on to the camera (closest angle to 0°) */
   const activeIndex = useMemo(() => {
     const angles = timelineData.map((_, i) =>
-      Math.abs(normalizeDeg(i * 90 + rotation))
+      Math.abs(normalizeDeg(i * stepDeg + rotation))
     );
     return angles.indexOf(Math.min(...angles));
-  }, [rotation]);
+  }, [rotation, stepDeg]);
 
   /* Scroll listener — tracks progress within the wrap element */
   useEffect(() => {
@@ -129,10 +173,10 @@ export default function EventTimeline() {
         <div className="helix-header">
           <p className="helix-eyebrow">
             <span className="helix-eyebrow-dot" />
-            4-Day Workshop Series
+            Flagship Events & Workshop Series
           </p>
           <h3 className="helix-title">
-            AWS <span>Week</span> Event Timeline
+            AWS Club <span>Events</span> Timeline
           </h3>
         </div>
 
@@ -153,24 +197,29 @@ export default function EventTimeline() {
           <div
             className="helix-stage"
             style={{
-              transform: `translate(-50%, -50%) rotateX(12deg) rotateY(${rotation}deg)`,
+              transform: `translate(-50%, -50%) rotateX(4deg) rotateY(${rotation}deg)`,
             }}
           >
             {timelineData.map((item, i) => {
-              const cardBaseDeg = i * 90;
+              const cardBaseDeg = i * stepDeg;
               const normalizedDeg = normalizeDeg(cardBaseDeg + rotation);
-
-              /* Cosine-based opacity: 1 when face-on (0°), fades to ~0 at 90° */
-              const cardOpacity = Math.max(0.07, Math.cos(normalizedDeg * Math.PI / 180));
+              const absDeg = Math.abs(normalizedDeg);
               const isActive = i === activeIndex;
+
+              // Only cards within 44 degrees of front-facing are rendered; adjacent 60-deg cards are completely hidden
+              const isVisible = absDeg < 44;
+              const cardOpacity = isVisible ? Math.max(0, Math.cos((absDeg * Math.PI) / 88)) : 0;
+              const cardScale = isVisible ? Math.max(0.92, 1 - absDeg * 0.0018) : 0.88;
 
               return (
                 <div
-                  key={item.day}
+                  key={item.day + i}
                   className={`helix-card${isActive ? ' helix-card--active' : ''}`}
                   style={{
-                    transform: `rotateY(${cardBaseDeg}deg) translateZ(310px)`,
+                    transform: `rotateY(${cardBaseDeg}deg) translateZ(270px) scale(${cardScale})`,
                     opacity: cardOpacity,
+                    visibility: isVisible ? 'visible' : 'hidden',
+                    pointerEvents: isActive ? 'auto' : 'none',
                   }}
                 >
                   {/* Left Panel — Day Number */}
@@ -235,8 +284,8 @@ export default function EventTimeline() {
         {/* ── Footer ── */}
         <div className="helix-footer-bar">
           <p>
-            4 days · 4 technical sessions · Cloud Combat series ·{' '}
-            <strong>aws week</strong>
+            6 Flagship Events · Hands-on Workshops · Hackathons ·{' '}
+            <strong>AWS SBG VIT</strong>
           </p>
         </div>
 

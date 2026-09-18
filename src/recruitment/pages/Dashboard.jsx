@@ -1,0 +1,256 @@
+import { useEffect, useState } from 'react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { createClient } from '../lib/supabase.js';
+import { statusLabel, statusColor, formatDate } from '../lib/utils.js';
+
+const roundSteps = [
+  { key: 'round_0', settingKey: 'round_0_start_at', label: 'Application', desc: 'Written domain responses and Technical assessment', href: '/recruitment/dashboard/round-1' },
+  { key: 'round_1', settingKey: 'round_1_start_at', label: 'AWS Project', desc: 'A project for each selected Technical track', href: '/recruitment/round-2' },
+  { key: 'round_2', settingKey: 'round_2_start_at', label: 'Interview', desc: 'Interview scheduling by selected subdomain', href: '/recruitment/interview' },
+];
+
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const [supabase] = useState(createClient);
+  const [profile, setProfile] = useState(null);
+  const [schedule, setSchedule] = useState({});
+  const [attempts, setAttempts] = useState([]);
+  const [now, setNow] = useState(Date.now());
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) { navigate('/recruitment/login', { replace: true }); return; }
+      Promise.all([
+        supabase.from('candidate_profiles')
+          .select('*, subdomain_choices:candidate_subdomain_choices(*, subdomain:subdomains(*, domain:domains(*)))')
+          .eq('id', user.id).maybeSingle(),
+        // Deadlines are not readable from the table by candidates, so the schedule comes from the API.
+        // If that request fails, fall back to the start dates candidates can read directly.
+        supabase.auth.getSession().then(({ data: { session } }) => fetch('/api/recruitment/schedule', { headers: { Authorization: `Bearer ${session?.access_token}` } }))
+          .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+          .catch(() => supabase.from('recruitment_settings').select('key,value').in('key', roundSteps.map((r) => r.settingKey))
+            .then(({ data }) => Object.fromEntries((data ?? []).map((row) => [row.key, row.value?.at ?? null])))),
+        supabase.from('assessment_attempts').select('subdomain_id,admin_qualified').eq('candidate_id', user.id),
+      ]).then(([profileResult, settingsResult, attemptsResult]) => {
+        if (profileResult.error) setLoadError(profileResult.error.message);
+        setProfile(profileResult.data);
+        setSchedule(settingsResult ?? {});
+        setAttempts(attemptsResult.data ?? []);
+        setLoading(false);
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  if (loading) return (
+    <div className="flex h-screen items-center justify-center">
+      <div className="text-center">
+        <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-t-[var(--accent)]" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }} />
+        <p className="text-sm" style={{ color: 'var(--muted)' }}>Loading…</p>
+      </div>
+    </div>
+  );
+  // No profile row means completion never succeeded; showing an empty page hides that.
+  // Only a genuinely missing record sends the candidate to the form; a failed
+  // query must surface, or the two pages redirect to each other forever.
+  if (loadError) return (
+    <main className="mx-auto max-w-lg p-8 text-center">
+      <p className="eyebrow">DASHBOARD</p>
+      <h1 className="mt-4 text-2xl font-bold">Could not load your dashboard.</h1>
+      <p role="alert" className="mt-4 text-sm" style={{ color: 'var(--error)' }}>{loadError}</p>
+      <button type="button" onClick={() => window.location.reload()} className="action mt-6">Try again</button>
+    </main>
+  );
+  if (!profile) return <Navigate to="/recruitment/profile/complete" replace />;
+
+  const statusFor = (key) => {
+    if (key === 'round_0') return profile.round_0_status;
+    if (key === 'round_1') return profile.round_1_status;
+    if (key === 'round_2') return profile.interview_status;
+    return 'not_started';
+  };
+
+  // Per-track decisions are only shown once Round 1 results are out.
+  const resultsOut = profile.round_0_status === 'qualified' || profile.round_0_status === 'not_qualified';
+  const trackBadge = (track) => {
+    // Technical tracks are decided on their assessment, other domains on the choice itself.
+    const decision = !resultsOut ? null : track.subdomain?.domain?.slug === 'technical'
+      ? attempts.find((a) => a.subdomain_id === track.subdomain_id)?.admin_qualified
+      : track.admin_qualified;
+    if (decision === true) return { text: 'Qualified', color: 'var(--success)' };
+    if (decision === false) return { text: 'Not qualified', color: 'var(--error)' };
+    return { text: 'Applied', color: 'var(--accent)' };
+  };
+  const roundTwoDeadline = schedule.round_1_deadline_at ?? null;
+  const roundTwoClosed = Boolean(roundTwoDeadline && now >= new Date(roundTwoDeadline).getTime());
+  const roundOneDeadline = schedule.round_0_deadline_at ?? null;
+  const roundOneClosed = Boolean(roundOneDeadline && now >= new Date(roundOneDeadline).getTime());
+
+  return (
+    <div className="mx-auto max-w-4xl p-6">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>Welcome back, {profile.full_name?.split(' ')[0]} 👋</h1>
+        <p className="mt-1" style={{ color: 'var(--muted)' }}>Track your recruitment progress below.</p>
+      </div>
+
+      {/* Status card */}
+      <div className="mb-8 rounded-xl border p-6" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>Current Status</p>
+            <p className={`mt-1 text-xl font-semibold ${statusColor[profile.status]}`}>{statusLabel[profile.status]}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>Subdomain choices</p>
+            {profile.subdomain_choices?.length
+              ? [...profile.subdomain_choices].sort((a, b) => a.priority - b.priority).map((choice) => (
+                <p key={choice.subdomain_id} className="mt-1 font-mono text-xs" style={{ color: 'var(--accent)' }}>
+                  {choice.subdomain?.domain?.selection_mode === 'whole_domain'
+                    ? choice.subdomain?.domain?.name
+                    : `${choice.subdomain?.domain?.name} / ${choice.subdomain?.name}`}
+                </p>
+              ))
+              : <p className="mt-1" style={{ color: 'var(--text)' }}>—</p>}
+            <Link to="/recruitment/subdomain" className="mt-2 inline-block text-xs transition hover:underline" style={{ color: 'var(--muted)' }}>
+              {profile.domain_locked || (profile.round_0_status && profile.round_0_status !== 'not_started') ? 'View choices →' : 'View or change →'}
+            </Link>
+          </div>
+          <div className="text-right">
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>Applied</p>
+            <p className="mt-1 text-sm" style={{ color: 'var(--text)' }}>{formatDate(profile.created_at)}</p>
+          </div>
+        </div>
+      </div>
+
+      {!profile.subdomain_id && (
+        <div className="mb-8 rounded-xl border p-6" style={{ borderColor: 'rgba(255,153,0,.3)', background: 'rgba(255,153,0,.1)' }}>
+          <p className="font-semibold" style={{ color: 'var(--accent)' }}>Select your domains to get started</p>
+          <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>Apply to any domain. Technical allows up to two specializations.</p>
+          <Link to="/recruitment/subdomain" className="action mt-4">Choose Domains →</Link>
+        </div>
+      )}
+
+      {profile.final_status && (
+        <div className="mb-8 rounded-xl border p-6" style={{ borderColor: 'rgba(34,197,94,.3)', background: 'rgba(34,197,94,.08)' }}>
+          <p className="font-mono text-[10px] uppercase tracking-widest" style={{ color: 'var(--muted)' }}>Final decision</p>
+          <p className={`mt-2 text-xl font-semibold ${statusColor[profile.final_status]}`}>{statusLabel[profile.final_status]}</p>
+          <p className="mt-2 text-sm leading-6" style={{ color: 'var(--muted)' }}>
+            This is the recruitment team&apos;s final decision. It takes precedence over the individual round statuses below.
+          </p>
+        </div>
+      )}
+
+      <h2 className="mb-4 font-semibold" style={{ color: 'var(--text)' }}>Rounds</h2>
+      <div className="space-y-4">
+        {roundSteps.map(({ key, settingKey, label, desc, href }) => {
+          const st = statusFor(key);
+          // Past the Round 2 deadline nobody can start or change a project.
+          const isActive = (st === 'in_progress' || st === 'not_started') && !(key === 'round_1' && roundTwoClosed) && !(key === 'round_0' && roundOneClosed);
+          const startsAt = schedule[settingKey] ?? null;
+          const hasStarted = Boolean(startsAt && now >= new Date(startsAt).getTime());
+          const allTracks = [...(profile.subdomain_choices ?? [])].sort((a, b) => a.priority - b.priority);
+          const technicalTracks = allTracks.filter((c) => c.subdomain?.domain?.slug === 'technical');
+          // Non-technical applicants skip the project round entirely.
+          const projectRoundSkipped = key === 'round_1' && technicalTracks.length === 0;
+          const eligible = key === 'round_0'
+            || (key === 'round_1'
+              ? profile.round_0_status === 'qualified' || profile.round_1_status !== 'not_started'
+              : technicalTracks.length
+                ? profile.round_1_status === 'qualified' || profile.interview_status !== 'not_started'
+                : profile.round_0_status === 'qualified' || profile.interview_status !== 'not_started');
+          const tracks = key === 'round_1' ? technicalTracks : allTracks;
+          return (
+            <section key={key} className="rounded-xl border p-5" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+              <div className="flex items-start gap-5">
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                  st === 'qualified' ? 'bg-success/20 text-success' :
+                  st === 'not_qualified' ? 'bg-error/20 text-error' :
+                  st === 'in_progress' || st === 'submitted' ? 'bg-info/20 text-info' : 'bg-panel text-dim'
+                }`}>
+                  {st === 'qualified' ? '✓' : key === 'round_0' ? '1' : key === 'round_1' ? '2' : '3'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium" style={{ color: 'var(--text)' }}>Round {Number(key.slice(-1)) + 1} · {label}</p>
+                  <p className="text-sm" style={{ color: 'var(--muted)' }}>
+                    {projectRoundSkipped ? 'Technical tracks only — your domains go straight to interview' : desc}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  {projectRoundSkipped ? (
+                    <p className="text-sm font-medium" style={{ color: 'var(--muted)' }}>Not required</p>
+                  ) : (<>
+                  <p className={`text-sm font-medium ${statusColor[st]}`}>{statusLabel[st]}</p>
+                  {hasStarted
+                    ? (isActive && eligible && profile.subdomain_id ? (
+                      <Link to={href} className="action mt-2 !min-h-9 !px-4">
+                        {st === 'in_progress' ? 'Continue →' : 'Start now →'}
+                      </Link>
+                    ) : (key === 'round_1' || key === 'round_0') && eligible && (st === 'submitted' || st === 'in_progress' || (key === 'round_1' ? roundTwoClosed : roundOneClosed)) && (
+                      <div className="mt-2">
+                        {(key === 'round_1' ? roundTwoClosed : roundOneClosed) && <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: 'var(--error)' }}>Deadline passed</p>}
+                        {st !== 'not_started' && <Link to={href} className="mt-1 inline-block text-xs hover:underline" style={{ color: 'var(--muted)' }}>View submission →</Link>}
+                      </div>
+                    ))
+                    : (
+                      <div className="mt-2">
+                        <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: 'var(--dim)' }}>Starts</p>
+                        <p className="mt-1 font-mono text-xs" style={{ color: 'var(--accent)' }}>
+                          {startsAt ? new Date(startsAt).toLocaleString() : 'To be announced'}
+                        </p>
+                      </div>
+                    )}
+                  {(() => {
+                    // Show an upcoming deadline for Round 1 and Round 2, whether or not the round has opened.
+                    const deadline = key === 'round_0' ? roundOneDeadline : key === 'round_1' ? roundTwoDeadline : null;
+                    const passed = key === 'round_0' ? roundOneClosed : roundTwoClosed;
+                    if (!deadline || passed) return null;
+                    return (
+                      <div className="mt-2">
+                        <p className="font-mono text-[10px] uppercase tracking-wider" style={{ color: 'var(--dim)' }}>Deadline</p>
+                        <p className="mt-1 font-mono text-xs" style={{ color: 'var(--error)' }}>
+                          {new Date(deadline).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    );
+                  })()}
+                  </>)}
+                </div>
+              </div>
+              {projectRoundSkipped && (
+                <p className="mt-4 border-l-2 pl-3 text-sm leading-6" style={{ borderColor: 'var(--accent)', color: 'var(--muted)' }}>
+                  There is no project round for your domains. Once you are declared qualified in Round 1,
+                  you will get a direct interview call when your interview date is allotted.
+                </p>
+              )}
+              {tracks.length > 0 && (
+                <div className={`mt-4 grid gap-2 ${tracks.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+                  {tracks.map((track) => (
+                    <div key={track.subdomain_id} className="border p-3" style={{ borderColor: 'var(--border)', background: 'rgba(0,0,0,.3)' }}>
+                      <p className="font-mono text-[10px] uppercase tracking-widest" style={{ color: trackBadge(track).color }}>{trackBadge(track).text}</p>
+                      <p className="mt-1 text-sm" style={{ color: 'var(--text)' }}>
+                        {track.subdomain?.domain?.selection_mode === 'whole_domain'
+                          ? track.subdomain?.domain?.name
+                          : `${track.subdomain?.domain?.name} / ${track.subdomain?.name}`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {hasStarted && !eligible && !projectRoundSkipped && (
+                <p className="mt-4 border-l-2 pl-3 text-xs" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>
+                  Complete and qualify in the previous round to unlock this round.
+                </p>
+              )}
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

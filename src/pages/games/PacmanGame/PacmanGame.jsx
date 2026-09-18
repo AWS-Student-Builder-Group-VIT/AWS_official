@@ -265,7 +265,10 @@ const D4 = [DIRS.UP, DIRS.LEFT, DIRS.DOWN, DIRS.RIGHT];
 
 function canMoveTo(grid, c, r, isEaten) {
   if (r < 0 || r >= ROWS) return false;
-  if (c < 0 || c >= COLS) return true; // Tunnel wrap
+  // Wrapping through the tunnel is only valid on row 14
+  if (c < 0 || c >= COLS) return r === 14;
+  // The side bays outside the maze are illegal void spaces
+  if ((c <= 4 || c >= 23) && ((r >= 10 && r <= 12) || (r >= 16 && r <= 18))) return false;
   const t = grid[r]?.[c];
   if (t === '#') return false;
   if (t === '-' && !isEaten) return false;
@@ -432,6 +435,19 @@ class Pacman {
       if (this.dir === DIRS.DOWN  && oldY <= cy && newY >= cy) crossedCenter = true;
       if (this.dir === DIRS.UP    && oldY >= cy && newY <= cy) crossedCenter = true;
 
+      // Safety: if moving toward a blocked tile, clamp at center
+      if (!crossedCenter) {
+        if (this.dir === DIRS.RIGHT && newX > cx && !canMoveTo(grid, curTileX + 1, curTileY, false)) {
+          crossedCenter = true;
+        } else if (this.dir === DIRS.LEFT && newX < cx && !canMoveTo(grid, curTileX - 1, curTileY, false)) {
+          crossedCenter = true;
+        } else if (this.dir === DIRS.DOWN && newY > cy && !canMoveTo(grid, curTileX, curTileY + 1, false)) {
+          crossedCenter = true;
+        } else if (this.dir === DIRS.UP && newY < cy && !canMoveTo(grid, curTileX, curTileY - 1, false)) {
+          crossedCenter = true;
+        }
+      }
+
       if (crossedCenter) {
         this.x = cx;
         this.y = cy;
@@ -461,8 +477,12 @@ class Pacman {
       if (this.mouth < 0.02) { this.mouth = 0.02; this.mouthDir = 1; }
     }
 
-    if (this.x < -TILE / 2) this.x = COLS * TILE + TILE / 2;
-    else if (this.x > COLS * TILE + TILE / 2) this.x = -TILE / 2;
+    // Tunnel wrap (row 14 only): modular arithmetic keeps entity at symmetric position on other side
+    const pacTileY = Math.floor(this.y / TILE);
+    if (pacTileY === 14) {
+      if (this.x < 0) this.x += COLS * TILE;
+      else if (this.x >= COLS * TILE) this.x -= COLS * TILE;
+    }
 
     // Eat pellets
     const eatTileX = Math.round((this.x - TILE / 2) / TILE);
@@ -642,6 +662,15 @@ class Ghost {
     else if (this.mode === 'frightened') spd = 0.95;
     else if (this.mode === 'eaten') spd = 3.2;
 
+    // Self-healing: if ghost ever ends up in an illegal outside bay, rescue it to spawn
+    if ((curTileX <= 4 || curTileX >= 23) && ((curTileY >= 10 && curTileY <= 12) || (curTileY >= 16 && curTileY <= 18))) {
+      this.x = this.sx * TILE + TILE / 2;
+      this.y = this.sy * TILE + TILE / 2;
+      this.dir = DIRS.UP;
+      this.mode = this.inHouse ? 'house' : 'scatter';
+      return;
+    }
+
     const dx = this.dir.x * spd;
     const dy = this.dir.y * spd;
     const oldX = this.x, oldY = this.y;
@@ -655,6 +684,19 @@ class Ghost {
     if (this.dir === DIRS.LEFT  && oldX >= cx && newX <= cx) crossedCenter = true;
     if (this.dir === DIRS.DOWN  && oldY <= cy && newY >= cy) crossedCenter = true;
     if (this.dir === DIRS.UP    && oldY >= cy && newY <= cy) crossedCenter = true;
+
+    // Safety: if moving toward a blocked tile, do not allow passing tile center
+    if (!crossedCenter) {
+      if (this.dir === DIRS.RIGHT && newX > cx && !canMoveTo(grid, curTileX + 1, curTileY, this.mode === 'eaten')) {
+        crossedCenter = true;
+      } else if (this.dir === DIRS.LEFT && newX < cx && !canMoveTo(grid, curTileX - 1, curTileY, this.mode === 'eaten')) {
+        crossedCenter = true;
+      } else if (this.dir === DIRS.DOWN && newY > cy && !canMoveTo(grid, curTileX, curTileY + 1, this.mode === 'eaten')) {
+        crossedCenter = true;
+      } else if (this.dir === DIRS.UP && newY < cy && !canMoveTo(grid, curTileX, curTileY - 1, this.mode === 'eaten')) {
+        crossedCenter = true;
+      }
+    }
 
     if (crossedCenter) {
       this.x = cx;
@@ -698,8 +740,12 @@ class Ghost {
       this.y = newY;
     }
 
-    if (this.x < -TILE / 2) this.x = COLS * TILE + TILE / 2;
-    else if (this.x > COLS * TILE + TILE / 2) this.x = -TILE / 2;
+    // Tunnel wrap (row 14 only): modular arithmetic keeps entity at symmetric position on other side
+    const ghostTileY = Math.floor(this.y / TILE);
+    if (ghostTileY === 14) {
+      if (this.x < 0) this.x += COLS * TILE;
+      else if (this.x >= COLS * TILE) this.x -= COLS * TILE;
+    }
   }
 
   draw(ctx, frightenedTimer) {
@@ -896,7 +942,12 @@ export default function PacmanGame({ onComplete }) {
         ghosts.forEach(g => {
           if (g.mode === 'scatter' || g.mode === 'chase') {
             g.mode = 'frightened';
-            g.dir = DIRS[g.dir.opp] || g.dir;
+            const opp = DIRS[g.dir.opp];
+            const curTileX = Math.floor(g.x / TILE);
+            const curTileY = Math.floor(g.y / TILE);
+            if (opp && canMoveTo(game.grid, curTileX + opp.x, curTileY + opp.y, false)) {
+              g.dir = opp;
+            }
           }
         });
       },

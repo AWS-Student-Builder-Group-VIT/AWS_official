@@ -1,0 +1,163 @@
+/* =====================================================
+   RECRUITMENT MODULE – scoped CSS variables & utilities
+   Wraps all recruitment content inside .rct-root
+   ===================================================== */
+
+.rct-root {
+  --bg:      #0a0b0e;
+  --surface: #111318;
+  --panel:   #161a21;
+  --border:  rgba(255,255,255,.08);
+  --text:    #e8eaf0;
+  --muted:   #7d8494;
+  --dim:     #4a5060;
+  --accent:  #FF9900;
+  --accent-muted: #cc7a00;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error:   #ef4444;
+  --info:    #60a5fa;
+  --blue:    #60a5fa;
+  font-family: 'Product Sans', 'Google Sans', 'Poppins', 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+}
+
+/* ── Typography tokens ─────────────────────────────── */
+.rct-root .eyebrow {
+  font-family: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: .625rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.rct-root .label {
+  display: block;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: .6875rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: .375rem;
+}
+
+/* ── Layout helpers ────────────────────────────────── */
+.rct-root .shell {
+  width: 100%;
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+/* ── Interactive elements ──────────────────────────── */
+.rct-root .action {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  min-height: 2.75rem;
+  padding: .625rem 1.375rem;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: .8125rem;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border: none;
+  cursor: pointer;
+  transition: background .15s, opacity .15s;
+}
+.rct-root .action:hover:not(:disabled) { background: var(--accent-muted); }
+.rct-root .action:disabled { opacity: .5; cursor: not-allowed; }
+
+.rct-root .action-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  min-height: 2.75rem;
+  padding: .625rem 1.375rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: .8125rem;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.rct-root .action-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.rct-root .field {
+  display: block;
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: .625rem .875rem;
+  font-size: .875rem;
+  outline: none;
+  transition: border-color .15s;
+}
+.rct-root .field:focus { border-color: var(--accent); }
+.rct-root .field::placeholder { color: var(--dim); }
+
+.rct-root .technical-panel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.rct-root .status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: .25rem .625rem;
+  border: 1px solid;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: .6875rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* ── Scrollbar ─────────────────────────────────────── */
+.rct-root ::-webkit-scrollbar { width: 4px; height: 4px; }
+.rct-root ::-webkit-scrollbar-track { background: var(--bg); }
+.rct-root ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── Admin console typography ──────────────────────────
+   The admin screens are dense working surfaces, so they use a larger scale
+   than the candidate pages. Sizes are bumped rather than zoomed so layout,
+   borders and spacing stay crisp.
+   ──────────────────────────────────────────────────── */
+.rct-root .rct-admin {
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+}
+
+.rct-root .rct-admin .text-xs   { font-size: .8125rem; line-height: 1.35rem; }
+.rct-root .rct-admin .text-sm   { font-size: .9375rem; line-height: 1.55rem; }
+.rct-root .rct-admin .text-base { font-size: 1.0625rem; line-height: 1.7rem; }
+.rct-root .rct-admin .text-lg   { font-size: 1.1875rem; line-height: 1.8rem; }
+.rct-root .rct-admin .text-xl   { font-size: 1.375rem;  line-height: 1.9rem; }
+.rct-root .rct-admin .text-2xl  { font-size: 1.75rem;   line-height: 2.2rem; }
+.rct-root .rct-admin .text-3xl  { font-size: 2.125rem;  line-height: 2.5rem; }
+.rct-root .rct-admin .text-4xl  { font-size: 2.5rem;    line-height: 2.9rem; }
+
+/* The console's smallest mono labels were close to unreadable. */
+.rct-root .rct-admin .text-\[9px\],
+.rct-root .rct-admin .text-\[10px\] { font-size: .75rem; line-height: 1.15rem; }
+
+.rct-root .rct-admin .eyebrow { font-size: .75rem; letter-spacing: .15em; }
+.rct-root .rct-admin .label   { font-size: .8125rem; letter-spacing: .08em; }
+
+/* Give dense tables and controls room to breathe. */
+.rct-root .rct-admin th,
+.rct-root .rct-admin td { padding-block: .875rem; }
+.rct-root .rct-admin input,
+.rct-root .rct-admin select,
+.rct-root .rct-admin textarea { font-size: .9375rem; }

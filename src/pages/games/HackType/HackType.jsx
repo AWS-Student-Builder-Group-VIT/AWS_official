@@ -1,19 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   calculateStats,
+  finishHackTypeAttempt,
   GAME_TIME_MS,
+  getHackTypeCompletion,
   restoreState,
   STORAGE_KEY,
-  TOTAL_ATTEMPTS,
   WORD_SETS,
 } from './hackTypeCore.js';
 import './hackType.css';
 
-export default function HackType({ onExit }) {
+export default function HackType({ onExit, onComplete }) {
   const [screen, setScreen] = useState('landing');
   const [save, setSave] = useState(() => restoreState(localStorage.getItem(STORAGE_KEY)));
   const [run, setRun] = useState(null);
   const saveRef = useRef(save);
+  const completionReportedRef = useRef(false);
   const raf = useRef();
   const runStartedAt = run?.started;
 
@@ -44,18 +46,16 @@ export default function HackType({ onExit }) {
         const saved = saveRef.current;
 
         if (!remaining) {
-          const stats = calculateStats({ ...current, elapsedMs: GAME_TIME_MS });
-          const next = {
-            ...saved,
-            results: [...saved.results, { ...stats, words: current.words }],
-            attempt: saved.attempt + 1,
-            completed: saved.attempt === TOTAL_ATTEMPTS,
-          };
-          saveRef.current = next;
-          setSave(next);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-          setScreen(next.completed ? 'complete' : 'result');
-          return null;
+          const finished = finishHackTypeAttempt(saved, current);
+          saveRef.current = finished.save;
+          setSave(finished.save);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(finished.save));
+          setScreen(finished.screen);
+          if (finished.save.completed && !completionReportedRef.current) {
+            completionReportedRef.current = true;
+            void onComplete?.(getHackTypeCompletion(finished.save.results));
+          }
+          return finished.run;
         }
 
         const active = current.active
@@ -77,7 +77,7 @@ export default function HackType({ onExit }) {
 
     raf.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf.current);
-  }, [screen, runStartedAt]);
+  }, [screen, runStartedAt, onComplete]);
 
   const type = (value) => {
     setRun((current) => {

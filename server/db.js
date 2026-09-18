@@ -4,6 +4,9 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import { PGlite } from '@electric-sql/pglite';
 
+// The workspace keeps a single .env.local at the repository root; plain
+// .env is loaded afterwards so it can fill any gaps without overriding.
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 let pool;

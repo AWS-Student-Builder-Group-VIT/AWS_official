@@ -1,5 +1,5 @@
-import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
-import { Navigate, Routes, Route, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { lazy, Suspense, useState, useEffect } from 'react';
+import { Routes, Route, useLocation, useNavigate, useParams } from 'react-router-dom';
 import AwsStudentBuilderLoader from './components/AwsStudentBuilderLoader';
 import MobilePreloader from './components/MobilePreloader';
 import Hero from './components/Hero';
@@ -12,13 +12,9 @@ import Blog from './components/Blog';
 import Footer from './components/Footer';
 import LoginModal from './components/LoginModal';
 import StaggeredMenu from './components/StaggeredMenu';
-import MacbookScrollSection from './components/MacbookScrollSection';
 import awsIcon from './assets/aws_icon.jpeg';
-import OfficialGameReceipt from './components/OfficialGameReceipt';
 
 import { checkSessionValidity, getUser, logout } from './utils/auth';
-import { games } from './pages/gamesRegistry';
-import { buildOfficialGameReceipt, completeTeamGame, SCORED_TEAM_GAMES, shouldReturnToDashboardAfterOfficialCompletion, startTeamGame } from './utils/teamGameScoring';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
@@ -27,11 +23,10 @@ const BlogBedrock = lazy(() => import('./pages/BlogBedrock'));
 const BlogLambda = lazy(() => import('./pages/BlogLambda'));
 const BlogPredictiveAnalytics = lazy(() => import('./pages/BlogPredictiveAnalytics'));
 const BlogGoogleMaps = lazy(() => import('./pages/BlogGoogleMaps'));
-const MysteryBoxHackathon = lazy(() => import('./pages/MysteryBoxHackathon/index.js'));
-const MysteryBoxDashboard = lazy(() => import('./pages/MysteryBoxHackathon/index.js').then((module) => ({ default: module.MysteryBoxDashboard })));
 const GamesPage = lazy(() => import('./pages/GamesPage'));
 const GridScanIntro = lazy(() => import('./components/GridScanIntro'));
 const QuizPage = lazy(() => import('./pages/quiz/index.jsx'));
+const RecruitmentApp = lazy(() => import('./recruitment/Recruitment.jsx'));
 
 const gameComponents = {
   'flappy-bird': lazy(() => import('./pages/games/FlappyBird/FlappyBird.jsx')),
@@ -39,22 +34,15 @@ const gameComponents = {
   snake: lazy(() => import('./pages/games/SnakeGame/SnakeGame.jsx')),
   wordle: lazy(() => import('./pages/games/ASCII-Wordle/src/WordleGame.jsx')),
   'crack-the-code': lazy(() => import('./pages/games/detective and cypher game/CrackTheCode.react.jsx')),
-  'detective-crime': lazy(() => import('./pages/games/detective and cypher game/DetectiveCrime.react.jsx')),
   'level-devil': lazy(() => import('./pages/games/level-devil/src/LevelDevilGame.jsx')),
   morse: lazy(() => import('./pages/games/Morse-Game/src/MorseGame.jsx')),
   pacman: lazy(() => import('./pages/games/PacmanGame/PacmanGame.jsx')),
   'mario-kart': lazy(() => import('./pages/games/MarioKart/MarioKart.jsx')),
-  'watergirl-fireboy': lazy(() => import('./pages/games/WatergirlFireboy/WatergirlFireboy.jsx')),
   'asteroid-command': lazy(() => import('./pages/games/AsteroidCommand/AsteroidCommand.jsx')),
   'gunshot-roulette': lazy(() => import('./pages/games/GunshotRoulette/GunshotRoulette.jsx')),
   'hack-type': lazy(() => import('./pages/games/HackType/HackType.jsx')),
 };
 
-/**
- * Detect mobile viewport (≤768px).
- * Captures the initial value on mount so the loader type
- * doesn't flip mid-animation if the user resizes.
- */
 function useIsMobile() {
   const [isMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -63,15 +51,11 @@ function useIsMobile() {
   return isMobile;
 }
 
-
-
 function HomePage() {
   return (
     <main>
       <Hero />
       <Marquee />
-      {/* MacbookScroll — storytelling bridge between Hero and Events */}
-      <MacbookScrollSection />
       <CoreProtocols />
       <WhyJoinUs />
       <TheBuilders />
@@ -82,98 +66,16 @@ function HomePage() {
   );
 }
 
-function GameRoute({ Component, gameSlug, official = false }) {
+function GameRoute({ Component }) {
   const navigate = useNavigate();
-  const [teamGameAttempt, setTeamGameAttempt] = useState(null);
-  const [receipt, setReceipt] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const attemptRef = useRef(null);
-  const completionPayloadRef = useRef(null);
-  const submissionRef = useRef(null);
-  const retrySubmissionRef = useRef(null);
-  const dashboardPath = '/hackquest/dashboard?tab=games';
-
-  useEffect(() => {
-    if (!official) return undefined;
-    let active = true;
-    startTeamGame(gameSlug).then((attempt) => {
-      if (!active) return;
-      attemptRef.current = attempt;
-      retrySubmissionRef.current = attempt.retrySubmission || null;
-      if (attempt.receipt) setReceipt(buildOfficialGameReceipt(gameSlug, attempt.receipt));
-      setTeamGameAttempt(attempt);
-    });
-    return () => { active = false; };
-  }, [gameSlug, official]);
-
-  const handleComplete = useCallback(async (result) => {
-    if (!official) return Promise.resolve({ submitted: false });
-    if (submissionRef.current) return submissionRef.current;
-    completionPayloadRef.current = result;
-    setSubmitting(true);
-    const submission = completeTeamGame(gameSlug, attemptRef.current, result)
-      .then((response) => {
-        if (response.submitted && shouldReturnToDashboardAfterOfficialCompletion(gameSlug)) {
-          navigate(dashboardPath);
-          return response;
-        }
-        setReceipt(buildOfficialGameReceipt(gameSlug, response));
-        return response;
-      })
-      .finally(() => setSubmitting(false));
-    submissionRef.current = submission;
-    return submission;
-  }, [gameSlug, official, navigate]);
-
-  const retrySubmission = useCallback(async () => {
-    if (submitting) return;
-    setSubmitting(true);
-    const retry = retrySubmissionRef.current
-      || (() => completeTeamGame(gameSlug, attemptRef.current, completionPayloadRef.current));
-    try {
-      const response = await retry();
-      setReceipt(buildOfficialGameReceipt(gameSlug, response));
-      if (response.submitted) retrySubmissionRef.current = null;
-    } finally {
-      submissionRef.current = null;
-      setSubmitting(false);
-    }
-  }, [gameSlug, submitting]);
-
-  const game = games.find((entry) => entry.slug === gameSlug);
-  if (official && (submitting || receipt)) {
-    return (
-      <OfficialGameReceipt
-        gameTitle={game?.title || gameSlug}
-        receipt={receipt}
-        submitting={submitting}
-        onRetry={retrySubmission}
-        onDashboard={() => navigate(dashboardPath)}
-        onPractice={() => navigate(game?.path || `/games/${gameSlug}`)}
-      />
-    );
-  }
-
-  if (official && SCORED_TEAM_GAMES.includes(gameSlug) && teamGameAttempt === null) {
-    return <main className="min-h-screen bg-[#080b11] text-white grid place-items-center p-6"><p>Checking official team attempt…</p></main>;
-  }
-  if (official && (teamGameAttempt?.locked || teamGameAttempt?.enabled === false)) {
-    return (
-      <main className="min-h-screen bg-[#080b11] text-white grid place-items-center p-6 text-center">
-        <div><p className="text-[#ff9900] uppercase tracking-widest">Official game unavailable</p><h1 className="text-3xl font-bold mb-4">{teamGameAttempt.error || 'Your team cannot start another official game right now.'}</h1><button className="px-5 py-3 bg-[#ff9900] text-black font-bold rounded" onClick={() => navigate(dashboardPath)}>Back to dashboard</button></div>
-      </main>
-    );
-  }
-  return <Component onComplete={official ? handleComplete : undefined} teamGameAttempt={official ? teamGameAttempt : null} onExit={() => navigate(official ? dashboardPath : '/games')} />;
+  return <Component onExit={() => navigate('/games')} />;
 }
 
-function OfficialGameRoute() {
+function GamePageRoute() {
   const { gameSlug } = useParams();
   const Component = gameComponents[gameSlug];
-  if (!Component || !SCORED_TEAM_GAMES.includes(gameSlug)) {
-    return <main className="min-h-screen bg-[#080b11] text-white grid place-items-center p-6"><p>Official game not found.</p></main>;
-  }
-  return <GameRoute Component={Component} gameSlug={gameSlug} official />;
+  if (!Component) return <RouteLoading />;
+  return <GameRoute Component={Component} />;
 }
 
 function RouteLoading() {
@@ -184,23 +86,48 @@ function RouteLoading() {
   );
 }
 
-function LegacyHackQuestRedirect() {
-  const location = useLocation();
-  const path = location.pathname.replace('/mystery-box-hackathon', '/hackquest');
-  return <Navigate replace to={`${path}${location.search}${location.hash}`} />;
+function RecruitmentRedirect() {
+  useEffect(() => {
+    const configuredUrl = import.meta.env.VITE_RECRUITMENT_URL?.trim();
+    const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const target = configuredUrl || (isLocal
+      ? `${window.location.protocol}//${window.location.hostname}:3001/recruitment`
+      : null);
+
+    if (target) window.location.replace(target);
+  }, []);
+
+  const hasProductionUrl = Boolean(import.meta.env.VITE_RECRUITMENT_URL?.trim());
+  const isLocal = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+  if (!hasProductionUrl && !isLocal) {
+    return (
+      <main className="min-h-screen bg-[#080b11] text-white grid place-items-center p-6">
+        <div className="max-w-lg border border-white/10 bg-white/5 p-8">
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[#ff9900]">Recruitment portal</p>
+          <h1 className="mt-4 text-2xl font-semibold">Portal URL is not configured</h1>
+          <p className="mt-3 text-sm leading-6 text-white/65">
+            Set VITE_RECRUITMENT_URL to the deployed recruitment application URL and rebuild the main site.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  return <RouteLoading />;
 }
 
 export default function App() {
+  const navigate = useNavigate();
   const location = useLocation();
   const isHomePage = location.pathname === '/';
   const isGamesRoute = location.pathname.startsWith('/games');
 
-  // Skip preloader if already shown this session
   const [isLoading, setIsLoading] = useState(() => {
     if (typeof window === 'undefined') return true;
     return !sessionStorage.getItem('preloader-shown');
   });
-  const [showIntro, setShowIntro] = useState(false); // GridScan intro stage
+  const [showIntro, setShowIntro] = useState(false);
   const [introFading, setIntroFading] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const isMobile = useIsMobile();
@@ -222,24 +149,41 @@ export default function App() {
     { label: 'Why Us', ariaLabel: 'Why join us', link: '#why-join-us' },
     { label: 'Builders', ariaLabel: 'Meet the builders', link: '#builders' },
     { label: 'Blog', ariaLabel: 'Read our blog', link: '#blog' },
-    user
-      ? { label: 'Account', ariaLabel: 'Manage your account', link: '/account' }
-      : { label: 'Join', ariaLabel: 'Join the club', onClick: () => window.dispatchEvent(new Event('open-login-modal')) },
+    {
+      label: 'Join Cloud',
+      ariaLabel: 'Join Cloud recruitment',
+      link: '/recruitment',
+      onClick: (e) => {
+        e?.preventDefault();
+        navigate('/recruitment');
+      },
+    },
+    ...(user
+      ? [
+          {
+            label: 'Account',
+            ariaLabel: 'Manage your account',
+            link: '/account',
+            onClick: (e) => {
+              e?.preventDefault();
+              navigate('/account');
+            },
+          },
+        ]
+      : []),
   ];
 
   const socialItems = [
     { label: 'GitHub', link: 'https://github.com/AWS-Student-Builder-Group-VIT' },
-    { label: 'LinkedIn', link: 'https://www.linkedin.com/company/aws-student-builder-group-vit' },
-    { label: 'Instagram', link: 'https://www.instagram.com/aws.sbg.vit' },
+    { label: 'LinkedIn', link: 'https://www.linkedin.com/company/awsbuilder-vit/' },
+    { label: 'Instagram', link: 'https://www.instagram.com/awsbuilder_vit' },
     ...(user ? [{ label: 'Logout', onClick: () => { logout(); window.dispatchEvent(new Event('auth-change')); } }] : [])
   ];
 
-  // Check session validity on app mount (24h expiry)
   useEffect(() => {
     checkSessionValidity();
   }, []);
 
-  // Track whether all page resources (images, fonts, DOM) are ready
   const [resourcesReady, setResourcesReady] = useState(false);
 
   useEffect(() => {
@@ -248,7 +192,6 @@ export default function App() {
     return () => window.removeEventListener('open-login-modal', handleOpenModal);
   }, []);
 
-  // Wait for all resources: window load + fonts
   useEffect(() => {
     if (!isLoading) return;
 
@@ -259,9 +202,7 @@ export default function App() {
       setResourcesReady(true);
     };
 
-    // Wait for both: full page load (images, scripts) AND fonts
     const onLoad = () => {
-      // Fonts may still be loading after window.load
       if (document.fonts && document.fonts.ready) {
         document.fonts.ready.then(markReady);
       } else {
@@ -277,13 +218,11 @@ export default function App() {
     }
   }, [isLoading]);
 
-  // Desktop: no fixed timer — animation signals completion via onDone
-
   const handlePreloaderDone = () => {
     const finish = () => {
       sessionStorage.setItem('preloader-shown', '1');
       setIsLoading(false);
-      setShowIntro(true); // ← launch GridScan intro
+      setShowIntro(true);
       setIntroFading(false);
     };
 
@@ -324,7 +263,6 @@ export default function App() {
       )}
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
 
-      {/* StaggeredMenu — fixed overlay, shown only on the homepage */}
       {isHomePage && (
         <StaggeredMenu
           isFixed
@@ -360,17 +298,12 @@ export default function App() {
             <Route path="/blog/aws-lambda" element={<BlogLambda />} />
             <Route path="/blog/predictive-analytics" element={<BlogPredictiveAnalytics />} />
             <Route path="/blog/google-maps-traffic" element={<BlogGoogleMaps />} />
-
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/quiz" element={<QuizPage />} />
             <Route path="/account" element={<AccountPage />} />
-            <Route path="/hackquest" element={<MysteryBoxHackathon />} />
-            <Route path="/hackquest/dashboard" element={<MysteryBoxDashboard />} />
-            <Route path="/hackquest/games/:gameSlug" element={<OfficialGameRoute />} />
-            <Route path="/mystery-box-hackathon" element={<LegacyHackQuestRedirect />} />
-            <Route path="/mystery-box-hackathon/*" element={<LegacyHackQuestRedirect />} />
+            <Route path="/recruitment/*" element={<RecruitmentApp />} />
             <Route path="/games" element={<GamesPage />} />
-            {games.map((game) => <Route key={game.slug} path={game.path} element={<GameRoute Component={gameComponents[game.slug]} gameSlug={game.slug} />} />)}
+            <Route path="/games/:gameSlug" element={<GamePageRoute />} />
           </Routes>
         </Suspense>
       </div>

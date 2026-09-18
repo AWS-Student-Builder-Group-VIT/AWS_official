@@ -1,0 +1,134 @@
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useNavigate } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
+import { createClient } from '../lib/supabase.js';
+import { profileSchema } from '../lib/profile-schema.js';
+import { splitVitName } from '../lib/vit-identity.js';
+
+export default function ProfileComplete() {
+  const navigate = useNavigate();
+  const [supabase] = useState(createClient);
+  const [identity, setIdentity] = useState({ name: '', email: '', registrationNumber: null });
+  const [error, setError] = useState('');
+  const [loggingOut, setLoggingOut] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm({ resolver: zodResolver(profileSchema) });
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) { navigate('/recruitment/login', { replace: true }); return; }
+      // A returning candidate keeps the record they already filled in; signing
+      // in again should drop them straight back on the dashboard.
+      const { data: existing } = await supabase
+        .from('candidate_profiles').select('profile_complete').eq('id', user.id).maybeSingle();
+      if (existing?.profile_complete) { navigate('/recruitment/dashboard', { replace: true }); return; }
+      const { name, registrationNumber } = splitVitName(user.user_metadata.full_name || user.user_metadata.name || '');
+      setIdentity({ name, email: user.email || '', registrationNumber });
+      if (registrationNumber) setValue('registration_number', registrationNumber, { shouldValidate: true });
+    });
+  }, []);
+
+  async function save(values) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { navigate('/recruitment/login', { replace: true }); return; }
+    setError('');
+    try {
+      const response = await fetch('/api/recruitment/profile/complete', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(values),
+      });
+      // A missing route or crashed function replies with HTML, not JSON.
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error ?? `Unable to complete profile (HTTP ${response.status}).`);
+      navigate('/recruitment/subdomain');
+    } catch (err) {
+      setError(err.message ?? 'Unable to complete profile.');
+    }
+  }
+
+  async function logout() {
+    setLoggingOut(true);
+    setError('');
+    const { error: logoutError } = await supabase.auth.signOut();
+    if (logoutError) { setError(logoutError.message); setLoggingOut(false); return; }
+    navigate('/recruitment/login', { replace: true });
+  }
+
+  const field = (name, label, { readOnly = false, hint = '' } = {}) => (
+    <label key={name}>
+      <span className="label">{label}</span>
+      <input className="field" {...register(name)} readOnly={readOnly} aria-invalid={Boolean(errors[name])}
+        style={readOnly ? { opacity: 0.7, cursor: 'not-allowed' } : undefined} />
+      {hint && !errors[name] && <span className="mt-1 block text-xs text-[var(--dim)]">{hint}</span>}
+      {errors[name] && <span className="mt-1 block text-xs text-[var(--error)]">{errors[name]?.message}</span>}
+    </label>
+  );
+
+  return (
+    <main className="shell py-8 sm:py-12">
+      <div className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-5">
+        <p className="eyebrow">PROFILE / COMPLETION</p>
+        <button
+          type="button"
+          onClick={logout}
+          disabled={loggingOut}
+          className="action-secondary !min-h-10 !px-4 disabled:cursor-wait disabled:opacity-60"
+        >
+          <LogOut size={14} aria-hidden="true" />
+          {loggingOut ? 'Logging out…' : 'Log out'}
+        </button>
+      </div>
+
+      <div className="mt-8 grid gap-10 lg:grid-cols-[.7fr_1.3fr]">
+        <aside>
+          <h1 className="text-3xl font-bold sm:text-5xl">
+            IDENTITY<br /><span className="text-[var(--accent)]">RECORD.</span>
+          </h1>
+          <div className="mt-8 border-l border-[var(--accent)] pl-5">
+            <p className="font-mono text-sm">{identity.name || 'GOOGLE USER'}</p>
+            <p className="mt-1 text-sm text-[var(--muted)]">{identity.email}</p>
+            <p className="mt-4 text-xs leading-5 text-[var(--dim)]">
+              Google identity fields are locked. Complete the academic record to enter recruitment.
+            </p>
+          </div>
+        </aside>
+
+        <form onSubmit={handleSubmit(save)} className="technical-panel p-6 sm:p-8">
+          <section>
+            <h2 className="eyebrow mb-5">01 / ACADEMIC_PROFILE</h2>
+            <div className="grid gap-5 sm:grid-cols-2">
+              {field('registration_number', 'Registration number', identity.registrationNumber
+                ? { readOnly: true, hint: 'Taken from your VIT Google account.' }
+                : {})}
+              {field('phone', 'Phone number')}
+              <label>
+                <span className="label">Year</span>
+                <select className="field" {...register('year')}>
+                  <option value="">Select year</option>
+                  {[1, 2, 3, 4].map((y) => <option key={y}>{y}</option>)}
+                </select>
+                {errors.year && <span className="mt-1 block text-xs text-[var(--error)]">{errors.year.message}</span>}
+              </label>
+              {field('branch', 'Branch / School')}
+            </div>
+          </section>
+
+          {error && <p role="alert" className="mt-5 text-sm text-[var(--error)]">{error}</p>}
+          <button disabled={isSubmitting} className="action mt-8 w-full sm:w-auto">
+            {isSubmitting ? 'Saving…' : 'Complete profile →'}
+          </button>
+        </form>
+      </div>
+    </main>
+  );
+}
