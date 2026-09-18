@@ -25,6 +25,7 @@ const BlogPredictiveAnalytics = lazy(() => import('./pages/BlogPredictiveAnalyti
 const BlogGoogleMaps = lazy(() => import('./pages/BlogGoogleMaps'));
 const GamesPage = lazy(() => import('./pages/GamesPage'));
 const GridScanIntro = lazy(() => import('./components/GridScanIntro'));
+const QuizPage = lazy(() => import('./pages/quiz/index.jsx'));
 const RecruitmentApp = lazy(() => import('./recruitment/Recruitment.jsx'));
 
 const gameComponents = {
@@ -298,6 +299,7 @@ export default function App() {
             <Route path="/blog/predictive-analytics" element={<BlogPredictiveAnalytics />} />
             <Route path="/blog/google-maps-traffic" element={<BlogGoogleMaps />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/quiz" element={<QuizPage />} />
             <Route path="/account" element={<AccountPage />} />
             <Route path="/recruitment/*" element={<RecruitmentApp />} />
             <Route path="/games" element={<GamesPage />} />

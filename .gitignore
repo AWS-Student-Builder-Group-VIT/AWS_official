@@ -34,6 +34,7 @@ tmp/
 .env
 .env.local
 .env.*.local
+.pglite_data/
+server/.pglite_data/
 .claude/
 AWS_official 3/
-

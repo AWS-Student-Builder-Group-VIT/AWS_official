@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pool from './db.js';
 import { initializeVersionedSchema } from './databaseInitialization.js';
+import { initializeCloudIntelligence, registerCloudIntelligenceRoutes } from './cloudIntelligence.js';
 import { isAllowedOrigin } from './corsOrigins.js';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -73,6 +74,17 @@ function adminMiddleware(req, res, next) {
 // ── Database init ─────────────────────────────────────────────
 async function runDatabaseMigrations() {
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      first_name VARCHAR(100) NOT NULL,
+      last_name VARCHAR(100) NOT NULL,
+      email VARCHAR(255) UNIQUE NOT NULL,
+      phone VARCHAR(50),
+      password_hash VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS quiz_scores (
       id           SERIAL PRIMARY KEY,
       user_id      INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -98,22 +110,27 @@ async function runDatabaseMigrations() {
       value VARCHAR(255) NOT NULL
     );
   `);
+
+  await initializeCloudIntelligence(pool);
 }
 
 async function initDb() {
   const result = await initializeVersionedSchema({
     pool,
-    version: 'v10-hackquest-removed',
+    version: 'v11-cloud-intelligence',
     migrate: runDatabaseMigrations,
   });
-  console.log(result.migrated ? 'Database tables ready (migrated to v10)' : 'Database schema already ready');
+  console.log(result.migrated ? 'Database tables ready (migrated to v11)' : 'Database schema already ready');
 }
+
 // An unhandled module-scope rejection kills the whole serverless function before
 // any handler runs, taking the Supabase-only recruitment routes down with it —
 // so a Postgres outage must not be fatal to the rest of the API.
 export const dbReady = initDb().catch((error) => {
   console.error('Database initialisation failed:', error);
 });
+
+registerCloudIntelligenceRoutes(app, { pool, adminMiddleware });
 
 // ── Register ─────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {

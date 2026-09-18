@@ -227,4 +227,207 @@ export async function updateQuizStatus(adminToken, action) {
   } catch { return { ok: false, error: 'Network error' }; }
 }
 
+// ── Cloud Intelligence Admin API Helpers ──────────────────────
 
+/** Fetch all Cloud Intelligence questions */
+export async function fetchCloudIntelligenceQuestions(adminToken) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/cloud-intelligence/questions`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, questions: data } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to fetch questions' };
+  }
+}
+
+/** Create a new Cloud Intelligence question */
+export async function createCloudIntelligenceQuestion(adminToken, questionData) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/cloud-intelligence/questions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify(questionData),
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, question: data } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to create question' };
+  }
+}
+
+/** Update an existing Cloud Intelligence question */
+export async function updateCloudIntelligenceQuestion(adminToken, id, questionData) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/cloud-intelligence/questions/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify(questionData),
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, question: data } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to update question' };
+  }
+}
+
+/** Delete a Cloud Intelligence question */
+export async function deleteCloudIntelligenceQuestion(adminToken, id) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/cloud-intelligence/questions/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to delete question' };
+  }
+}
+
+/** Fetch Cloud Intelligence quiz settings */
+export async function fetchCloudIntelligenceSettings(adminToken) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/cloud-intelligence/settings`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, settings: data } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to fetch settings' };
+  }
+}
+
+/** Update Cloud Intelligence quiz settings */
+export async function updateCloudIntelligenceSettings(adminToken, settings) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/cloud-intelligence/settings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify(settings),
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, settings: data.settings } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to update settings' };
+  }
+}
+
+/** Toggle Cloud Intelligence Freeze status */
+export async function toggleCloudIntelligenceFreeze(adminToken, status) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/cloud-intelligence/freeze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({ status }),
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, status: data.status } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to toggle status' };
+  }
+}
+
+/** Fetch Cloud Intelligence results & statistics */
+export async function fetchCloudIntelligenceResults(adminToken) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/cloud-intelligence/results`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, submissions: data.submissions, stats: data.stats } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to fetch results' };
+  }
+}
+
+/** Delete a Cloud Intelligence submission */
+export async function deleteCloudIntelligenceResult(adminToken, id) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/cloud-intelligence/results/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to delete submission' };
+  }
+}
+
+/** Reset all Cloud Intelligence submissions */
+export async function resetCloudIntelligenceResults(adminToken) {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/cloud-intelligence/results/reset`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to reset results' };
+  }
+}
+
+// ── Public Participant Quiz API Helpers ───────────────────────
+
+/** Fetch public quiz information & freeze state */
+export async function fetchPublicQuizInfo() {
+  try {
+    const res = await fetch(`${API_URL}/api/cloud-intelligence/quiz-info`);
+    const data = await res.json();
+    return res.ok ? { ok: true, ...data } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to retrieve quiz status' };
+  }
+}
+
+/** Fetch randomized quiz questions for participant */
+export async function fetchPublicQuizQuestions() {
+  try {
+    const res = await fetch(`${API_URL}/api/cloud-intelligence/questions`);
+    const data = await res.json();
+    return res.ok ? { ok: true, questions: data.questions, totalCount: data.totalCount } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to load questions' };
+  }
+}
+
+/** Check if participant has existing submission */
+export async function fetchParticipantSubmission(email) {
+  try {
+    const res = await fetch(`${API_URL}/api/cloud-intelligence/submission/${encodeURIComponent(email)}`);
+    const data = await res.json();
+    return res.ok ? { ok: true, hasSubmitted: data.hasSubmitted, submission: data.submission } : { ok: false, error: data.error };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to check submission history' };
+  }
+}
+
+/** Submit participant assessment responses */
+export async function submitPublicQuizAssessment(payload) {
+  try {
+    const res = await fetch(`${API_URL}/api/cloud-intelligence/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    return res.ok ? { ok: true, submission: data.submission } : { ok: false, error: data.error, submission: data.submission };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Failed to submit quiz responses' };
+  }
+}
