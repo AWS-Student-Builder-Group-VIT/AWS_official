@@ -1,0 +1,542 @@
+[
+  {
+    "id": 1,
+    "question_text": "Which architecture connects foundation models to authoritative internal knowledge bases to ground responses\nwithout retraining or updating model weights?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Supervised Fine-Tuning",
+      "Retrieval-Augmented Generation (RAG)",
+      "Reinforcement Learning (RLHF)",
+      "Parameter-Efficient Adapter Tuning"
+    ],
+    "correct_answer": "Retrieval-Augmented Generation (RAG)",
+    "points": "1.00",
+    "created_at": "2026-09-18T07:49:43.509Z",
+    "updated_at": "2026-09-18T08:35:23.380Z"
+  },
+  {
+    "id": 2,
+    "question_text": "Which AWS capability provides configurable safeguards to detect prompt injection attacks and filter harmful content in foundation model interactions?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Amazon S3 Guard",
+      "Amazon Bedrock Guardrails",
+      "AWS Shield Advanced",
+      "Amazon CloudWatch Canaries"
+    ],
+    "correct_answer": "Amazon Bedrock Guardrails",
+    "points": "1.00",
+    "created_at": "2026-09-18T07:49:43.550Z",
+    "updated_at": "2026-09-18T08:36:14.434Z"
+  },
+  {
+    "id": 3,
+    "question_text": "Which prompt structure is most likely to produce unreliable, ungrounded, or hallucinated LLM outputs?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": "AWS Lambda is a serverless compute service that runs code in response to events.",
+    "reason": "Users do not need to provision or manage servers to execute code in AWS Lambda.",
+    "options": [
+      "'Summarize the document below using exactly 5 concise bullet points.'",
+      "'Answer strictly using the provided document; state Unknown if unsupported.'",
+      "'Answer using your internal knowledge, assumptions, and anything useful.'",
+      "'Extract all dates from the text and format them as YYYY-MM-DD.'"
+    ],
+    "correct_answer": "'Answer using your internal knowledge, assumptions, and anything useful.'",
+    "points": "1.00",
+    "created_at": "2026-09-18T07:49:43.591Z",
+    "updated_at": "2026-09-18T08:37:28.452Z"
+  },
+  {
+    "id": 4,
+    "question_text": "An AI system relies strictly on Unsupervised Learning. Which statement CANNOT describe its training process?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": "abc",
+    "reason": "abc",
+    "options": [
+      "It discovers inherent groupings and clusters in data.",
+      "It identifies latent structures without target labels.",
+      "It requires ground-truth target labels for every training sample.",
+      "It analyzes similarity metrics across input features."
+    ],
+    "correct_answer": "It requires ground-truth target labels for every training sample.",
+    "points": "1.00",
+    "created_at": "2026-09-18T08:46:34.322Z",
+    "updated_at": "2026-09-18T08:46:34.322Z"
+  },
+  {
+    "id": 5,
+    "question_text": "Statement 1: 'The model never encountered this exact sentence during training.' \nStatement 2: 'Therefore, the model cannot possibly generate this sentence.'\nWhat is the best evaluation?",
+    "question_type": "mcq",
+    "difficulty": "medium",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Valid logic: models strictly repeat training data.",
+      "Statement 2 is false: models generalize patterns to create novel sequences.",
+      "Statement 1 is impossible: training sets contain all sentences.",
+      "Both statements contradict relational database storage rules."
+    ],
+    "correct_answer": "Statement 2 is false: models generalize patterns to create novel sequences.",
+    "points": "1.00",
+    "created_at": "2026-09-18T08:48:06.761Z",
+    "updated_at": "2026-09-18T08:48:06.761Z"
+  },
+  {
+    "id": 6,
+    "question_text": "A team asserts: 'Our classification model achieved 95% overall accuracy, so it cannot disadvantage any\ndemographic subgroup.' What is the best technical assessment?",
+    "question_type": "mcq",
+    "difficulty": "medium",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "High accuracy guarantees equal performance across demographic groups.",
+      "Overall accuracy alone does not ensure fairness, as majority-class accuracy can mask poor performance on minority groups..",
+      "Accuracy and demographic fairness are mathematically identical metrics.",
+      "Model fairness can only be evaluated after complete model retirement."
+    ],
+    "correct_answer": "Overall accuracy alone does not ensure fairness, as majority-class accuracy can mask poor performance on minority groups..",
+    "points": "1.00",
+    "created_at": "2026-09-18T08:49:27.625Z",
+    "updated_at": "2026-09-18T08:49:41.681Z"
+  },
+  {
+    "id": 7,
+    "question_text": "When evaluating an AI system for potential demographic bias and responsible deployment, which metric is most\nessential to analyze alongside overall accuracy?",
+    "question_type": "mcq",
+    "difficulty": "medium",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Total token consumption per prompt.",
+      "Disaggregated performance metrics across relevant demographic subgroups.",
+      "Total parameter count of the underlying neural network.",
+      "Storage volume required for model checkpoints."
+    ],
+    "correct_answer": "Disaggregated performance metrics across relevant demographic subgroups.",
+    "points": "1.00",
+    "created_at": "2026-09-18T08:51:21.229Z",
+    "updated_at": "2026-09-18T08:51:21.229Z"
+  },
+  {
+    "id": 8,
+    "question_text": "You need an LLM chatbot to answer strictly from internal documents without inventing facts. What is the minimum\nnecessary prompt instruction?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "'Be intelligent and helpful.'",
+      "'Act as an expert in cloud computing.'",
+      "'Provide maximum detail in every response.'",
+      "'Answer only using supplied documents; if unsupported, state that clearly.'"
+    ],
+    "correct_answer": "'Answer only using supplied documents; if unsupported, state that clearly.'",
+    "points": "1.00",
+    "created_at": "2026-09-18T08:53:13.385Z",
+    "updated_at": "2026-09-18T08:53:13.385Z"
+  },
+  {
+    "id": 9,
+    "question_text": "Which phase of the Machine Learning lifecycle involves transforming raw input data into meaningful numerical formats to boost model prediction capabilities?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Model Evaluation",
+      "Model Deployment",
+      "Hyperparameter Tuning",
+      "Feature Engineering"
+    ],
+    "correct_answer": "Feature Engineering",
+    "points": "1.00",
+    "created_at": "2026-09-18T08:55:06.081Z",
+    "updated_at": "2026-09-18T08:55:06.081Z"
+  },
+  {
+    "id": 10,
+    "question_text": "What is the primary operational distinction between Supervised Learning and Unsupervised Learning?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Supervised uses unlabeled data; Unsupervised uses labels",
+      "Supervised relies exclusively on deep neural networks.",
+      "Supervised requires ground-truth target labels for training.",
+      "Unsupervised learning cannot accept continuous numeric features."
+    ],
+    "correct_answer": "Supervised requires ground-truth target labels for training.",
+    "points": "1.00",
+    "created_at": "2026-09-18T08:56:57.089Z",
+    "updated_at": "2026-09-18T08:56:57.089Z"
+  },
+  {
+    "id": 11,
+    "question_text": "In deep neural networks, what is the primary mathematical purpose of an Activation Function?",
+    "question_type": "mcq",
+    "difficulty": "medium",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "To compute loss backpropagation derivatives.",
+      "To introduce non-linearity for learning complex patterns.",
+      "To split datasets into train, validation, and test splits.",
+      "To map text tokens directly into vector embeddings."
+    ],
+    "correct_answer": "To introduce non-linearity for learning complex patterns.",
+    "points": "1.00",
+    "created_at": "2026-09-18T08:58:12.029Z",
+    "updated_at": "2026-09-18T08:58:12.029Z"
+  },
+  {
+    "id": 12,
+    "question_text": "When a machine learning model achieves high accuracy on training data but performs poorly on unseen validation data, which condition exists?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Model Overfitting",
+      "Model Underfitting",
+      "Data Drift",
+      "Vanishing Gradient"
+    ],
+    "correct_answer": "Model Overfitting",
+    "points": "1.00",
+    "created_at": "2026-09-18T08:59:07.468Z",
+    "updated_at": "2026-09-18T08:59:07.468Z"
+  },
+  {
+    "id": 13,
+    "question_text": "Which data preprocessing technique rescales numerical features to a uniform range (e.g., 0 to 1) to prevent large scalar values from dominating model training?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Feature Normalization / Scaling",
+      "Dimensionality Reduction",
+      "One-Hot Encoding",
+      "Cross-Validation"
+    ],
+    "correct_answer": "Feature Normalization / Scaling",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:00:15.365Z",
+    "updated_at": "2026-09-18T09:00:15.365Z"
+  },
+  {
+    "id": 14,
+    "question_text": "In Large Language Models (LLMs) available on Amazon Bedrock, what does a 'Token' represent?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "An API security token for AWS IAM authentication.",
+      "A sequence of characters/words processed as a basic text unit.",
+      "A transactional database key stored in Amazon DynamoDB.",
+      "A network latency measurement unit."
+    ],
+    "correct_answer": "A sequence of characters/words processed as a basic text unit.",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:01:34.806Z",
+    "updated_at": "2026-09-18T09:01:34.806Z"
+  },
+  {
+    "id": 15,
+    "question_text": "Which prompt engineering technique provides explicit input-output demonstration pairs within the prompt to guide output structure without model training?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Zero-Shot Prompting",
+      "Few-Shot Prompting",
+      "Parameter Fine-Tuning",
+      "Continuous Pre-training"
+    ],
+    "correct_answer": "Few-Shot Prompting",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:02:34.159Z",
+    "updated_at": "2026-09-18T09:02:34.159Z"
+  },
+  {
+    "id": 16,
+    "question_text": "What is the primary role of Vector Embeddings in modern Generative AI search architectures?",
+    "question_type": "mcq",
+    "difficulty": "medium",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Compressing binary image assets stored in S3.",
+      "Representing textual concepts as numerical vectors in semantic space.",
+      "Encrypting prompt payloads in transit across VPCs.",
+      "Setting execution timeouts for serverless endpoints."
+    ],
+    "correct_answer": "Representing textual concepts as numerical vectors in semantic space.",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:03:19.212Z",
+    "updated_at": "2026-09-18T09:03:19.212Z"
+  },
+  {
+    "id": 17,
+    "question_text": "Which LLM inference parameter should be reduced to make generated model responses more deterministic, consistent, and focused?",
+    "question_type": "mcq",
+    "difficulty": "medium",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Top-K",
+      "Temperature",
+      "Max Tokens",
+      "Frequency Penalty"
+    ],
+    "correct_answer": "Temperature",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:04:18.574Z",
+    "updated_at": "2026-09-18T09:04:18.574Z"
+  },
+  {
+    "id": 18,
+    "question_text": "Which Amazon Bedrock capability allows you to privately adapt a base foundation model using your own labeled datasets to improve performance on highly specialized, domain-specific tasks?",
+    "question_type": "mcq",
+    "difficulty": "medium",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Provisioned Throughput",
+      "Retrieval-Augmented Generation (RAG)",
+      "Custom Models (Fine-Tuning)",
+      "Agents for Amazon Bedrock"
+    ],
+    "correct_answer": "Custom Models (Fine-Tuning)",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:07:22.630Z",
+    "updated_at": "2026-09-18T09:07:22.630Z"
+  },
+  {
+    "id": 19,
+    "question_text": "Which AWS service provides a fully managed serverless API to access foundation models from AI21 Labs, Anthropic, Cohere, Meta, and Stability AI?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Amazon SageMaker",
+      "Amazon Bedrock",
+      "Amazon Comprehend",
+      "AWS HealthOmics"
+    ],
+    "correct_answer": "Amazon Bedrock",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:08:47.129Z",
+    "updated_at": "2026-09-18T09:08:47.129Z"
+  },
+  {
+    "id": 20,
+    "question_text": "Assertion (A): Generative AI models can produce plausible information that is factually incorrect.\nReason (R): Generative models generate outputs by predicting probabilistic word patterns rather than guaranteeing absolute factual lookup.",
+    "question_type": "assertion_reason",
+    "difficulty": "medium",
+    "assertion": "Generative AI models can produce plausible information that is factually incorrect.",
+    "reason": "Generative models generate outputs by predicting probabilistic word patterns rather than guaranteeing absolute factual lookup.",
+    "options": [
+      "Both Assertion (A) and Reason (R) are true, and (R) is the correct explanation of (A).",
+      "Both Assertion (A) and Reason (R) are true, but (R) is NOT the correct explanation of (A).",
+      "Assertion (A) is true, but Reason (R) is false.",
+      "Assertion (A) is false, but Reason (R) is true."
+    ],
+    "correct_answer": "Both Assertion (A) and Reason (R) are true, and (R) is the correct explanation of (A).",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:09:56.507Z",
+    "updated_at": "2026-09-18T09:09:56.507Z"
+  },
+  {
+    "id": 21,
+    "question_text": "Assertion (A): Vector embeddings capture semantic relationships between textual units in mathematical space.\nReason (R): Every token in an LLM is assigned a static numerical value that never varies by surrounding context.",
+    "question_type": "assertion_reason",
+    "difficulty": "hard",
+    "assertion": "Vector embeddings capture semantic relationships between textual units in mathematical space.",
+    "reason": "Every token in an LLM is assigned a static numerical value that never varies by surrounding context.",
+    "options": [
+      "Both Assertion (A) and Reason (R) are true, and (R) is the correct explanation of (A).",
+      "Both Assertion (A) and Reason (R) are true, but (R) is NOT the correct explanation of (A).",
+      "Assertion (A) is true, but Reason (R) is false.",
+      "Assertion (A) is false, but Reason (R) is true."
+    ],
+    "correct_answer": "Assertion (A) is true, but Reason (R) is false.",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:11:58.089Z",
+    "updated_at": "2026-09-18T09:11:58.089Z"
+  },
+  {
+    "id": 22,
+    "question_text": "A financial institution needs to automatically extract tables, form fields, and raw text from scanned PDF loan applications. Which service is optimal?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Amazon Rekognition",
+      "Amazon Textract",
+      "Amazon Polly",
+      "Amazon Transcribe"
+    ],
+    "correct_answer": "Amazon Textract",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:12:57.089Z",
+    "updated_at": "2026-09-18T09:12:57.089Z"
+  },
+  {
+    "id": 23,
+    "question_text": "Which AWS solution delivers a generative AI-powered enterprise assistant capable of answering questions based on corporate internal repositories?",
+    "question_type": "mcq",
+    "difficulty": "medium",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Amazon Q Business",
+      "Amazon Lex",
+      "AWS CodePipeline",
+      "Amazon Kendra basic search"
+    ],
+    "correct_answer": "Amazon Q Business",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:13:53.659Z",
+    "updated_at": "2026-09-18T09:13:53.659Z"
+  },
+  {
+    "id": 24,
+    "question_text": "Which AWS computer vision service provides pre-trained capabilities for facial analysis, object recognition, and content moderation without custom ML coding?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Amazon Rekognition",
+      "Amazon Forecast",
+      "Amazon Personalize",
+      "AWS Panorama"
+    ],
+    "correct_answer": "Amazon Rekognition",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:14:35.287Z",
+    "updated_at": "2026-09-18T09:14:41.475Z"
+  },
+  {
+    "id": 25,
+    "question_text": "Which fully managed AWS service converts written text into natural-sounding speech across multiple languages and voices?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Amazon Transcribe",
+      "Amazon Translate",
+      "Amazon Lex",
+      "Amazon Polly"
+    ],
+    "correct_answer": "Amazon Polly",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:15:46.598Z",
+    "updated_at": "2026-09-18T09:15:46.598Z"
+  },
+  {
+    "id": 26,
+    "question_text": "Under the AWS Shared Responsibility Model for Generative AI, which responsibility belongs strictly to the Customer when using Amazon Bedrock?",
+    "question_type": "mcq",
+    "difficulty": "medium",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Physical security of underlying AI hardware infrastructure.",
+      "Safeguard base model weights from global network exposure.",
+      "Configuring application guardrails, data privacy rules, and IAM policies.",
+      "Patching underlying cloud server hypervisors."
+    ],
+    "correct_answer": "Configuring application guardrails, data privacy rules, and IAM policies.",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:16:38.581Z",
+    "updated_at": "2026-09-18T09:16:38.581Z"
+  },
+  {
+    "id": 27,
+    "question_text": "When building machine learning data lakes on AWS, which service should you use to automatically discover, classify, and protect sensitive training data like Personally Identifiable Information (PII) stored in Amazon S3?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Amazon Macie",
+      "AWS Shield Advanced",
+      "AWS WAF",
+      "Amazon GuardDuty"
+    ],
+    "correct_answer": "Amazon Macie",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:18:18.819Z",
+    "updated_at": "2026-09-18T09:18:18.819Z"
+  },
+  {
+    "id": 28,
+    "question_text": "Which tool provides quantitative metrics for bias detection in training data and feature attribution explainability for models hosted on AWS?",
+    "question_type": "mcq",
+    "difficulty": "hard",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "Amazon SageMaker Clarify",
+      "AWS Config",
+      "AWS Trusted Advisor",
+      "Amazon Inspector"
+    ],
+    "correct_answer": "Amazon SageMaker Clarify",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:19:26.474Z",
+    "updated_at": "2026-09-18T09:19:26.474Z"
+  },
+  {
+    "id": 29,
+    "question_text": "Which service continuously monitors production machine learning models for data drift, concept drift, and prediction quality degradation in Amazon SageMaker?",
+    "question_type": "mcq",
+    "difficulty": "medium",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "SageMaker Model Monitor",
+      "AWS CloudTrail",
+      "Amazon CloudWatch Alarms",
+      "SageMaker Canvas"
+    ],
+    "correct_answer": "SageMaker Model Monitor",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:20:08.601Z",
+    "updated_at": "2026-09-18T09:20:08.601Z"
+  },
+  {
+    "id": 30,
+    "question_text": "Under Amazon Bedrock data protection policies, how are customer prompt inputs and model responses managed by default?",
+    "question_type": "mcq",
+    "difficulty": "medium",
+    "assertion": null,
+    "reason": null,
+    "options": [
+      "They are stored publicly for open-source AI benchmarks.",
+      "They are used to retrain base foundation models across all customers.",
+      "They are encrypted and never used to train third-party or base AWS FMs.",
+      "They are automatically published to AWS Marketplace."
+    ],
+    "correct_answer": "They are encrypted and never used to train third-party or base AWS FMs.",
+    "points": "1.00",
+    "created_at": "2026-09-18T09:21:10.018Z",
+    "updated_at": "2026-09-18T09:21:10.018Z"
+  }
+]

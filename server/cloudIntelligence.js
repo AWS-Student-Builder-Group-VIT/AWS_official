@@ -81,72 +81,55 @@ export async function initializeCloudIntelligence(pool) {
     ON cloud_intelligence_submissions (LOWER(participant_email));
   `);
 
-  // 4. Seed initial questions in Database if empty (so questions, results, etc. are dynamic & database-backed)
+  // 4. Seed questions in Database if empty or incomplete
   const qCountRes = await pool.query('SELECT COUNT(*)::int as count FROM cloud_intelligence_questions');
   const existingCount = parseInt(qCountRes.rows[0]?.count || 0, 10);
-  if (existingCount < 3) {
-    const seedQuestions = [
-      {
-        text: 'Which AWS service provides resizable, managed virtual compute capacity in the cloud?',
-        type: 'mcq',
-        difficulty: 'easy',
-        assertion: null,
-        reason: null,
-        options: [
-          'Amazon EC2 (Elastic Compute Cloud)',
-          'Amazon S3 (Simple Storage Service)',
-          'Amazon RDS (Relational Database Service)',
-          'AWS Lambda',
-        ],
-        answer: 'Amazon EC2 (Elastic Compute Cloud)',
-      },
-      {
-        text: 'What type of storage is Amazon Simple Storage Service (Amazon S3)?',
-        type: 'mcq',
-        difficulty: 'easy',
-        assertion: null,
-        reason: null,
-        options: [
-          'Object Storage',
-          'Block Storage',
-          'File System Storage',
-          'Tape Storage',
-        ],
-        answer: 'Object Storage',
-      },
-      {
-        text: 'Assertion: AWS Lambda is a serverless compute service that runs code in response to events.\nReason: Users do not need to provision or manage servers to execute code in AWS Lambda.',
-        type: 'assertion_reason',
-        difficulty: 'medium',
-        assertion: 'AWS Lambda is a serverless compute service that runs code in response to events.',
-        reason: 'Users do not need to provision or manage servers to execute code in AWS Lambda.',
-        options: [
-          'Both Assertion (A) and Reason (R) are true, and (R) is the correct explanation of (A).',
-          'Both Assertion (A) and Reason (R) are true, but (R) is NOT the correct explanation of (A).',
-          'Assertion (A) is true, but Reason (R) is false.',
-          'Assertion (A) is false, but Reason (R) is true.',
-        ],
-        answer: 'Both Assertion (A) and Reason (R) are true, and (R) is the correct explanation of (A).',
-      },
-    ];
+  if (existingCount < 30) {
+    try {
+      const fs = await import('fs');
+      const seedPath = './server/cloud_intelligence_seed.json';
+      if (fs.existsSync(seedPath)) {
+        const seedData = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+        if (Array.isArray(seedData) && seedData.length > 0) {
+          for (const q of seedData) {
+            const opts = Array.isArray(q.options) ? q.options : (typeof q.options === 'string' ? JSON.parse(q.options) : []);
+            const ans = q.correct_answer !== undefined ? q.correct_answer : q.answer;
 
-    for (let i = existingCount; i < seedQuestions.length; i++) {
-      const q = seedQuestions[i];
-      await pool.query(
-        `INSERT INTO cloud_intelligence_questions (
-          question_text, question_type, difficulty, assertion, reason, options, correct_answer, points
-        )
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 1.0)`,
-        [
-          q.text,
-          q.type,
-          q.difficulty,
-          q.assertion,
-          q.reason,
-          JSON.stringify(q.options),
-          JSON.stringify(q.answer),
-        ]
-      );
+            await pool.query(
+              `INSERT INTO cloud_intelligence_questions (
+                id, question_text, question_type, difficulty, assertion, reason, options, correct_answer, points
+              )
+              VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
+              ON CONFLICT (id) DO UPDATE
+              SET question_text = EXCLUDED.question_text,
+                  question_type = EXCLUDED.question_type,
+                  difficulty = EXCLUDED.difficulty,
+                  assertion = EXCLUDED.assertion,
+                  reason = EXCLUDED.reason,
+                  options = EXCLUDED.options,
+                  correct_answer = EXCLUDED.correct_answer,
+                  points = EXCLUDED.points`,
+              [
+                q.id,
+                q.question_text || q.text,
+                q.question_type || q.type || 'mcq',
+                (q.difficulty || 'medium').toLowerCase(),
+                q.assertion || null,
+                q.reason || null,
+                JSON.stringify(opts),
+                typeof ans === 'string' ? JSON.stringify(ans) : JSON.stringify(ans),
+                q.points || 1.0,
+              ]
+            );
+          }
+          try {
+            await pool.query("SELECT setval('cloud_intelligence_questions_id_seq', (SELECT MAX(id) FROM cloud_intelligence_questions))");
+          } catch {}
+          console.log(`Loaded ${seedData.length} questions from cloud_intelligence_seed.json`);
+        }
+      }
+    } catch (seedErr) {
+      console.warn('Could not load cloud_intelligence_seed.json:', seedErr.message);
     }
   }
 }
@@ -319,7 +302,8 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       if (email) {
         await pool.query(
           `INSERT INTO cloud_intelligence_attempts (participant_email, started_at)
-           VALUES ($1, NOW()) ON CONFLICT (participant_email) DO NOTHING`,
+           VALUES ($1, NOW())
+           ON CONFLICT (participant_email) DO UPDATE SET started_at = NOW()`,
           [email]
         );
       }
@@ -333,6 +317,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       res.json({
         questions: result.rows,
         totalCount: result.rows.length,
+        secondsPerQuestion: SECONDS_PER_QUESTION,
       });
     } catch (error) {
       console.error('Participant questions error:', error);
@@ -378,7 +363,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
 
       // Evaluate with 1-mark system (0.6 correctness + 0.4 speed against dynamic 30s/q)
       // Elapsed time comes from the start row written when the questions were fetched;
-      // a browser-supplied number can be set to 0 to fake a perfect speed bonus.
+      // a browser-supplied number is used as fallback.
       const startedRes = await pool.query(
         'SELECT started_at FROM cloud_intelligence_attempts WHERE participant_email = $1',
         [participantEmail.trim().toLowerCase()]
@@ -425,6 +410,12 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
           JSON.stringify(evaluation.breakdown),
         ]
       );
+
+      // Clean up the attempt record after successful submission
+      await pool.query(
+        'DELETE FROM cloud_intelligence_attempts WHERE participant_email = $1',
+        [participantEmail.trim().toLowerCase()]
+      ).catch(() => {});
 
       res.status(201).json({
         success: true,
@@ -682,6 +673,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
   app.post('/api/admin/cloud-intelligence/results/reset', adminMiddleware, async (req, res) => {
     try {
       await pool.query('TRUNCATE TABLE cloud_intelligence_submissions');
+      await pool.query('TRUNCATE TABLE cloud_intelligence_attempts').catch(() => {});
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: 'Failed to reset results' });
@@ -692,6 +684,10 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
   app.delete('/api/admin/cloud-intelligence/results/:id', adminMiddleware, async (req, res) => {
     try {
       const { id } = req.params;
+      const subRes = await pool.query('SELECT participant_email FROM cloud_intelligence_submissions WHERE id = $1', [id]);
+      if (subRes.rows.length > 0 && subRes.rows[0].participant_email) {
+        await pool.query('DELETE FROM cloud_intelligence_attempts WHERE participant_email = $1', [subRes.rows[0].participant_email]).catch(() => {});
+      }
       await pool.query('DELETE FROM cloud_intelligence_submissions WHERE id = $1', [id]);
       res.json({ success: true, deletedId: id });
     } catch (error) {

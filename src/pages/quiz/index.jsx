@@ -94,6 +94,8 @@ export default function QuizParticipantPage() {
   currentIndexRef.current = currentIndex;
   const answersRef = useRef(answers);
   answersRef.current = answers;
+  const questionTimeMapRef = useRef(questionTimeMap);
+  questionTimeMapRef.current = questionTimeMap;
   const timeTakenRef = useRef(timeTaken);
   timeTakenRef.current = timeTaken;
   const participantRef = useRef(participant);
@@ -358,12 +360,13 @@ export default function QuizParticipantPage() {
 
     if (res.ok && res.questions?.length > 0) {
       const qCount = res.questions.length;
-      const dynamicAllottedSeconds = qCount * SECONDS_PER_QUESTION; // 30s per question (0.5 * n minutes)
+      const perQuestionLimit = Number(res.secondsPerQuestion) || SECONDS_PER_QUESTION;
+      const dynamicAllottedSeconds = qCount * perQuestionLimit; // 30s per question (0.5 * n minutes)
 
       // Initialize the persistent per-question timer
       const initialMap = {};
       res.questions.forEach((q) => {
-        initialMap[q.id] = SECONDS_PER_QUESTION;
+        initialMap[q.id] = perQuestionLimit;
       });
 
       setQuestions(res.questions);
@@ -371,6 +374,7 @@ export default function QuizParticipantPage() {
       setAnswers({});
       setMarkedForReview({});
       setQuestionTimeMap(initialMap);
+      questionTimeMapRef.current = initialMap;
       setTimeRemaining(dynamicAllottedSeconds);
       setTimeTaken(0);
 
@@ -408,15 +412,55 @@ export default function QuizParticipantPage() {
         return prev - 1;
       });
 
-      // 2. Decrement only active question's persistent remaining time
+      // 2. Decrement only active question's persistent remaining time & auto-advance if expired
       setQuestionTimeMap((prev) => {
         const curQ = questionsRef.current[currentIndexRef.current];
         if (!curQ) return prev;
         const curTime = prev[curQ.id] !== undefined ? prev[curQ.id] : SECONDS_PER_QUESTION;
-        return {
+        const newTime = Math.max(0, curTime - 1);
+        const updated = {
           ...prev,
-          [curQ.id]: Math.max(0, curTime - 1),
+          [curQ.id]: newTime,
         };
+        questionTimeMapRef.current = updated;
+
+        // If the current question just expired (reached 0s), auto-advance to next available question
+        if (newTime === 0 && curTime > 0) {
+          const allQuestions = questionsRef.current || [];
+          let nextAvailableIndex = -1;
+
+          // Look forwards first (from currentIndex + 1 onwards)
+          for (let i = currentIndexRef.current + 1; i < allQuestions.length; i++) {
+            const q = allQuestions[i];
+            const remaining = updated[q.id] !== undefined ? updated[q.id] : SECONDS_PER_QUESTION;
+            if (remaining > 0) {
+              nextAvailableIndex = i;
+              break;
+            }
+          }
+
+          // If no remaining question ahead, look from start
+          if (nextAvailableIndex === -1) {
+            for (let i = 0; i < currentIndexRef.current; i++) {
+              const q = allQuestions[i];
+              const remaining = updated[q.id] !== undefined ? updated[q.id] : SECONDS_PER_QUESTION;
+              if (remaining > 0) {
+                nextAvailableIndex = i;
+                break;
+              }
+            }
+          }
+
+          if (nextAvailableIndex !== -1) {
+            setCurrentIndex(nextAvailableIndex);
+          } else {
+            // All questions have expired
+            clearInterval(timerRef.current);
+            handleFinalSubmit(true, 'Assessment auto-submitted: 30-second time expired for all questions.');
+          }
+        }
+
+        return updated;
       });
 
       setTimeTaken((prev) => prev + 1);
@@ -513,14 +557,35 @@ export default function QuizParticipantPage() {
 
   // ── Question Answer Helpers ──────────────────────────────────
   const currentQuestion = questions[currentIndex] || null;
+  const isCurrentQuestionExpired = currentQuestion
+    ? (questionTimeMap[currentQuestion.id] !== undefined ? questionTimeMap[currentQuestion.id] : (quizInfo.secondsPerQuestion || SECONDS_PER_QUESTION)) <= 0
+    : false;
+
+  const getPrevUnexpiredIndex = useCallback(() => {
+    for (let i = currentIndex - 1; i >= 0; i--) {
+      const q = questions[i];
+      const remaining = questionTimeMap[q.id] !== undefined ? questionTimeMap[q.id] : (quizInfo.secondsPerQuestion || SECONDS_PER_QUESTION);
+      if (remaining > 0) return i;
+    }
+    return -1;
+  }, [currentIndex, questions, questionTimeMap, quizInfo.secondsPerQuestion]);
+
+  const getNextUnexpiredIndex = useCallback(() => {
+    for (let i = currentIndex + 1; i < questions.length; i++) {
+      const q = questions[i];
+      const remaining = questionTimeMap[q.id] !== undefined ? questionTimeMap[q.id] : (quizInfo.secondsPerQuestion || SECONDS_PER_QUESTION);
+      if (remaining > 0) return i;
+    }
+    return -1;
+  }, [currentIndex, questions, questionTimeMap, quizInfo.secondsPerQuestion]);
 
   const handleSelectMCQ = (optionText) => {
-    if (!currentQuestion) return;
+    if (!currentQuestion || isCurrentQuestionExpired) return;
     setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionText }));
   };
 
   const handleToggleMultiSelect = (optionText) => {
-    if (!currentQuestion) return;
+    if (!currentQuestion || isCurrentQuestionExpired) return;
     const current = Array.isArray(answers[currentQuestion.id]) ? [...answers[currentQuestion.id]] : [];
     if (current.includes(optionText)) {
       const idx = current.indexOf(optionText);
@@ -532,12 +597,12 @@ export default function QuizParticipantPage() {
   };
 
   const handleObjectiveChange = (text) => {
-    if (!currentQuestion) return;
+    if (!currentQuestion || isCurrentQuestionExpired) return;
     setAnswers((prev) => ({ ...prev, [currentQuestion.id]: text }));
   };
 
   const toggleMarkForReview = () => {
-    if (!currentQuestion) return;
+    if (!currentQuestion || isCurrentQuestionExpired) return;
     setMarkedForReview((prev) => ({ ...prev, [currentQuestion.id]: !prev[currentQuestion.id] }));
   };
 
@@ -1005,6 +1070,14 @@ export default function QuizParticipantPage() {
               {/* Left: Question Card (3 cols) */}
               <div className="lg:col-span-3 flex flex-col justify-between bg-[#12161f] border border-white/10 p-6 md:p-8">
                 <div>
+                  {/* Expired Warning Banner */}
+                  {isCurrentQuestionExpired && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2 mb-6 font-mono">
+                      <span className="material-symbols-outlined text-sm">lock_clock</span>
+                      <span>Time for this question has expired (0s). Options and modifications are strictly locked.</span>
+                    </div>
+                  )}
+
                   {/* Question Header */}
                   <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
                     <div className="flex items-center gap-2">
@@ -1016,10 +1089,13 @@ export default function QuizParticipantPage() {
                     <button
                       type="button"
                       onClick={toggleMarkForReview}
-                      className={`px-3 py-1 text-xs border flex items-center gap-1 cursor-pointer transition-colors ${
-                        markedForReview[currentQuestion.id]
-                          ? 'bg-purple-500/20 text-purple-300 border-purple-500/50'
-                          : 'bg-white/5 text-[#dbc2ad] border-white/10 hover:bg-white/10'
+                      disabled={isCurrentQuestionExpired}
+                      className={`px-3 py-1 text-xs border flex items-center gap-1 transition-colors ${
+                        isCurrentQuestionExpired
+                          ? 'opacity-40 cursor-not-allowed border-white/10 text-white/40'
+                          : markedForReview[currentQuestion.id]
+                          ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 cursor-pointer'
+                          : 'bg-white/5 text-[#dbc2ad] border-white/10 hover:bg-white/10 cursor-pointer'
                       }`}
                     >
                       <span className="material-symbols-outlined text-xs">flag</span>
@@ -1057,11 +1133,16 @@ export default function QuizParticipantPage() {
                           <button
                             type="button"
                             key={idx}
+                            disabled={isCurrentQuestionExpired}
                             onClick={() => handleSelectMCQ(opt)}
-                            className={`w-full p-4 text-left border flex items-center gap-3 cursor-pointer transition-all ${
-                              isSelected
-                                ? 'bg-[#FF9900]/15 border-[#FF9900] text-white shadow-lg'
-                                : 'bg-white/2 border-white/10 text-white/80 hover:bg-white/5'
+                            className={`w-full p-4 text-left border flex items-center gap-3 transition-all ${
+                              isCurrentQuestionExpired
+                                ? isSelected
+                                  ? 'bg-white/10 border-white/30 text-white/70 cursor-not-allowed opacity-70'
+                                  : 'bg-white/2 border-white/5 text-white/30 cursor-not-allowed opacity-50'
+                                : isSelected
+                                ? 'bg-[#FF9900]/15 border-[#FF9900] text-white shadow-lg cursor-pointer'
+                                : 'bg-white/2 border-white/10 text-white/80 hover:bg-white/5 cursor-pointer'
                             }`}
                           >
                             <span
@@ -1092,11 +1173,16 @@ export default function QuizParticipantPage() {
                           <button
                             type="button"
                             key={idx}
+                            disabled={isCurrentQuestionExpired}
                             onClick={() => handleToggleMultiSelect(opt)}
-                            className={`w-full p-4 text-left border flex items-center gap-3 cursor-pointer transition-all ${
-                              isSelected
-                                ? 'bg-emerald-500/15 border-emerald-500 text-emerald-200 shadow-lg'
-                                : 'bg-white/2 border-white/10 text-white/80 hover:bg-white/5'
+                            className={`w-full p-4 text-left border flex items-center gap-3 transition-all ${
+                              isCurrentQuestionExpired
+                                ? isSelected
+                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200/60 cursor-not-allowed opacity-70'
+                                  : 'bg-white/2 border-white/5 text-white/30 cursor-not-allowed opacity-50'
+                                : isSelected
+                                ? 'bg-emerald-500/15 border-emerald-500 text-emerald-200 shadow-lg cursor-pointer'
+                                : 'bg-white/2 border-white/10 text-white/80 hover:bg-white/5 cursor-pointer'
                             }`}
                           >
                             <span
@@ -1122,9 +1208,14 @@ export default function QuizParticipantPage() {
                       <input
                         type="text"
                         placeholder="Type answer here..."
+                        disabled={isCurrentQuestionExpired}
                         value={answers[currentQuestion.id] || ''}
                         onChange={(e) => handleObjectiveChange(e.target.value)}
-                        className="w-full bg-white/5 border border-white/20 p-4 text-white text-sm focus:outline-none focus:border-[#FF9900]"
+                        className={`w-full bg-white/5 border p-4 text-sm focus:outline-none transition-colors ${
+                          isCurrentQuestionExpired
+                            ? 'border-white/10 text-white/40 cursor-not-allowed opacity-60'
+                            : 'border-white/20 text-white focus:border-[#FF9900]'
+                        }`}
                       />
                     </div>
                   )}
@@ -1134,26 +1225,35 @@ export default function QuizParticipantPage() {
                 <div className="flex items-center justify-between border-t border-white/10 pt-6 mt-8">
                   <button
                     type="button"
-                    onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-                    disabled={currentIndex === 0}
+                    onClick={() => {
+                      const prevIdx = getPrevUnexpiredIndex();
+                      if (prevIdx !== -1) setCurrentIndex(prevIdx);
+                    }}
+                    disabled={getPrevUnexpiredIndex() === -1}
                     className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-white text-xs border border-white/10 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                    title={getPrevUnexpiredIndex() === -1 ? 'No previous active questions available' : 'Navigate to previous unexpired question'}
                   >
                     ← Previous
                   </button>
 
                   <button
                     type="button"
+                    disabled={isCurrentQuestionExpired}
                     onClick={() => setAnswers((prev) => ({ ...prev, [currentQuestion.id]: undefined }))}
-                    className="text-[11px] text-white/40 hover:text-red-400 cursor-pointer"
+                    className="text-[11px] text-white/40 hover:text-red-400 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     Clear Response
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setCurrentIndex((prev) => Math.min(questions.length - 1, prev + 1))}
-                    disabled={currentIndex === questions.length - 1}
+                    onClick={() => {
+                      const nextIdx = getNextUnexpiredIndex();
+                      if (nextIdx !== -1) setCurrentIndex(nextIdx);
+                    }}
+                    disabled={getNextUnexpiredIndex() === -1}
                     className="px-5 py-2.5 bg-[#FF9900] hover:bg-[#ffb86f] text-black font-bold text-xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                    title={getNextUnexpiredIndex() === -1 ? 'No next active questions available' : 'Navigate to next unexpired question'}
                   >
                     Next →
                   </button>
@@ -1175,25 +1275,34 @@ export default function QuizParticipantPage() {
                         !(Array.isArray(answers[q.id]) && answers[q.id].length === 0);
                       const isReview = markedForReview[q.id];
                       const isCurrent = currentIndex === idx;
+                      const qRemaining = questionTimeMap[q.id] !== undefined ? questionTimeMap[q.id] : (quizInfo.secondsPerQuestion || SECONDS_PER_QUESTION);
+                      const isExpired = qRemaining <= 0;
 
                       return (
                         <button
                           type="button"
                           key={q.id}
-                          onClick={() => setCurrentIndex(idx)}
-                          className={`w-full aspect-square flex items-center justify-center font-bold text-xs border cursor-pointer transition-all ${
+                          disabled={isExpired}
+                          onClick={() => {
+                            if (!isExpired) setCurrentIndex(idx);
+                          }}
+                          title={isExpired ? `Question ${idx + 1}: Time Expired (Locked)` : `Question ${idx + 1} (${qRemaining}s remaining)`}
+                          className={`w-full aspect-square flex flex-col items-center justify-center font-bold text-xs border transition-all ${
                             isCurrent
                               ? 'ring-2 ring-[#FF9900] border-[#FF9900]'
                               : ''
                           } ${
-                            isAnswered
-                              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                            isExpired
+                              ? 'bg-red-950/20 text-red-400/40 border-red-500/20 cursor-not-allowed opacity-50'
+                              : isAnswered
+                              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 cursor-pointer hover:bg-emerald-500/30'
                               : isReview
-                              ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
-                              : 'bg-white/3 text-white/50 border-white/5 hover:bg-white/10'
+                              ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 cursor-pointer hover:bg-purple-500/30'
+                              : 'bg-white/3 text-white/50 border-white/5 hover:bg-white/10 cursor-pointer'
                           }`}
                         >
-                          {idx + 1}
+                          <span>{idx + 1}</span>
+                          {isExpired && <span className="text-[8px] text-red-400 leading-none">🔒</span>}
                         </button>
                       );
                     })}
@@ -1213,6 +1322,10 @@ export default function QuizParticipantPage() {
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 bg-white/10 border border-white/20 rounded-sm" />
                     <span>Unanswered ({questions.length - answeredCount})</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-red-950/40 border border-red-500/40 rounded-sm flex items-center justify-center text-[8px] text-red-400">🔒</span>
+                    <span>Locked / Timed Out (0s)</span>
                   </div>
                 </div>
               </div>
