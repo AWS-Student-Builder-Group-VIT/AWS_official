@@ -50,7 +50,7 @@ function AdminLogin({ onLogin }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0C10] flex items-center justify-center px-4"
+    <div className="font-product min-h-screen bg-[#0A0C10] flex items-center justify-center px-4"
       style={{ backgroundImage: 'linear-gradient(to right,rgba(255,255,255,0.04) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.04) 1px,transparent 1px)', backgroundSize: '80px 80px' }}>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
@@ -58,7 +58,7 @@ function AdminLogin({ onLogin }) {
             <span className="w-2 h-2 rounded-full bg-[#FF9900] animate-pulse" />
             Admin Access
           </div>
-          <h1 className="font-mono text-3xl sm:text-4xl font-bold text-white tracking-widest leading-tight">ADMIN<br /><span className="text-[#FF9900]">PANEL</span></h1>
+          <h1 className="text-3xl sm:text-4xl font-semibold text-white tracking-tight leading-tight">Admin<br /><span className="text-[#FF9900]">Panel</span></h1>
           <p className="font-mono text-xs text-[#dbc2ad] mt-2">AWS Student Builder Group</p>
         </div>
 
@@ -212,38 +212,41 @@ function Dashboard({ token, onLogout }) {
     });
 
   return (
-    <div className="min-h-screen bg-[#0A0C10] text-white"
+    <div className="font-product min-h-screen bg-[#0A0C10] text-white"
       style={{ backgroundImage: 'linear-gradient(to right,rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.03) 1px,transparent 1px)', backgroundSize: '80px 80px' }}>
 
       {/* Header */}
       <div className="border-b border-white/8 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-[#FF9900] animate-pulse" />
-          <span className="font-mono text-sm font-bold text-[#FF9900] uppercase tracking-widest">Admin Dashboard</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-[#FF9900]" />
+          <div>
+            <p className="text-sm font-semibold text-white leading-tight">Admin Dashboard</p>
+            <p className="text-[11px] text-[#dbc2ad]">AWS Student Builder Group</p>
+          </div>
         </div>
 
         {/* Center Tab Switcher */}
         <div className="flex justify-center">
-          <div className="flex bg-white/5 border border-white/10 p-1 rounded font-mono text-xs">
+          <div className="flex bg-white/5 border border-white/10 p-1 rounded-lg text-xs">
             <button
               onClick={() => setActiveTab('cloud-intelligence')}
               className={`px-4 py-1.5 uppercase tracking-wider transition-all cursor-pointer ${
                 activeTab === 'cloud-intelligence'
-                  ? 'bg-[#FF9900] text-black font-bold shadow'
+                  ? 'bg-[#FF9900] text-black font-semibold shadow rounded-md'
                   : 'text-[#dbc2ad] hover:text-white'
               }`}
             >
-              🧠 Cloud Intelligence
+              Cloud Intelligence
             </button>
             <button
               onClick={() => setActiveTab('quiz')}
               className={`px-4 py-1.5 uppercase tracking-wider transition-all cursor-pointer ${
                 activeTab === 'quiz'
-                  ? 'bg-[#FF9900] text-black font-bold shadow'
+                  ? 'bg-[#FF9900] text-black font-semibold shadow rounded-md'
                   : 'text-[#dbc2ad] hover:text-white'
               }`}
             >
-              📊 Quizzes &amp; Tests
+              Quizzes &amp; Tests
             </button>
           </div>
         </div>

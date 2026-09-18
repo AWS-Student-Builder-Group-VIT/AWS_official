@@ -396,9 +396,11 @@ export async function fetchPublicQuizInfo() {
 }
 
 /** Fetch randomized quiz questions for participant */
-export async function fetchPublicQuizQuestions() {
+export async function fetchPublicQuizQuestions(email) {
   try {
-    const res = await fetch(`${API_URL}/api/cloud-intelligence/questions`);
+    // The email lets the server record when this participant started.
+    const query = email ? `?email=${encodeURIComponent(email)}` : '';
+    const res = await fetch(`${API_URL}/api/cloud-intelligence/questions${query}`);
     const data = await res.json();
     return res.ok ? { ok: true, questions: data.questions, totalCount: data.totalCount } : { ok: false, error: data.error };
   } catch (error) {

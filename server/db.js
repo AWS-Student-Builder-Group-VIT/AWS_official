@@ -2,7 +2,6 @@ import pkg from 'pg';
 const { Pool } = pkg;
 import dotenv from 'dotenv';
 import fs from 'fs';
-import { PGlite } from '@electric-sql/pglite';
 
 // The workspace keeps a single .env.local at the repository root; plain
 // .env is loaded afterwards so it can fill any gaps without overriding.
@@ -18,7 +17,14 @@ if (process.env.DATABASE_URL) {
     idleTimeoutMillis: 30000,
   });
 } else {
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+    // PGlite writes to disk and keeps nothing between requests, so in production
+    // a missing DATABASE_URL must be an obvious failure, not a silent local database.
+    throw new Error('DATABASE_URL is not set. Refusing to start the embedded development database in production.');
+  }
   console.log('ℹ️ DATABASE_URL not provided. Initializing local embedded PostgreSQL (PGlite)...');
+  // Loaded only here: the package is a devDependency and may be absent in production.
+  const { PGlite } = await import('@electric-sql/pglite');
   const lockFile = './server/.pglite_data/postmaster.pid';
   if (fs.existsSync(lockFile)) {
     try {

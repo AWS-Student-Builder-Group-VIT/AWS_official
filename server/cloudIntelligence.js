@@ -65,6 +65,19 @@ export async function initializeCloudIntelligence(pool) {
     );
   `);
 
+  // 3b. Start times, so the elapsed clock comes from the server, not the browser.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cloud_intelligence_attempts (
+      participant_email VARCHAR(255) PRIMARY KEY,
+      started_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  // One submission per email, enforced by the database and not just a lookup.
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS cloud_intelligence_submissions_email_key
+    ON cloud_intelligence_submissions (LOWER(participant_email));
+  `);
+
   // 4. Seed initial questions in Database if empty (so questions, results, etc. are dynamic & database-backed)
   const qCountRes = await pool.query('SELECT COUNT(*)::int as count FROM cloud_intelligence_questions');
   const existingCount = parseInt(qCountRes.rows[0]?.count || 0, 10);
@@ -233,7 +246,31 @@ export function evaluateQuizSubmission({ questions, userAnswers, timeTakenSecond
   };
 }
 
+/** Correct answers stay hidden while the quiz is open, so nobody can farm them. */
+function hideAnswers(breakdown) {
+  const rows = Array.isArray(breakdown) ? breakdown : [];
+  return rows.map((row) => {
+    const copy = { ...row };
+    delete copy.correctAnswer;
+    return copy;
+  });
+}
+
+/** What a participant may see: no answer key while the quiz is open, never someone else's answers. */
+function publicSubmission(row, revealAnswers) {
+  if (!row) return row;
+  const safe = { ...row };
+  delete safe.answers;
+  delete safe.participant_reg_no;
+  safe.breakdown = revealAnswers ? row.breakdown : hideAnswers(row.breakdown);
+  return safe;
+}
+
 export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) {
+  const quizStatus = async () => {
+    const r = await pool.query("SELECT value FROM cloud_intelligence_settings WHERE key = 'status'");
+    return r.rows[0]?.value === 'unfrozen' ? 'unfrozen' : 'frozen';
+  };
   // ── Public / Participant Quiz Endpoints ──────────────────────
 
   // 1. Get Quiz Public Info
@@ -273,6 +310,16 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
         return res.status(403).json({ error: 'Quiz is currently frozen by the administrator.' });
       }
 
+      // The clock starts here, on the server. The browser's own number is only a fallback.
+      const email = String(req.query.email || '').trim().toLowerCase();
+      if (email) {
+        await pool.query(
+          `INSERT INTO cloud_intelligence_attempts (participant_email, started_at)
+           VALUES ($1, NOW()) ON CONFLICT (participant_email) DO NOTHING`,
+          [email]
+        );
+      }
+
       const result = await pool.query(`
         SELECT id, question_text, question_type, difficulty, assertion, reason, options
         FROM cloud_intelligence_questions
@@ -304,6 +351,10 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
         return res.status(400).json({ error: 'Participant name and email are required.' });
       }
 
+      if (await quizStatus() !== 'unfrozen') {
+        return res.status(403).json({ error: 'The quiz is closed. Submissions are not being accepted.' });
+      }
+
       // Check duplicate submission
       const existing = await pool.query(
         'SELECT * FROM cloud_intelligence_submissions WHERE LOWER(participant_email) = LOWER($1) ORDER BY submitted_at DESC LIMIT 1',
@@ -312,7 +363,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       if (existing.rows.length > 0) {
         return res.status(409).json({
           error: 'You have already submitted this assessment.',
-          submission: existing.rows[0],
+          submission: publicSubmission(existing.rows[0], await quizStatus() !== 'unfrozen'),
         });
       }
 
@@ -322,10 +373,22 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       const allottedSeconds = Math.max(90, totalQuestions * 90);
 
       // Evaluate with 1-mark system (0.6 correctness + 0.4 speed against dynamic 90s/q)
+      // Elapsed time comes from the start row written when the questions were fetched;
+      // a browser-supplied number can be set to 0 to fake a perfect speed bonus.
+      const startedRes = await pool.query(
+        'SELECT started_at FROM cloud_intelligence_attempts WHERE participant_email = $1',
+        [participantEmail.trim().toLowerCase()]
+      );
+      const startedAt = startedRes.rows[0]?.started_at;
+      const elapsedSeconds = startedAt
+        ? Math.max(0, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000))
+        : Math.max(0, Number(timeTakenSeconds) || 0);
+      const measuredTime = Math.min(elapsedSeconds, allottedSeconds);
+
       const evaluation = evaluateQuizSubmission({
         questions: allQuestions,
         userAnswers: answers,
-        timeTakenSeconds: Number(timeTakenSeconds) || 0,
+        timeTakenSeconds: measuredTime,
         allottedSeconds,
       });
 
@@ -352,7 +415,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
           evaluation.correctCount,
           evaluation.incorrectCount,
           evaluation.unansweredCount,
-          Number(timeTakenSeconds) || 0,
+          measuredTime,
           allottedSeconds,
           JSON.stringify(answers),
           JSON.stringify(evaluation.breakdown),
@@ -361,9 +424,13 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
 
       res.status(201).json({
         success: true,
-        submission: insertRes.rows[0],
+        submission: publicSubmission(insertRes.rows[0], await quizStatus() !== 'unfrozen'),
       });
     } catch (error) {
+      // 23505: two submissions for the same email at the same moment.
+      if (error.code === '23505') {
+        return res.status(409).json({ error: 'You have already submitted this assessment.' });
+      }
       console.error('Quiz submission error:', error);
       res.status(500).json({ error: 'Failed to process assessment: ' + error.message });
     }
@@ -386,7 +453,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
 
       res.json({
         hasSubmitted: true,
-        submission: result.rows[0],
+        submission: publicSubmission(result.rows[0], await quizStatus() !== 'unfrozen'),
       });
     } catch (error) {
       console.error('Check submission error:', error);
