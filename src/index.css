@@ -210,3 +210,22 @@ body {
 body::-webkit-scrollbar {
   display: none;
 }
+
+/* Product Sans is a licensed Google typeface, so it is used when the device
+   already has it and falls back to the closest free geometric sans we load.
+   Scoped to the quiz and admin pages; the rest of the site keeps its fonts.
+   Inside this scope even .font-mono uses it, so the terminal look gives way to
+   a cleaner, more professional one without touching every className. */
+.font-product,
+.font-product .font-mono,
+.font-product input,
+.font-product select,
+.font-product textarea,
+.font-product button {
+  font-family: 'Product Sans', 'Google Sans', 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* Icons are ligatures in their own font: without this they print as words. */
+.font-product .material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+}

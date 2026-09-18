@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import { splitVitName } from '../../recruitment/lib/vit-identity.js';
 import {
   fetchPublicQuizInfo,
   fetchPublicQuizQuestions,
@@ -264,7 +265,10 @@ export default function QuizParticipantPage() {
     }
 
     const email = (payload.email || '').trim().toLowerCase();
-    const name = payload.name || payload.given_name || '';
+    // VIT Google accounts are named "Full Name 25BAI0156": take the registration
+    // number from there so nobody has to type it, and nobody can mistype it.
+    const identity = splitVitName(payload.name || payload.given_name || '');
+    const name = identity.name;
 
     const isVitEmail = email.endsWith('@vitstudent.ac.in') || email.endsWith('@vit.ac.in');
     if (!isVitEmail) {
@@ -279,7 +283,9 @@ export default function QuizParticipantPage() {
     setParticipant((prev) => ({
       ...prev,
       email,
-      name: prev.name || name,
+      name: name || prev.name,
+      regNo: identity.registrationNumber || prev.regNo,
+      regNoFromGoogle: Boolean(identity.registrationNumber),
       googleVerified: true,
     }));
   };
@@ -344,7 +350,7 @@ export default function QuizParticipantPage() {
     }
 
     setLoadingInfo(true);
-    const res = await fetchPublicQuizQuestions();
+    const res = await fetchPublicQuizQuestions(participant.email?.trim().toLowerCase());
     setLoadingInfo(false);
 
     if (res.ok && res.questions?.length > 0) {
@@ -547,30 +553,24 @@ export default function QuizParticipantPage() {
 
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <div className="min-h-screen bg-[#080b11] text-white font-mono selection:bg-[#FF9900] selection:text-black">
+      <div className="font-product min-h-screen bg-[#080b11] text-white selection:bg-[#FF9900] selection:text-black">
         {/* ═══════════════════════════════════════════════════════════
             STAGE 1: STUDENT IDENTIFICATION & GOOGLE OAUTH LOGIN
            ═══════════════════════════════════════════════════════════ */}
         {stage === 'auth' && (
           <div className="min-h-screen flex items-center justify-center p-4 relative">
-            <div className="w-full max-w-lg bg-[#12161f] border border-white/10 p-8 sm:p-10 shadow-2xl relative">
-              <div className="text-center mb-8 space-y-3">
-                <div className="inline-flex items-center gap-2 bg-[#FF9900]/10 border border-[#FF9900]/30 px-3.5 py-1 text-[11px] text-[#FF9900] font-bold uppercase tracking-widest">
-                  <span className="w-2 h-2 rounded-full bg-[#FF9900] animate-pulse" />
+            <div className="w-full max-w-lg bg-[#12161f] border border-white/10 rounded-2xl p-8 sm:p-10 shadow-2xl relative">
+              <div className="text-center mb-8">
+                <div className="inline-flex items-center gap-2 text-[11px] text-[#FF9900] font-medium uppercase tracking-[0.2em]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#FF9900]" />
                   AWS Student Builder Group
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-wider text-white">
-                  CLOUD <span className="text-[#FF9900]">INTELLIGENCE</span>
+                <h1 className="mt-5 text-3xl sm:text-4xl font-semibold tracking-tight text-white">
+                  Cloud <span className="text-[#FF9900]">Intelligence</span>
                 </h1>
-                {/* Official Motto */}
-                <div className="flex items-center justify-center gap-2 text-xs font-bold tracking-widest text-[#FF9900]">
-                  <span>BUILD</span>
-                  <span className="text-white/30">•</span>
-                  <span>LEARN</span>
-                  <span className="text-white/30">•</span>
-                  <span>DEPLOY</span>
-                </div>
-                <p className="text-xs text-[#dbc2ad] pt-1">Official Event Participant Examination Portal</p>
+                <p className="mt-3 text-sm text-[#dbc2ad]">Event assessment portal</p>
+                <p className="mt-1 text-xs text-white/40">Build · Learn · Deploy</p>
+                <div className="mt-6 h-px bg-white/10" />
               </div>
 
               {checkingAttempt && (
@@ -671,7 +671,7 @@ export default function QuizParticipantPage() {
                           placeholder="e.g. Alex Johnson"
                           value={participant.name}
                           onChange={(e) => setParticipant({ ...participant, name: e.target.value })}
-                          className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white focus:outline-none focus:border-[#FF9900] transition-colors"
+                          className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white rounded-lg focus:outline-none focus:border-[#FF9900] transition-colors"
                           required
                         />
                       </div>
@@ -683,10 +683,15 @@ export default function QuizParticipantPage() {
                           placeholder="e.g. 22BCE1045"
                           value={participant.regNo}
                           onChange={(e) => setParticipant({ ...participant, regNo: e.target.value })}
-                          className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white uppercase focus:outline-none focus:border-[#FF9900] transition-colors"
+                          readOnly={participant.regNoFromGoogle}
+                          className={`w-full bg-white/5 border border-white/10 px-4 py-3 text-white uppercase rounded-lg focus:outline-none focus:border-[#FF9900] transition-colors ${participant.regNoFromGoogle ? 'opacity-70 cursor-not-allowed' : ''}`}
                           required
                         />
-                        <span className="text-[10px] text-white/40 mt-1 block">Enter your official VIT student registration number.</span>
+                        <span className="text-[10px] text-white/40 mt-1 block">
+                          {participant.regNoFromGoogle
+                            ? 'Taken from your VIT Google account.'
+                            : 'Enter your official VIT student registration number.'}
+                        </span>
                       </div>
 
                       <button
@@ -1324,12 +1329,15 @@ export default function QuizParticipantPage() {
                         </div>
                       </div>
 
-                      <div className="text-right">
-                        <span className="text-[10px] text-emerald-400 block font-bold">Correct Solution:</span>
-                        <code className="bg-black/40 px-2 py-0.5 rounded text-white text-[11px]">
-                          {JSON.stringify(item.correctAnswer)}
-                        </code>
-                      </div>
+                      {/* The answer key is only sent once the admin closes the quiz. */}
+                      {item.correctAnswer !== undefined && (
+                        <div className="text-right">
+                          <span className="text-[10px] text-emerald-400 block font-bold">Correct Solution:</span>
+                          <code className="bg-black/40 px-2 py-0.5 rounded text-white text-[11px]">
+                            {JSON.stringify(item.correctAnswer)}
+                          </code>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
