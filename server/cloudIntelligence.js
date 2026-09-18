@@ -1,3 +1,6 @@
+// Time allowed per question: 0.5 minutes.
+export const SECONDS_PER_QUESTION = 30;
+
 export async function initializeCloudIntelligence(pool) {
   // 1. Questions table
   await pool.query(`
@@ -153,7 +156,7 @@ export async function initializeCloudIntelligence(pool) {
 // - 0.6 Marks for Correctness (60% weightage)
 // - 0.4 Marks for Speed (40% weightage, scaled with accuracy)
 // Total Max Score = Total Questions Count (e.g. 20 Questions = 20.00 Marks)
-export function evaluateQuizSubmission({ questions, userAnswers, timeTakenSeconds, allottedSeconds = 1800 }) {
+export function evaluateQuizSubmission({ questions, userAnswers, timeTakenSeconds, allottedSeconds = 0 }) {
   let correctCount = 0;
   let incorrectCount = 0;
   let unansweredCount = 0;
@@ -219,8 +222,8 @@ export function evaluateQuizSubmission({ questions, userAnswers, timeTakenSecond
   const accuracyScore = correctCount * 0.6;
 
   // 2. Speed Score (Max = Total Questions * 0.4)
-  // Allotted duration is n * 90 seconds (1.5 * n minutes)
-  const totalAllotted = allottedSeconds || (totalQuestions * 90);
+  // Allotted duration is n * 30 seconds (0.5 * n minutes)
+  const totalAllotted = allottedSeconds || (totalQuestions * SECONDS_PER_QUESTION);
   const validAllotted = Math.max(30, totalAllotted);
   const actualTime = Math.min(timeTakenSeconds, validAllotted);
   const timeSavedRatio = Math.max(0, (validAllotted - actualTime) / validAllotted);
@@ -284,9 +287,10 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       const totalQuestions = countRes.rows[0]?.count || 0;
       // Default to frozen unless explicitly set to 'unfrozen'
       const isFrozen = settings.status !== 'unfrozen';
-      // Duration is 1.5 minutes (90 seconds) per question
-      const durationMinutes = totalQuestions > 0 ? Number((totalQuestions * 1.5).toFixed(1)) : 1.5;
-      const allottedSeconds = Math.max(90, totalQuestions * 90);
+      // Duration is 0.5 minutes (30 seconds) per question
+      const perQuestionMinutes = SECONDS_PER_QUESTION / 60;
+      const durationMinutes = Number(((totalQuestions || 1) * perQuestionMinutes).toFixed(1));
+      const allottedSeconds = Math.max(SECONDS_PER_QUESTION, totalQuestions * SECONDS_PER_QUESTION);
 
       res.json({
         title: settings.title || 'Cloud Intelligence Assessment',
@@ -370,9 +374,9 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       const allQuestionsRes = await pool.query('SELECT * FROM cloud_intelligence_questions');
       const allQuestions = allQuestionsRes.rows;
       const totalQuestions = allQuestions.length;
-      const allottedSeconds = Math.max(90, totalQuestions * 90);
+      const allottedSeconds = Math.max(SECONDS_PER_QUESTION, totalQuestions * SECONDS_PER_QUESTION);
 
-      // Evaluate with 1-mark system (0.6 correctness + 0.4 speed against dynamic 90s/q)
+      // Evaluate with 1-mark system (0.6 correctness + 0.4 speed against dynamic 30s/q)
       // Elapsed time comes from the start row written when the questions were fetched;
       // a browser-supplied number can be set to 0 to fake a perfect speed bonus.
       const startedRes = await pool.query(
@@ -617,7 +621,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
 
       const countRes = await pool.query('SELECT COUNT(*)::int as count FROM cloud_intelligence_questions');
       const qCount = countRes.rows[0]?.count || 0;
-      settings.duration_minutes = qCount > 0 ? Number((qCount * 1.5).toFixed(1)) : 1.5;
+      settings.duration_minutes = Number(((qCount || 1) * (SECONDS_PER_QUESTION / 60)).toFixed(1));
 
       res.json(settings);
     } catch (error) {

@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { splitVitName } from '../../recruitment/lib/vit-identity.js';
+
+// Time allowed per question: 0.5 minutes. Keep in step with the server.
+const SECONDS_PER_QUESTION = 30;
 import {
   fetchPublicQuizInfo,
   fetchPublicQuizQuestions,
@@ -168,8 +171,8 @@ export default function QuizParticipantPage() {
     const res = await fetchPublicQuizInfo();
     if (res.ok) {
       const qCount = res.totalQuestions || 0;
-      const calculatedDuration = qCount > 0 ? Number((qCount * 1.5).toFixed(1)) : 1.5;
-      const calculatedAllotted = Math.max(90, qCount * 90);
+      const calculatedDuration = Number(((qCount || 1) * (SECONDS_PER_QUESTION / 60)).toFixed(1));
+      const calculatedAllotted = Math.max(SECONDS_PER_QUESTION, qCount * SECONDS_PER_QUESTION);
 
       setQuizInfo({
         title: res.title || 'Cloud Intelligence Assessment',
@@ -355,12 +358,12 @@ export default function QuizParticipantPage() {
 
     if (res.ok && res.questions?.length > 0) {
       const qCount = res.questions.length;
-      const dynamicAllottedSeconds = qCount * 90; // 90s per question (1.5 * n minutes)
+      const dynamicAllottedSeconds = qCount * SECONDS_PER_QUESTION; // 30s per question (0.5 * n minutes)
 
       // Initialize persistent 90s timer per question
       const initialMap = {};
       res.questions.forEach((q) => {
-        initialMap[q.id] = 90;
+        initialMap[q.id] = SECONDS_PER_QUESTION;
       });
 
       setQuestions(res.questions);
@@ -409,7 +412,7 @@ export default function QuizParticipantPage() {
       setQuestionTimeMap((prev) => {
         const curQ = questionsRef.current[currentIndexRef.current];
         if (!curQ) return prev;
-        const curTime = prev[curQ.id] !== undefined ? prev[curQ.id] : 90;
+        const curTime = prev[curQ.id] !== undefined ? prev[curQ.id] : SECONDS_PER_QUESTION;
         return {
           ...prev,
           [curQ.id]: Math.max(0, curTime - 1),
@@ -849,7 +852,7 @@ export default function QuizParticipantPage() {
                       <span>Accuracy &amp; Quickness Weightage</span>
                     </div>
                     <p className="leading-relaxed text-white/90">
-                      Total duration is strictly <strong>1.5 Minutes (90 seconds) per question</strong>. Each question is worth <strong>1 Mark Total</strong>, split into <strong>0.6 for Correctness (60%)</strong> and <strong>0.4 for Speed (40%)</strong>.
+                      Total duration is strictly <strong>30 seconds per question</strong>. Each question is worth <strong>1 Mark Total</strong>, split into <strong>0.6 for Correctness (60%)</strong> and <strong>0.4 for Speed (40%)</strong>.
                     </p>
                     <p className="text-[#dbc2ad] leading-relaxed">
                       💡 <em>Quickness scoring scales with each question you answer correctly. Fast answers combined with high accuracy maximize your speed bonus!</em>
@@ -958,7 +961,7 @@ export default function QuizParticipantPage() {
                 {/* 1. Current Question Persistent Timer (out of 90s) */}
                 <div
                   className={`flex items-center gap-2 px-3 py-1.5 border font-bold text-xs ${
-                    (questionTimeMap[currentQuestion.id] ?? 90) <= 15
+                    (questionTimeMap[currentQuestion.id] ?? SECONDS_PER_QUESTION) <= 10
                       ? 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse'
                       : 'bg-white/5 text-[#00a8e0] border-[#00a8e0]/40'
                   }`}
@@ -967,7 +970,7 @@ export default function QuizParticipantPage() {
                   <span className="material-symbols-outlined text-sm">schedule</span>
                   <div className="flex flex-col text-[10px] leading-tight">
                     <span className="text-white/50 text-[9px] uppercase font-mono">Q.{currentIndex + 1} Time</span>
-                    <span className="text-xs font-bold">{formatTimer(questionTimeMap[currentQuestion.id] ?? 90)}</span>
+                    <span className="text-xs font-bold">{formatTimer(questionTimeMap[currentQuestion.id] ?? SECONDS_PER_QUESTION)}</span>
                   </div>
                 </div>
 
