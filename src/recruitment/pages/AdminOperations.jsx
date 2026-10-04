@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Activity, CalendarClock, CheckCircle2, ClipboardCheck, Download, FilePlus2, FolderKanban, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react';
+import { Activity, CalendarClock, CheckCircle2, ClipboardCheck, Download, FilePlus2, FolderKanban, RefreshCw, Search, ShieldCheck, Users, X } from 'lucide-react';
 import { createClient } from '../lib/supabase.js';
 import { formatDateTime } from '../lib/utils.js';
-import { candidateCsvRow } from '../lib/admin-export.js';
 import QuestionBank from './QuestionBank.jsx';
 
 const emptyPayload = { admin: { id: '', email: '', name: '', role: '' }, candidates: [], attempts: [], assignments: [], submissions: [], bookings: [], results: [], domains: [], slots: [], written_questions: [], written_rules: [], subdomain_lookup: {}, synced_at: '' };
@@ -29,6 +28,9 @@ export default function AdminOperations() {
   const [sort, setSort] = useState('newest');
   const [showQuestionBank, setShowQuestionBank] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportDomainId, setExportDomainId] = useState('');
+  const [exportQualFilter, setExportQualFilter] = useState('qualified');
 
   const load = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true); else setLoading(true);
@@ -102,36 +104,68 @@ export default function AdminOperations() {
     return result;
   }, [supabase]);
 
-  async function exportCsv() {
-    setExporting(true);
-    setError('');
-    // Every answer, a page at a time, so no single response grows too large.
-    const allAnswers = {};
-    try {
-      for (let offset = 0; offset != null;) {
-        const page = await adminFetch(`/api/recruitment/admin/written-answers?offset=${offset}&limit=400`);
-        for (const answer of page.answers ?? []) (allAnswers[answer.candidate_id] ??= []).push(answer);
-        offset = page.nextOffset;
-      }
-    } catch (err) {
-      setError(`Export failed: ${err.message}`);
-      setExporting(false);
-      return;
-    }
-    exportRows(allAnswers);
-    setExporting(false);
+  function openExportModal() {
+    setExportDomainId(payload.domains[0]?.id ?? '');
+    setExportQualFilter('qualified');
+    setShowExportModal(true);
   }
 
-  function exportRows(allAnswers) {
-    const quote = (v) => `"${String(v ?? '').replaceAll('"', '""')}"`;
-    const rows = filtered.map(({ profile, attempt, assignments, bookings, result }) => {
-      const writtenAnswers = allAnswers[profile.id] ?? [];
-      const exportRow = candidateCsvRow({ profile, choices: [...(profile.subdomain_choices ?? [])].sort((a, b) => a.priority - b.priority).map(choiceLabel), writtenAnswers: writtenAnswers.map((a) => ({ domain: a.domain?.name ?? 'Domain', prompt: a.question?.prompt ?? 'Question', answer: a.answer_text, links: a.submission_links })) });
-      return [exportRow.registration_number, exportRow.full_name, profile.email, profile.phone, profile.year, profile.branch, exportRow.choices, exportRow.written_responses, profile.status, attempt?.score, attempt?.total_marks, assignments.map((a) => a.project?.code).join(' | '), bookings.map((b) => `${b.slot?.date?.date ?? ''} ${b.slot?.slot_time ?? ''}`).join(' | '), result?.result];
-    });
-    const csv = [['Registration', 'Name', 'Email', 'Phone', 'Year', 'Branch', 'Choices', 'Written responses', 'Status', 'R1 score', 'R1 total', 'R2 projects', 'R3 interviews', 'Final'], ...rows].map((row) => row.map(quote).join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    const a = document.createElement('a'); a.href = url; a.download = `recruitment-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+  async function runExport() {
+    if (!exportDomainId) return;
+    setExporting(true);
+    setError('');
+    try {
+      // Determine which domain object was selected
+      const domain = payload.domains.find((d) => d.id === exportDomainId);
+      const domainName = domain?.name ?? 'Domain';
+
+      // Collect every candidate that registered for this domain
+      const domainCandidates = records.filter((record) =>
+        (record.profile.subdomain_choices ?? []).some(
+          (c) => c.subdomain?.domain_id === exportDomainId,
+        ),
+      );
+
+      // For each candidate determine if they are qualified in THIS domain.
+      // – Technical domains  → qualification is on the assessment_attempt (admin_qualified)
+      // – Non-technical      → we derive from the attempt too (admin_qualified on attempt)
+      //   The attempt carries domain_id so we can match it precisely.
+      const qualify = (record) => {
+        // Find attempt(s) for this domain
+        const domainAttempt = payload.attempts.find(
+          (a) => a.candidate_id === record.profile.id && a.domain_id === exportDomainId,
+        );
+        if (domainAttempt) return domainAttempt.admin_qualified === true;
+        // Fallback: if no attempt exists, treat as not qualified
+        return false;
+      };
+
+      const toExport = domainCandidates.filter((record) => {
+        const isQualified = qualify(record);
+        if (exportQualFilter === 'qualified') return isQualified;
+        if (exportQualFilter === 'not_qualified') return !isQualified;
+        return true; // 'all'
+      });
+
+      const quote = (v) => `"${String(v ?? '').replaceAll('"', '""')}"`;
+      const headers = ['Name', 'Email', 'Phone', 'Branch', 'Domain'];
+      const rows = toExport.map(({ profile }) => [
+        profile.full_name,
+        profile.email,
+        profile.phone,
+        profile.branch,
+        domainName,
+      ]);
+      const csv = [headers, ...rows].map((row) => row.map(quote).join(',')).join('\n');
+      const label = exportQualFilter === 'all' ? 'all' : exportQualFilter;
+      const filename = `${domainName.toLowerCase().replace(/\s+/g, '-')}-${label}-${new Date().toISOString().slice(0, 10)}.csv`;
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+      setShowExportModal(false);
+    } catch (err) {
+      setError(`Export failed: ${err.message}`);
+    }
+    setExporting(false);
   }
 
   if (loading) return <div className="grid min-h-screen place-items-center" style={{ background: '#080a0d' }}><div className="text-center"><RefreshCw className="mx-auto animate-spin" style={{ color: 'var(--accent)' }} /><p className="mt-3 font-mono text-xs" style={{ color: 'var(--muted)' }}>BUFFERING OPERATIONS DATA…</p></div></div>;
@@ -175,7 +209,7 @@ export default function AdminOperations() {
         <span><strong style={{ color: 'var(--accent)' }}>{filtered.length}</strong> OF {records.length} CANDIDATES DISPLAYED</span>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setShowQuestionBank(true)} className="inline-flex items-center gap-2 border px-3 py-2 transition" style={{ borderColor: 'rgba(255,153,0,.6)', background: 'rgba(255,153,0,.1)', color: 'var(--accent)' }}><FilePlus2 size={13} />QUESTION BANK</button>
-          <button onClick={exportCsv} disabled={exporting} className="inline-flex items-center gap-2 border px-3 py-2 transition disabled:opacity-50" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}><Download size={13} />{exporting ? 'EXPORTING…' : 'EXPORT CSV'}</button>
+          <button onClick={openExportModal} disabled={exporting} className="inline-flex items-center gap-2 border px-3 py-2 transition disabled:opacity-50" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}><Download size={13} />{exporting ? 'EXPORTING…' : 'EXPORT CSV'}</button>
           <button onClick={() => load(true)} disabled={refreshing} className="inline-flex items-center gap-2 border px-3 py-2 transition disabled:opacity-50" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}><RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />SYNC LIVE</button>
         </div>
       </div>
@@ -243,6 +277,135 @@ export default function AdminOperations() {
       </footer>
 
       {showQuestionBank && <QuestionBank domains={payload.domains} onClose={() => setShowQuestionBank(false)} />}
+
+      {showExportModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Export CSV"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowExportModal(false); }}
+        >
+          <div
+            className="w-full max-w-md border"
+            style={{ background: '#0d0f14', borderColor: 'var(--border)' }}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-2">
+                <Download size={15} style={{ color: 'var(--accent)' }} />
+                <span className="font-mono text-xs font-bold tracking-widest" style={{ color: 'var(--accent)' }}>EXPORT CSV</span>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                aria-label="Close export modal"
+                className="border p-1 transition hover:border-[var(--accent)]"
+                style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+              >
+                <X size={13} />
+              </button>
+            </div>
+
+            {/* Modal body */}
+            <div className="space-y-5 px-4 py-5">
+              <p className="font-mono text-[10px] leading-relaxed" style={{ color: 'var(--muted)' }}>
+                Select a domain and qualification status. Each student registered in the chosen domain
+                will appear in the CSV — if they registered in multiple domains they will be listed
+                per domain based on their qualification in <em>that</em> domain.
+              </p>
+
+              {/* Domain selector */}
+              <label className="block">
+                <span className="mb-1 block font-mono text-[9px] uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Domain</span>
+                <select
+                  id="export-domain-select"
+                  value={exportDomainId}
+                  onChange={(e) => setExportDomainId(e.target.value)}
+                  className="w-full border px-3 py-2 font-mono text-xs"
+                  style={{ borderColor: 'var(--border)', background: '#060709', color: 'var(--text)' }}
+                >
+                  {payload.domains.map((d) => {
+                    const count = records.filter((r) =>
+                      (r.profile.subdomain_choices ?? []).some((c) => c.subdomain?.domain_id === d.id)
+                    ).length;
+                    return (
+                      <option key={d.id} value={d.id}>
+                        {d.name} ({count} registered)
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+
+              {/* Qualification filter */}
+              <label className="block">
+                <span className="mb-1 block font-mono text-[9px] uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Qualification status</span>
+                <select
+                  id="export-qual-select"
+                  value={exportQualFilter}
+                  onChange={(e) => setExportQualFilter(e.target.value)}
+                  className="w-full border px-3 py-2 font-mono text-xs"
+                  style={{ borderColor: 'var(--border)', background: '#060709', color: 'var(--text)' }}
+                >
+                  <option value="qualified">Qualified only</option>
+                  <option value="not_qualified">Not qualified only</option>
+                  <option value="all">All (qualified + not qualified)</option>
+                </select>
+              </label>
+
+              {/* Preview count */}
+              {exportDomainId && (() => {
+                const domainCandidates = records.filter((r) =>
+                  (r.profile.subdomain_choices ?? []).some((c) => c.subdomain?.domain_id === exportDomainId)
+                );
+                const qualify = (record) => {
+                  const domainAttempt = payload.attempts.find(
+                    (a) => a.candidate_id === record.profile.id && a.domain_id === exportDomainId,
+                  );
+                  return domainAttempt ? domainAttempt.admin_qualified === true : false;
+                };
+                const count = domainCandidates.filter((record) => {
+                  if (exportQualFilter === 'qualified') return qualify(record);
+                  if (exportQualFilter === 'not_qualified') return !qualify(record);
+                  return true;
+                }).length;
+                return (
+                  <div className="border px-3 py-2 font-mono text-[10px]" style={{ borderColor: 'rgba(255,153,0,.3)', background: 'rgba(255,153,0,.05)' }}>
+                    <span style={{ color: 'var(--muted)' }}>ROWS IN CSV: </span>
+                    <strong style={{ color: 'var(--accent)' }}>{count}</strong>
+                    <span style={{ color: 'var(--dim)' }}> candidates</span>
+                  </div>
+                );
+              })()}
+
+              <p className="font-mono text-[9px] leading-relaxed" style={{ color: 'var(--dim)' }}>
+                CSV columns: <strong style={{ color: 'var(--muted)' }}>Name · Email · Phone · Branch · Domain</strong>
+              </p>
+            </div>
+
+            {/* Modal footer */}
+            <div className="flex items-center justify-end gap-3 border-t px-4 py-3" style={{ borderColor: 'var(--border)' }}>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="border px-4 py-2 font-mono text-[10px] transition"
+                style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+              >
+                CANCEL
+              </button>
+              <button
+                id="export-csv-confirm"
+                onClick={runExport}
+                disabled={!exportDomainId || exporting}
+                className="inline-flex items-center gap-2 border px-4 py-2 font-mono text-[10px] font-bold transition disabled:opacity-50"
+                style={{ borderColor: 'rgba(255,153,0,.6)', background: 'rgba(255,153,0,.15)', color: 'var(--accent)' }}
+              >
+                <Download size={12} />{exporting ? 'EXPORTING…' : 'DOWNLOAD CSV'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
