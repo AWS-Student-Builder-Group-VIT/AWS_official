@@ -127,17 +127,26 @@ export default function AdminOperations() {
       );
 
       // For each candidate determine if they are qualified in THIS domain.
-      // – Technical domains  → qualification is on the assessment_attempt (admin_qualified)
-      // – Non-technical      → we derive from the attempt too (admin_qualified on attempt)
-      //   The attempt carries domain_id so we can match it precisely.
+      // – Technical domain (slug='technical') → qualification lives on assessment_attempt.admin_qualified
+      // – All other domains (Events, Management, etc.) → qualification lives on
+      //   candidate_subdomain_choices.admin_qualified (per-choice, NOT on the attempt)
+      const selectedDomain = payload.domains.find((d) => d.id === exportDomainId);
+      const isTechnical = selectedDomain?.slug === 'technical';
+
       const qualify = (record) => {
-        // Find attempt(s) for this domain
-        const domainAttempt = payload.attempts.find(
-          (a) => a.candidate_id === record.profile.id && a.domain_id === exportDomainId,
-        );
-        if (domainAttempt) return domainAttempt.admin_qualified === true;
-        // Fallback: if no attempt exists, treat as not qualified
-        return false;
+        if (isTechnical) {
+          // Technical: find the attempt for this domain
+          const domainAttempt = payload.attempts.find(
+            (a) => a.candidate_id === record.profile.id && a.domain_id === exportDomainId,
+          );
+          return domainAttempt ? domainAttempt.admin_qualified === true : false;
+        } else {
+          // Non-technical: qualification is stored directly on the subdomain choice row
+          const domainChoices = (record.profile.subdomain_choices ?? []).filter(
+            (c) => c.subdomain?.domain_id === exportDomainId,
+          );
+          return domainChoices.some((c) => c.admin_qualified === true);
+        }
       };
 
       const toExport = domainCandidates.filter((record) => {
@@ -359,11 +368,20 @@ export default function AdminOperations() {
                 const domainCandidates = records.filter((r) =>
                   (r.profile.subdomain_choices ?? []).some((c) => c.subdomain?.domain_id === exportDomainId)
                 );
+                const selectedDomain = payload.domains.find((d) => d.id === exportDomainId);
+                const isTechnical = selectedDomain?.slug === 'technical';
                 const qualify = (record) => {
-                  const domainAttempt = payload.attempts.find(
-                    (a) => a.candidate_id === record.profile.id && a.domain_id === exportDomainId,
-                  );
-                  return domainAttempt ? domainAttempt.admin_qualified === true : false;
+                  if (isTechnical) {
+                    const domainAttempt = payload.attempts.find(
+                      (a) => a.candidate_id === record.profile.id && a.domain_id === exportDomainId,
+                    );
+                    return domainAttempt ? domainAttempt.admin_qualified === true : false;
+                  } else {
+                    const domainChoices = (record.profile.subdomain_choices ?? []).filter(
+                      (c) => c.subdomain?.domain_id === exportDomainId,
+                    );
+                    return domainChoices.some((c) => c.admin_qualified === true);
+                  }
                 };
                 const count = domainCandidates.filter((record) => {
                   if (exportQualFilter === 'qualified') return qualify(record);
