@@ -618,6 +618,7 @@ router.get('/admin/operations', async (req, res) => {
       supabase.from('domains').select('id,name,slug,selection_mode'),
       supabase.from('written_application_questions').select('*').order('sort_order'),
       supabase.from('written_application_rules').select('*'),
+      fetchAll(() => supabase.from('candidate_written_answers').select('candidate_id,domain_id,is_final')),
     ]);
 
     const domainById = new Map((allDomains ?? []).map((d) => [d.id, d]));
@@ -639,6 +640,7 @@ router.get('/admin/operations', async (req, res) => {
       slots,
       written_questions: written_questions ?? [],
       written_rules: written_rules ?? [],
+      written_submissions: written_submissions ?? [],
       synced_at: new Date().toISOString(),
     });
   } catch (err) {

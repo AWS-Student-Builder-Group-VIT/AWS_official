@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Activity, AlertTriangle, CalendarClock, CheckCircle2, ClipboardCheck, Download, FilePlus2, FolderKanban, RefreshCw, Search, ShieldCheck, Users, X } from 'lucide-react';
+import { Activity, AlertCircle, AlertTriangle, CalendarClock, CheckCircle2, ClipboardCheck, Download, FilePlus2, FolderKanban, RefreshCw, RotateCcw, Search, ShieldAlert, ShieldCheck, Users, X } from 'lucide-react';
 import { createClient } from '../lib/supabase.js';
 import { formatDateTime } from '../lib/utils.js';
 import QuestionBank from './QuestionBank.jsx';
 
 const FILTER_STORAGE_KEY = 'ops-filter-v1';
 
-const emptyPayload = { admin: { id: '', email: '', name: '', role: '' }, candidates: [], attempts: [], assignments: [], submissions: [], bookings: [], results: [], domains: [], slots: [], written_questions: [], written_rules: [], subdomain_lookup: {}, synced_at: '' };
+const emptyPayload = { admin: { id: '', email: '', name: '', role: '' }, candidates: [], attempts: [], assignments: [], submissions: [], bookings: [], results: [], domains: [], slots: [], written_questions: [], written_rules: [], written_submissions: [], subdomain_lookup: {}, synced_at: '' };
 const stageOrder = { selected: 8, waitlisted: 7, round_2: 6, round_1: 5, round_0: 4, pending: 3, rejected: 1 };
 
 function readPersistedFilters() {
@@ -27,11 +27,27 @@ function getChoiceQualStatus(record, choice, attempts) {
   const isTechnical = domain?.slug === 'technical';
   if (isTechnical) {
     const domainAttempt = (attempts ?? []).find(
-      (a) => a.candidate_id === record.profile.id && a.domain_id === choice.subdomain?.domain_id,
+      (a) => a.candidate_id === record.profile.id && (a.domain_id === choice.subdomain?.domain_id || a.subdomain_id === choice.subdomain_id),
     );
     return domainAttempt?.admin_qualified ?? null;
   }
   return choice.admin_qualified ?? null;
+}
+
+function isChoiceSubmitted(candidateId, choice, payload) {
+  const domain = choice.subdomain?.domain;
+  const isTechnical = domain?.slug === 'technical';
+  if (isTechnical) {
+    const attempt = (payload.attempts ?? []).find(
+      (a) => a.candidate_id === candidateId && (a.domain_id === choice.subdomain?.domain_id || a.subdomain_id === choice.subdomain_id),
+    );
+    return Boolean(attempt && (attempt.status === 'submitted' || attempt.submitted_at != null || attempt.score != null));
+  }
+  const subs = (payload.written_submissions ?? []).filter(
+    (ws) => ws.candidate_id === candidateId && ws.domain_id === choice.subdomain?.domain_id,
+  );
+  if (subs.length === 0) return false;
+  return subs.some((ws) => ws.is_final) || subs.length > 0;
 }
 
 function getRecordQualStatus(record, domainIds, attempts) {
@@ -84,6 +100,12 @@ export default function AdminOperations() {
   const [bulkDisqualifying, setBulkDisqualifying] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [restoringKey, setRestoringKey] = useState('');
+  const [bulkRestoring, setBulkRestoring] = useState(false);
+  const [restoreProgress, setRestoreProgress] = useState({ done: 0, total: 0 });
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditDomainId, setAuditDomainId] = useState('');
 
   // Persist filter state so it survives navigation to candidate profile and back
   useEffect(() => {
@@ -106,6 +128,15 @@ export default function AdminOperations() {
       const lookup = result.subdomain_lookup ?? {};
       for (const candidate of result.candidates ?? []) {
         for (const choice of candidate.subdomain_choices ?? []) choice.subdomain = lookup[choice.subdomain_id] ?? null;
+      }
+      // Ensure written_submissions is present (fallback to direct supabase query if server hasn't restarted)
+      if (!result.written_submissions || !Array.isArray(result.written_submissions)) {
+        try {
+          const { data: ws } = await supabase.from('candidate_written_answers').select('candidate_id,domain_id,is_final');
+          result.written_submissions = ws ?? [];
+        } catch {
+          result.written_submissions = [];
+        }
       }
       setPayload(result);
     }
@@ -208,10 +239,88 @@ export default function AdminOperations() {
     return result;
   }, [supabase]);
 
+  const answeredDisqualifiedList = useMemo(() => {
+    const list = [];
+    for (const record of records) {
+      const candidateId = record.profile.id;
+      const choices = record.profile.subdomain_choices ?? [];
+      for (const choice of choices) {
+        const domain = choice.subdomain?.domain;
+        if (!domain) continue;
+        const submitted = isChoiceSubmitted(candidateId, choice, payload);
+        const qualStatus = getChoiceQualStatus(record, choice, payload.attempts);
+        if (submitted && qualStatus === false) {
+          list.push({
+            candidateId,
+            profile: record.profile,
+            choice,
+            domain,
+            trackLabel: choiceLabel(choice),
+            isTechnical: domain.slug === 'technical',
+          });
+        }
+      }
+    }
+    return list;
+  }, [records, payload]);
+
+  const filteredAuditList = useMemo(() => {
+    const q = auditSearch.trim().toLowerCase();
+    return answeredDisqualifiedList.filter((item) => {
+      const matchDomain = !auditDomainId || item.domain.id === auditDomainId;
+      const matchSearch =
+        !q ||
+        [item.profile.full_name, item.profile.registration_number, item.profile.email, item.trackLabel]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(q);
+      return matchDomain && matchSearch;
+    });
+  }, [answeredDisqualifiedList, auditSearch, auditDomainId]);
+
+  async function markToPending(candidateId, subdomainId) {
+    const key = `${candidateId}_${subdomainId}`;
+    setRestoringKey(key);
+    setError('');
+    try {
+      await adminFetch(`/api/recruitment/admin/candidates/${encodeURIComponent(candidateId)}/qualify`, {
+        method: 'POST',
+        body: JSON.stringify({ subdomainId, qualified: null }),
+      });
+      await load(true);
+    } catch (err) {
+      setError(`Failed to mark pending: ${err.message}`);
+    }
+    setRestoringKey('');
+  }
+
+  async function restoreAllToPending(itemsToRestore) {
+    const items = itemsToRestore ?? filteredAuditList;
+    if (items.length === 0) return;
+    setBulkRestoring(true);
+    setError('');
+    setRestoreProgress({ done: 0, total: items.length });
+    let done = 0;
+    for (const item of items) {
+      try {
+        await adminFetch(`/api/recruitment/admin/candidates/${encodeURIComponent(item.candidateId)}/qualify`, {
+          method: 'POST',
+          body: JSON.stringify({ subdomainId: item.choice.subdomain_id, qualified: null }),
+        });
+      } catch (err) {
+        console.error('Failed to restore candidate track', item, err);
+      }
+      done += 1;
+      setRestoreProgress({ done, total: items.length });
+    }
+    await load(true);
+    setBulkRestoring(false);
+    setRestoreProgress({ done: 0, total: 0 });
+  }
+
   /**
    * Disqualify the candidate ONLY for domains where they have NOT submitted a response.
-   * – Technical domain  → no assessment attempt or attempt.status !== 'submitted'
-   * – Non-technical     → no is_final written answer for that domain
    * Other domains (already submitted) are left completely untouched.
    */
   async function disqualifyNonSubmitted(record) {
@@ -222,22 +331,9 @@ export default function AdminOperations() {
       const choices = record.profile.subdomain_choices ?? [];
       const toDisqualify = [];
       for (const choice of choices) {
-        const domain = choice.subdomain?.domain;
-        const isTechnical = domain?.slug === 'technical';
-        if (isTechnical) {
-          const attempt = payload.attempts.find(
-            (a) => a.candidate_id === candidateId && a.domain_id === choice.subdomain?.domain_id,
-          );
-          if (!attempt || attempt.status !== 'submitted') {
-            toDisqualify.push(choice.subdomain_id);
-          }
-        } else {
-          const hasSubmitted = (payload.written_questions ?? []).some(
-            (wq) => wq.candidate_id === candidateId && wq.domain_id === choice.subdomain?.domain_id && wq.is_final,
-          );
-          if (!hasSubmitted) {
-            toDisqualify.push(choice.subdomain_id);
-          }
+        const submitted = isChoiceSubmitted(candidateId, choice, payload);
+        if (!submitted) {
+          toDisqualify.push(choice.subdomain_id);
         }
       }
       if (toDisqualify.length === 0) {
@@ -263,7 +359,6 @@ export default function AdminOperations() {
    * Returns an array of { domainName, candidateCount } sorted by count desc.
    */
   function buildBulkPreview() {
-    // Map domainId → { name, set of candidateIds that haven't submitted }
     const domainMap = {};
     for (const record of filtered) {
       const candidateId = record.profile.id;
@@ -271,18 +366,7 @@ export default function AdminOperations() {
       for (const choice of choices) {
         const domain = choice.subdomain?.domain;
         if (!domain) continue;
-        const isTechnical = domain.slug === 'technical';
-        let submitted = false;
-        if (isTechnical) {
-          const attempt = payload.attempts.find(
-            (a) => a.candidate_id === candidateId && a.domain_id === choice.subdomain?.domain_id,
-          );
-          submitted = attempt?.status === 'submitted';
-        } else {
-          submitted = (payload.written_questions ?? []).some(
-            (wq) => wq.candidate_id === candidateId && wq.domain_id === choice.subdomain?.domain_id && wq.is_final,
-          );
-        }
+        const submitted = isChoiceSubmitted(candidateId, choice, payload);
         if (!submitted) {
           const domId = domain.id;
           if (!domainMap[domId]) domainMap[domId] = { name: domain.name, candidates: new Set() };
@@ -303,7 +387,6 @@ export default function AdminOperations() {
     setShowBulkModal(false);
     setBulkDisqualifying(true);
     setError('');
-    // Collect all (candidateId, subdomainId) pairs where no submission exists
     const jobs = [];
     for (const record of filtered) {
       const candidateId = record.profile.id;
@@ -311,18 +394,7 @@ export default function AdminOperations() {
       for (const choice of choices) {
         const domain = choice.subdomain?.domain;
         if (!domain) continue;
-        const isTechnical = domain.slug === 'technical';
-        let submitted = false;
-        if (isTechnical) {
-          const attempt = payload.attempts.find(
-            (a) => a.candidate_id === candidateId && a.domain_id === choice.subdomain?.domain_id,
-          );
-          submitted = attempt?.status === 'submitted';
-        } else {
-          submitted = (payload.written_questions ?? []).some(
-            (wq) => wq.candidate_id === candidateId && wq.domain_id === choice.subdomain?.domain_id && wq.is_final,
-          );
-        }
+        const submitted = isChoiceSubmitted(candidateId, choice, payload);
         if (!submitted) {
           jobs.push({ candidateId, subdomainId: choice.subdomain_id });
         }
@@ -342,7 +414,6 @@ export default function AdminOperations() {
           { method: 'POST', body: JSON.stringify({ subdomainId: job.subdomainId, qualified: false }) },
         );
       } catch (err) {
-        // Log but continue; one failure shouldn't halt the bulk run
         console.error('Bulk disqualify error for', job, err.message);
       }
       done += 1;
@@ -498,6 +569,24 @@ export default function AdminOperations() {
           <button onClick={openExportModal} disabled={exporting} className="inline-flex items-center gap-2 border px-3 py-2 transition disabled:opacity-50" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}><Download size={13} />{exporting ? 'EXPORTING…' : 'EXPORT CSV'}</button>
           <button onClick={() => load(true)} disabled={refreshing} className="inline-flex items-center gap-2 border px-3 py-2 transition disabled:opacity-50" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}><RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />SYNC LIVE</button>
           <button
+            id="audit-disqualified-btn"
+            onClick={() => setShowAuditModal(true)}
+            title="Check and restore candidates who submitted answers but were marked disqualified"
+            className="inline-flex items-center gap-2 border px-3 py-2 font-bold transition"
+            style={{
+              borderColor: answeredDisqualifiedList.length > 0 ? 'rgba(234,179,8,.8)' : 'var(--border)',
+              background: answeredDisqualifiedList.length > 0 ? 'rgba(234,179,8,.15)' : 'transparent',
+              color: answeredDisqualifiedList.length > 0 ? '#facc15' : 'var(--muted)',
+            }}
+          >
+            <ShieldAlert size={13} />
+            {answeredDisqualifiedList.length > 0 ? (
+              <span>RECOVER ANSWERED ({answeredDisqualifiedList.length})</span>
+            ) : (
+              <span>AUDIT DISQUALIFIED (0)</span>
+            )}
+          </button>
+          <button
             id="bulk-disqualify-btn"
             onClick={() => setShowBulkModal(true)}
             disabled={bulkDisqualifying || filtered.length === 0}
@@ -594,6 +683,26 @@ export default function AdminOperations() {
 
           <label className="mt-5 block"><span className="label !text-[9px]">Pipeline stage</span><select value={stage} onChange={(e) => setStage(e.target.value)} className="field !py-2 font-mono text-xs"><option value="">All stages</option>{['pending','round_0','round_1','round_2','selected','waitlisted','rejected'].map((v) => <option key={v} value={v}>{humanize(v)}</option>)}</select></label>
           <label className="mt-5 block"><span className="flex justify-between font-mono text-[9px] uppercase tracking-wider" style={{ color: 'var(--muted)' }}><span>Min R1 score</span><strong style={{ color: 'var(--accent)' }}>{minScore}%</strong></span><input type="range" min="0" max="100" step="5" value={minScore} onChange={(e) => setMinScore(Number(e.target.value))} className="mt-3 w-full" style={{ accentColor: 'var(--accent)' }} /></label>
+
+          {answeredDisqualifiedList.length > 0 && (
+            <div className="mt-5 border p-2.5 font-mono text-[10px]" style={{ borderColor: 'rgba(234,179,8,.5)', background: 'rgba(234,179,8,.08)', color: '#facc15' }}>
+              <div className="flex items-center gap-1.5 font-bold">
+                <ShieldAlert size={13} />
+                <span>{answeredDisqualifiedList.length} SUBMISSIONS RECOVERABLE</span>
+              </div>
+              <p className="mt-1 text-[9px]" style={{ color: 'var(--dim)' }}>
+                Candidates answered questions but are currently marked Disqualified.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowAuditModal(true)}
+                className="mt-2 w-full border py-1 text-center font-bold hover:underline"
+                style={{ borderColor: 'rgba(234,179,8,.6)', color: '#facc15' }}
+              >
+                OPEN RECOVERY POPUP →
+              </button>
+            </div>
+          )}
         </aside>
 
         {/* Candidate table */}
@@ -628,24 +737,9 @@ export default function AdminOperations() {
 
                   // Build per-domain submission + qualification status
                   const domainRows = choices.map((choice) => {
-                    const domain = choice.subdomain?.domain;
-                    const isTechnical = domain?.slug === 'technical';
                     const label = choiceLabel(choice);
-                    let submitted = false;
-                    let qualStatus = null;
-                    if (isTechnical) {
-                      const domainAttempt = payload.attempts.find(
-                        (a) => a.candidate_id === profile.id && a.domain_id === choice.subdomain?.domain_id,
-                      );
-                      submitted = domainAttempt?.status === 'submitted';
-                      qualStatus = domainAttempt?.admin_qualified ?? null;
-                    } else {
-                      const hasSubmitted = (payload.written_questions ?? []).some(
-                        (wq) => wq.candidate_id === profile.id && wq.domain_id === choice.subdomain?.domain_id && wq.is_final,
-                      );
-                      submitted = hasSubmitted;
-                      qualStatus = choice.admin_qualified ?? null;
-                    }
+                    const submitted = isChoiceSubmitted(profile.id, choice, payload);
+                    const qualStatus = getChoiceQualStatus(record, choice, payload.attempts);
                     return { choice, label, submitted, qualStatus };
                   });
 
@@ -940,6 +1034,192 @@ export default function AdminOperations() {
           </div>
         );
       })()}
+
+      {/* ── Recover Answered Disqualified Candidates Modal ── */}
+      {showAuditModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Recover Answered Candidates"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.82)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowAuditModal(false); }}
+        >
+          <div
+            className="flex flex-col w-full max-w-4xl max-h-[88vh] border shadow-2xl"
+            style={{ background: '#0c0e12', borderColor: 'var(--border)' }}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: 'var(--border)', background: '#080a0d' }}>
+              <div className="flex items-center gap-3">
+                <ShieldAlert size={20} style={{ color: '#facc15' }} />
+                <div>
+                  <h2 className="font-mono text-sm font-bold tracking-wider text-white">
+                    RECOVER ANSWERED CANDIDATES (RESTORE TO PENDING)
+                  </h2>
+                  <p className="font-mono text-[10px]" style={{ color: 'var(--muted)' }}>
+                    Accurately detects candidates who submitted answers / assessments but are marked Disqualified.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAuditModal(false)}
+                className="p-1 hover:text-white transition"
+                style={{ color: 'var(--muted)' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Controls / Search & Domain filter */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3 font-mono text-xs" style={{ borderColor: 'var(--border)', background: '#0a0c10' }}>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="relative block w-64">
+                  <Search size={13} className="absolute left-2.5 top-2.5" style={{ color: 'var(--dim)' }} />
+                  <input
+                    type="search"
+                    value={auditSearch}
+                    onChange={(e) => setAuditSearch(e.target.value)}
+                    placeholder="Search candidate name, reg…"
+                    className="w-full border py-1.5 pl-8 pr-2 font-mono text-xs"
+                    style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
+                  />
+                </span>
+                <select
+                  value={auditDomainId}
+                  onChange={(e) => setAuditDomainId(e.target.value)}
+                  className="border px-2 py-1.5 font-mono text-xs"
+                  style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
+                >
+                  <option value="">All domains ({answeredDisqualifiedList.length})</option>
+                  {payload.domains.map((d) => {
+                    const count = answeredDisqualifiedList.filter((item) => item.domain.id === d.id).length;
+                    return (
+                      <option key={d.id} value={d.id}>
+                        {d.name} ({count})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* Bulk Restore Button */}
+              <div>
+                <button
+                  type="button"
+                  disabled={bulkRestoring || filteredAuditList.length === 0}
+                  onClick={() => restoreAllToPending(filteredAuditList)}
+                  className="inline-flex items-center gap-2 border px-3 py-1.5 font-mono text-xs font-bold transition disabled:opacity-40"
+                  style={{
+                    borderColor: 'rgba(34,197,94,.7)',
+                    background: 'rgba(34,197,94,.15)',
+                    color: 'var(--success)',
+                  }}
+                >
+                  <RotateCcw size={12} className={bulkRestoring ? 'animate-spin' : ''} />
+                  {bulkRestoring
+                    ? `RESTORING… ${restoreProgress.done}/${restoreProgress.total}`
+                    : `RESTORE ALL VISIBLE (${filteredAuditList.length}) TO PENDING`}
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body / Table */}
+            <div className="overflow-auto flex-1 p-4">
+              {filteredAuditList.length === 0 ? (
+                <div className="p-12 text-center font-mono text-xs" style={{ color: 'var(--muted)' }}>
+                  {answeredDisqualifiedList.length === 0
+                    ? '✓ No disqualified candidates with submitted answers found. All candidate records are in their correct state.'
+                    : 'No candidates match the active search/domain filter in this popup.'}
+                </div>
+              ) : (
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead className="sticky top-0 z-10 border-b font-mono text-[9px] uppercase tracking-wider" style={{ borderColor: 'var(--border)', background: '#0a0c10', color: 'var(--muted)' }}>
+                    <tr>
+                      <th className="px-3 py-2.5">Candidate</th>
+                      <th className="px-3 py-2.5">Domain / Track</th>
+                      <th className="px-3 py-2.5">Submission Evidence</th>
+                      <th className="px-3 py-2.5">Current Status</th>
+                      <th className="px-3 py-2.5 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                    {filteredAuditList.map((item) => {
+                      const key = `${item.candidateId}_${item.choice.subdomain_id}`;
+                      const isBusy = restoringKey === key || bulkRestoring;
+                      return (
+                        <tr key={key} className="hover:bg-[rgba(255,255,255,.02)] transition">
+                          <td className="px-3 py-2.5">
+                            <strong className="block text-white text-xs">{item.profile.full_name}</strong>
+                            <span className="font-mono text-[10px]" style={{ color: 'var(--accent)' }}>
+                              #{item.profile.registration_number}
+                            </span>
+                            <span className="block text-[9px]" style={{ color: 'var(--dim)' }}>
+                              {item.profile.email} · {item.profile.branch ?? '—'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 font-mono text-[10px]" style={{ color: 'var(--accent)' }}>
+                            {item.trackLabel}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span
+                              className="inline-flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[9px] font-bold"
+                              style={{ background: 'rgba(34,197,94,.15)', color: 'var(--success)' }}
+                            >
+                              <CheckCircle2 size={11} />
+                              {item.isTechnical ? 'Assessment Attempt Submitted' : 'Written Answers Submitted'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span
+                              className="rounded px-2 py-0.5 font-mono text-[9px] font-bold uppercase"
+                              style={{ background: 'rgba(239,68,68,.15)', color: 'var(--error)' }}
+                            >
+                              ✗ Not Qualified
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-right">
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => markToPending(item.candidateId, item.choice.subdomain_id)}
+                              className="inline-flex items-center gap-1 border px-2.5 py-1 font-mono text-[9px] font-bold uppercase transition hover:opacity-90 disabled:opacity-40"
+                              style={{
+                                borderColor: 'rgba(234,179,8,.7)',
+                                background: 'rgba(234,179,8,.12)',
+                                color: '#facc15',
+                              }}
+                            >
+                              <RotateCcw size={10} className={restoringKey === key ? 'animate-spin' : ''} />
+                              {restoringKey === key ? 'Restoring…' : 'Mark Pending'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between border-t px-5 py-3 font-mono text-[10px]" style={{ borderColor: 'var(--border)', background: '#080a0d', color: 'var(--dim)' }}>
+              <span>
+                {filteredAuditList.length} of {answeredDisqualifiedList.length} tracks displayed
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowAuditModal(false)}
+                className="border px-3 py-1 text-xs hover:text-white transition"
+                style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
