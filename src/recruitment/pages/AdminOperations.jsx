@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Activity, AlertCircle, AlertTriangle, CalendarClock, CheckCircle2, ClipboardCheck, Download, FilePlus2, FolderKanban, RefreshCw, RotateCcw, Search, ShieldAlert, ShieldCheck, Users, X } from 'lucide-react';
+import { Activity, AlertCircle, AlertTriangle, CalendarClock, CheckCircle2, ClipboardCheck, Download, Eye, FilePlus2, FolderKanban, RefreshCw, RotateCcw, Search, ShieldAlert, ShieldCheck, Users, X } from 'lucide-react';
 import { createClient } from '../lib/supabase.js';
 import { formatDateTime } from '../lib/utils.js';
 import QuestionBank from './QuestionBank.jsx';
@@ -106,6 +106,10 @@ export default function AdminOperations() {
   const [restoreProgress, setRestoreProgress] = useState({ done: 0, total: 0 });
   const [auditSearch, setAuditSearch] = useState('');
   const [auditDomainId, setAuditDomainId] = useState('');
+  const [previewItem, setPreviewItem] = useState(null);   // item being previewed
+  const [previewData, setPreviewData] = useState(null);   // { answers } or { attempt }
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [auditSelected, setAuditSelected] = useState(new Set()); // Set of "candidateId_subdomainId" keys
 
   // Persist filter state so it survives navigation to candidate profile and back
   useEffect(() => {
@@ -288,11 +292,41 @@ export default function AdminOperations() {
         method: 'POST',
         body: JSON.stringify({ subdomainId, qualified: null }),
       });
+      // If we were previewing this candidate, close the preview
+      if (previewItem?.candidateId === candidateId) setPreviewItem(null);
       await load(true);
     } catch (err) {
       setError(`Failed to mark pending: ${err.message}`);
     }
     setRestoringKey('');
+  }
+
+  async function openPreview(item) {
+    setPreviewItem(item);
+    setPreviewData(null);
+    setPreviewLoading(true);
+    try {
+      if (item.isTechnical) {
+        // Fetch attempt details from the already-loaded payload (we have score, marks, etc.)
+        const attempt = payload.attempts.find(
+          (a) => a.candidate_id === item.candidateId &&
+            (a.domain_id === item.domain.id || a.subdomain_id === item.choice.subdomain_id),
+        );
+        setPreviewData({ type: 'technical', attempt: attempt ?? null });
+      } else {
+        // Fetch actual written answers for this candidate + domain
+        const result = await adminFetch(
+          `/api/recruitment/admin/written-answers?candidate_id=${encodeURIComponent(item.candidateId)}`,
+        );
+        const domainAnswers = (result.answers ?? []).filter(
+          (a) => a.domain_id === item.domain.id,
+        );
+        setPreviewData({ type: 'written', answers: domainAnswers });
+      }
+    } catch (err) {
+      setPreviewData({ type: 'error', message: err.message });
+    }
+    setPreviewLoading(false);
   }
 
   async function restoreAllToPending(itemsToRestore) {
@@ -1046,7 +1080,7 @@ export default function AdminOperations() {
           onClick={(e) => { if (e.target === e.currentTarget) setShowAuditModal(false); }}
         >
           <div
-            className="flex flex-col w-full max-w-4xl max-h-[88vh] border shadow-2xl"
+            className="flex flex-col w-full max-w-5xl max-h-[90vh] border shadow-2xl"
             style={{ background: '#0c0e12', borderColor: 'var(--border)' }}
           >
             {/* Modal Header */}
@@ -1104,12 +1138,33 @@ export default function AdminOperations() {
                 </select>
               </div>
 
-              {/* Bulk Restore Button */}
-              <div>
+              {/* Bulk Restore Buttons */}
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const selectedItems = filteredAuditList.filter(
+                    (item) => auditSelected.has(`${item.candidateId}_${item.choice.subdomain_id}`),
+                  );
+                  return selectedItems.length > 0 ? (
+                    <button
+                      type="button"
+                      disabled={bulkRestoring}
+                      onClick={() => {
+                        restoreAllToPending(selectedItems).then(() => setAuditSelected(new Set()));
+                      }}
+                      className="inline-flex items-center gap-2 border px-3 py-1.5 font-mono text-xs font-bold transition disabled:opacity-40"
+                      style={{ borderColor: 'rgba(234,179,8,.7)', background: 'rgba(234,179,8,.15)', color: '#facc15' }}
+                    >
+                      <RotateCcw size={12} className={bulkRestoring ? 'animate-spin' : ''} />
+                      {bulkRestoring
+                        ? `RESTORING… ${restoreProgress.done}/${restoreProgress.total}`
+                        : `RESTORE SELECTED (${selectedItems.length})`}
+                    </button>
+                  ) : null;
+                })()}
                 <button
                   type="button"
                   disabled={bulkRestoring || filteredAuditList.length === 0}
-                  onClick={() => restoreAllToPending(filteredAuditList)}
+                  onClick={() => restoreAllToPending(filteredAuditList).then(() => setAuditSelected(new Set()))}
                   className="inline-flex items-center gap-2 border px-3 py-1.5 font-mono text-xs font-bold transition disabled:opacity-40"
                   style={{
                     borderColor: 'rgba(34,197,94,.7)',
@@ -1120,87 +1175,268 @@ export default function AdminOperations() {
                   <RotateCcw size={12} className={bulkRestoring ? 'animate-spin' : ''} />
                   {bulkRestoring
                     ? `RESTORING… ${restoreProgress.done}/${restoreProgress.total}`
-                    : `RESTORE ALL VISIBLE (${filteredAuditList.length}) TO PENDING`}
+                    : `RESTORE ALL VISIBLE (${filteredAuditList.length})`}
                 </button>
               </div>
             </div>
 
-            {/* Modal Body / Table */}
-            <div className="overflow-auto flex-1 p-4">
-              {filteredAuditList.length === 0 ? (
-                <div className="p-12 text-center font-mono text-xs" style={{ color: 'var(--muted)' }}>
-                  {answeredDisqualifiedList.length === 0
-                    ? '✓ No disqualified candidates with submitted answers found. All candidate records are in their correct state.'
-                    : 'No candidates match the active search/domain filter in this popup.'}
+            {/* Modal Body — two-pane layout when preview is open */}
+            <div className="flex flex-1 min-h-0 overflow-hidden">
+
+              {/* Left pane: candidate table */}
+              <div className={`overflow-auto flex-shrink-0 transition-all ${previewItem ? 'w-1/2 border-r' : 'w-full'}`} style={{ borderColor: 'var(--border)' }}>
+                <div className="p-4">
+                {filteredAuditList.length === 0 ? (
+                  <div className="p-12 text-center font-mono text-xs" style={{ color: 'var(--muted)' }}>
+                    {answeredDisqualifiedList.length === 0
+                      ? '✓ No disqualified candidates with submitted answers found. All candidate records are in their correct state.'
+                      : 'No candidates match the active search/domain filter in this popup.'}
+                  </div>
+                ) : (
+                  <table className="w-full border-collapse text-left text-xs">
+                    <thead className="sticky top-0 z-10 border-b font-mono text-[9px] uppercase tracking-wider" style={{ borderColor: 'var(--border)', background: '#0a0c10', color: 'var(--muted)' }}>
+                      <tr>
+                        <th className="px-3 py-2.5 w-8">
+                          {/* Select-all checkbox */}
+                          {(() => {
+                            const allKeys = filteredAuditList.map((i) => `${i.candidateId}_${i.choice.subdomain_id}`);
+                            const allChecked = allKeys.length > 0 && allKeys.every((k) => auditSelected.has(k));
+                            const someChecked = !allChecked && allKeys.some((k) => auditSelected.has(k));
+                            return (
+                              <input
+                                type="checkbox"
+                                checked={allChecked}
+                                ref={(el) => { if (el) el.indeterminate = someChecked; }}
+                                onChange={() => {
+                                  if (allChecked) {
+                                    setAuditSelected((prev) => {
+                                      const next = new Set(prev);
+                                      allKeys.forEach((k) => next.delete(k));
+                                      return next;
+                                    });
+                                  } else {
+                                    setAuditSelected((prev) => new Set([...prev, ...allKeys]));
+                                  }
+                                }}
+                                className="cursor-pointer accent-yellow-400"
+                                title={allChecked ? 'Deselect all visible' : 'Select all visible'}
+                              />
+                            );
+                          })()}
+                        </th>
+                        <th className="px-3 py-2.5">Candidate</th>
+                        <th className="px-3 py-2.5">Track</th>
+                        <th className="px-3 py-2.5">Evidence</th>
+                        <th className="px-3 py-2.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                      {filteredAuditList.map((item) => {
+                        const key = `${item.candidateId}_${item.choice.subdomain_id}`;
+                        const isBusy = restoringKey === key || bulkRestoring;
+                        const isActive = previewItem?.candidateId === item.candidateId && previewItem?.choice?.subdomain_id === item.choice.subdomain_id;
+                        const isChecked = auditSelected.has(key);
+                        return (
+                          <tr
+                            key={key}
+                            className="transition"
+                            style={{
+                              background: isChecked
+                                ? 'rgba(234,179,8,.07)'
+                                : isActive
+                                ? 'rgba(99,102,241,.07)'
+                                : undefined,
+                              outline: isActive ? '1px solid rgba(99,102,241,.3)' : undefined,
+                            }}
+                          >
+                            {/* Checkbox */}
+                            <td className="px-3 py-2.5 w-8" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  setAuditSelected((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(key)) next.delete(key); else next.add(key);
+                                    return next;
+                                  });
+                                }}
+                                className="cursor-pointer accent-yellow-400"
+                              />
+                            </td>
+                            <td className="px-3 py-2.5 cursor-pointer" onClick={() => isActive ? setPreviewItem(null) : openPreview(item)}>
+                              <strong className="block text-white text-xs">{item.profile.full_name}</strong>
+                              <span className="font-mono text-[10px]" style={{ color: 'var(--accent)' }}>#{item.profile.registration_number}</span>
+                              <span className="block text-[9px]" style={{ color: 'var(--dim)' }}>{item.profile.branch ?? '—'}</span>
+                            </td>
+                            <td className="px-3 py-2.5 font-mono text-[10px] cursor-pointer" style={{ color: 'var(--accent)' }} onClick={() => isActive ? setPreviewItem(null) : openPreview(item)}>
+                              {item.trackLabel}
+                            </td>
+                            <td className="px-3 py-2.5 cursor-pointer" onClick={() => isActive ? setPreviewItem(null) : openPreview(item)}>
+                              <span
+                                className="inline-flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[9px] font-bold"
+                                style={{ background: 'rgba(34,197,94,.15)', color: 'var(--success)' }}
+                              >
+                                <CheckCircle2 size={10} />
+                                {item.isTechnical ? 'Assessment' : 'Written'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => isActive ? setPreviewItem(null) : openPreview(item)}
+                                  className="inline-flex items-center gap-1 border px-2 py-1 font-mono text-[9px] font-bold uppercase transition hover:opacity-90"
+                                  style={isActive
+                                    ? { borderColor: 'rgba(99,102,241,.7)', background: 'rgba(99,102,241,.2)', color: '#a5b4fc' }
+                                    : { borderColor: 'var(--border)', color: 'var(--muted)' }}
+                                >
+                                  <Eye size={10} />
+                                  {isActive ? 'Hide' : 'View'}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => markToPending(item.candidateId, item.choice.subdomain_id)}
+                                  className="inline-flex items-center gap-1 border px-2 py-1 font-mono text-[9px] font-bold uppercase transition hover:opacity-90 disabled:opacity-40"
+                                  style={{ borderColor: 'rgba(34,197,94,.6)', background: 'rgba(34,197,94,.1)', color: 'var(--success)' }}
+                                >
+                                  <RotateCcw size={10} className={restoringKey === key ? 'animate-spin' : ''} />
+                                  {restoringKey === key ? 'Working…' : 'Pending'}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
                 </div>
-              ) : (
-                <table className="w-full border-collapse text-left text-xs">
-                  <thead className="sticky top-0 z-10 border-b font-mono text-[9px] uppercase tracking-wider" style={{ borderColor: 'var(--border)', background: '#0a0c10', color: 'var(--muted)' }}>
-                    <tr>
-                      <th className="px-3 py-2.5">Candidate</th>
-                      <th className="px-3 py-2.5">Domain / Track</th>
-                      <th className="px-3 py-2.5">Submission Evidence</th>
-                      <th className="px-3 py-2.5">Current Status</th>
-                      <th className="px-3 py-2.5 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
-                    {filteredAuditList.map((item) => {
-                      const key = `${item.candidateId}_${item.choice.subdomain_id}`;
-                      const isBusy = restoringKey === key || bulkRestoring;
-                      return (
-                        <tr key={key} className="hover:bg-[rgba(255,255,255,.02)] transition">
-                          <td className="px-3 py-2.5">
-                            <strong className="block text-white text-xs">{item.profile.full_name}</strong>
-                            <span className="font-mono text-[10px]" style={{ color: 'var(--accent)' }}>
-                              #{item.profile.registration_number}
-                            </span>
-                            <span className="block text-[9px]" style={{ color: 'var(--dim)' }}>
-                              {item.profile.email} · {item.profile.branch ?? '—'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 font-mono text-[10px]" style={{ color: 'var(--accent)' }}>
-                            {item.trackLabel}
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <span
-                              className="inline-flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[9px] font-bold"
-                              style={{ background: 'rgba(34,197,94,.15)', color: 'var(--success)' }}
-                            >
-                              <CheckCircle2 size={11} />
-                              {item.isTechnical ? 'Assessment Attempt Submitted' : 'Written Answers Submitted'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <span
-                              className="rounded px-2 py-0.5 font-mono text-[9px] font-bold uppercase"
-                              style={{ background: 'rgba(239,68,68,.15)', color: 'var(--error)' }}
-                            >
-                              ✗ Not Qualified
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-right">
-                            <button
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => markToPending(item.candidateId, item.choice.subdomain_id)}
-                              className="inline-flex items-center gap-1 border px-2.5 py-1 font-mono text-[9px] font-bold uppercase transition hover:opacity-90 disabled:opacity-40"
-                              style={{
-                                borderColor: 'rgba(234,179,8,.7)',
-                                background: 'rgba(234,179,8,.12)',
-                                color: '#facc15',
-                              }}
-                            >
-                              <RotateCcw size={10} className={restoringKey === key ? 'animate-spin' : ''} />
-                              {restoringKey === key ? 'Restoring…' : 'Mark Pending'}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              </div>
+
+              {/* Right pane: submission preview */}
+              {previewItem && (
+                <div className="w-1/2 flex flex-col overflow-hidden" style={{ background: '#080a0d' }}>
+                  {/* Preview header */}
+                  <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--border)' }}>
+                    <div>
+                      <p className="font-mono text-[10px] font-bold" style={{ color: '#facc15' }}>SUBMISSION PREVIEW</p>
+                      <p className="text-sm font-semibold text-white mt-0.5">{previewItem.profile.full_name}</p>
+                      <p className="font-mono text-[9px]" style={{ color: 'var(--accent)' }}>
+                        {previewItem.trackLabel}
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => setPreviewItem(null)} style={{ color: 'var(--muted)' }} className="hover:text-white">
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  {/* Preview body */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {previewLoading ? (
+                      <div className="flex items-center justify-center h-32">
+                        <RefreshCw size={20} className="animate-spin" style={{ color: 'var(--accent)' }} />
+                      </div>
+                    ) : previewData?.type === 'error' ? (
+                      <div className="border p-3 font-mono text-xs" style={{ borderColor: 'rgba(239,68,68,.4)', color: 'var(--error)' }}>
+                        {previewData.message}
+                      </div>
+                    ) : previewData?.type === 'technical' ? (
+                      previewData.attempt ? (
+                        <div className="space-y-3">
+                          <div className="border p-4" style={{ borderColor: 'rgba(34,197,94,.3)', background: 'rgba(34,197,94,.06)' }}>
+                            <p className="font-mono text-[9px] uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Assessment Details</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              {[['Score', previewData.attempt.score != null ? `${previewData.attempt.score} / ${previewData.attempt.total_marks}` : 'Unscored'],
+                                ['Percentage', previewData.attempt.score != null && previewData.attempt.total_marks ? `${Math.round((previewData.attempt.score / previewData.attempt.total_marks) * 100)}%` : '—'],
+                                ['Status', previewData.attempt.status ?? '—'],
+                                ['Submitted', previewData.attempt.submitted_at ? new Date(previewData.attempt.submitted_at).toLocaleString() : 'Auto/Timed out'],
+                              ].map(([label, val]) => (
+                                <div key={label}>
+                                  <p className="font-mono text-[9px] uppercase" style={{ color: 'var(--muted)' }}>{label}</p>
+                                  <p className="font-mono text-xs font-bold text-white mt-0.5">{val}</p>
+                                </div>
+                              ))}
+                            </div>
+                            {previewData.attempt.auto_submitted && (
+                              <p className="mt-3 font-mono text-[9px]" style={{ color: 'var(--warning)' }}>⚠ Auto-submitted (time ran out)</p>
+                            )}
+                          </div>
+                          <div className="border px-3 py-2 font-mono text-[10px]" style={{ borderColor: 'rgba(34,197,94,.3)', color: 'var(--success)' }}>
+                            ✓ This candidate DID attempt the assessment — safe to restore to Pending.
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="border p-3 font-mono text-xs" style={{ borderColor: 'rgba(239,68,68,.4)', color: 'var(--error)' }}>
+                          No assessment attempt found for this track in the current data.
+                        </div>
+                      )
+                    ) : previewData?.type === 'written' ? (
+                      previewData.answers.length === 0 ? (
+                        <div className="border p-3 font-mono text-xs" style={{ borderColor: 'rgba(239,68,68,.4)', color: 'var(--error)' }}>
+                          No written answers found for this domain. The submission flag may be stale — verify manually.
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="border px-3 py-2 font-mono text-[10px]" style={{ borderColor: 'rgba(34,197,94,.3)', color: 'var(--success)' }}>
+                            ✓ {previewData.answers.filter((a) => a.is_final).length} final answer(s) found — candidate DID submit.
+                          </div>
+                          {previewData.answers.map((ans, i) => (
+                            <div key={i} className="border p-3" style={{ borderColor: 'var(--border)', background: 'rgba(255,255,255,.02)' }}>
+                              <p className="font-mono text-[9px] uppercase font-bold mb-1" style={{ color: 'var(--muted)' }}>
+                                Q{i + 1}: {ans.question?.prompt ?? 'Question'}
+                                {ans.is_final && (
+                                  <span className="ml-2 rounded px-1.5 py-0.5" style={{ background: 'rgba(34,197,94,.2)', color: 'var(--success)' }}>FINAL</span>
+                                )}
+                              </p>
+                              {ans.answer_text ? (
+                                <p className="text-xs leading-5 whitespace-pre-wrap" style={{ color: 'var(--text)' }}>{ans.answer_text}</p>
+                              ) : null}
+                              {(ans.submission_links?.length > 0) && (
+                                <div className="mt-2 space-y-1">
+                                  {ans.submission_links.map((link, li) => (
+                                    <a
+                                      key={li}
+                                      href={link}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="block break-all font-mono text-[9px] hover:underline"
+                                      style={{ color: 'var(--accent)' }}
+                                    >
+                                      {link} ↗
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+                              {!ans.answer_text && (!ans.submission_links || ans.submission_links.length === 0) && (
+                                <p className="text-[10px] italic" style={{ color: 'var(--dim)' }}>No answer text or links.</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    ) : null}
+                  </div>
+
+                  {/* Confirm restore from preview */}
+                  {previewData && previewData.type !== 'error' && (
+                    <div className="border-t px-4 py-3" style={{ borderColor: 'var(--border)' }}>
+                      <button
+                        type="button"
+                        disabled={restoringKey === `${previewItem.candidateId}_${previewItem.choice.subdomain_id}`}
+                        onClick={() => markToPending(previewItem.candidateId, previewItem.choice.subdomain_id)}
+                        className="w-full inline-flex items-center justify-center gap-2 border py-2 font-mono text-xs font-bold uppercase transition hover:opacity-90 disabled:opacity-40"
+                        style={{ borderColor: 'rgba(34,197,94,.7)', background: 'rgba(34,197,94,.15)', color: 'var(--success)' }}
+                      >
+                        <RotateCcw size={13} className={restoringKey === `${previewItem.candidateId}_${previewItem.choice.subdomain_id}` ? 'animate-spin' : ''} />
+                        CONFIRM — RESTORE THIS CANDIDATE TO PENDING
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
+
             </div>
 
             {/* Modal Footer */}
