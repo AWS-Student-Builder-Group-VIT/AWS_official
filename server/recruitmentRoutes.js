@@ -605,6 +605,7 @@ router.get('/admin/operations', async (req, res) => {
       candidates, attempts, assignments, submissions, bookings, results, slots,
       { data: domains }, { data: allSubdomains }, { data: allDomains },
       { data: written_questions }, { data: written_rules },
+      written_submissions,
     ] = await Promise.all([
       fetchAll(() => supabase.from('candidate_profiles').select('*, subdomain_choices:candidate_subdomain_choices(subdomain_id,priority,admin_qualified)').order('created_at', { ascending: false }).order('id')),
       fetchAll(() => supabase.from('assessment_attempts').select('id,candidate_id,domain_id,subdomain_id,started_at,submitted_at,time_limit_seconds,auto_submitted,score,total_marks,status,admin_qualified,admin_notes,evaluated_at,results_released_at,results_released_by').order('started_at', { ascending: false }).order('id')),
