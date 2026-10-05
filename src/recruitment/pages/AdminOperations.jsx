@@ -42,6 +42,9 @@ export default function AdminOperations() {
   const [exportDomainId, setExportDomainId] = useState('');
   const [exportQualFilter, setExportQualFilter] = useState('qualified');
   const [disqualifying, setDisqualifying] = useState(''); // candidateId being processed
+  const [bulkDisqualifying, setBulkDisqualifying] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
+  const [showBulkModal, setShowBulkModal] = useState(false);
 
   // Persist filter state so it survives navigation to candidate profile and back
   useEffect(() => {
@@ -179,6 +182,101 @@ export default function AdminOperations() {
     setDisqualifying('');
   }
 
+  /**
+   * Build a preview of how many candidates × domain pairs will be bulk-disqualified.
+   * Returns an array of { domainName, candidateCount } sorted by count desc.
+   */
+  function buildBulkPreview() {
+    // Map domainId → { name, set of candidateIds that haven't submitted }
+    const domainMap = {};
+    for (const record of filtered) {
+      const candidateId = record.profile.id;
+      const choices = record.profile.subdomain_choices ?? [];
+      for (const choice of choices) {
+        const domain = choice.subdomain?.domain;
+        if (!domain) continue;
+        const isTechnical = domain.slug === 'technical';
+        let submitted = false;
+        if (isTechnical) {
+          const attempt = payload.attempts.find(
+            (a) => a.candidate_id === candidateId && a.domain_id === choice.subdomain?.domain_id,
+          );
+          submitted = attempt?.status === 'submitted';
+        } else {
+          submitted = (payload.written_questions ?? []).some(
+            (wq) => wq.candidate_id === candidateId && wq.domain_id === choice.subdomain?.domain_id && wq.is_final,
+          );
+        }
+        if (!submitted) {
+          const domId = domain.id;
+          if (!domainMap[domId]) domainMap[domId] = { name: domain.name, candidates: new Set() };
+          domainMap[domId].candidates.add(candidateId);
+        }
+      }
+    }
+    return Object.values(domainMap)
+      .map(({ name, candidates }) => ({ domainName: name, candidateCount: candidates.size }))
+      .sort((a, b) => b.candidateCount - a.candidateCount);
+  }
+
+  /**
+   * Bulk disqualify ALL filtered candidates for every domain they haven't submitted.
+   * Runs sequentially per candidate to avoid API hammering.
+   */
+  async function bulkDisqualifyAll() {
+    setShowBulkModal(false);
+    setBulkDisqualifying(true);
+    setError('');
+    // Collect all (candidateId, subdomainId) pairs where no submission exists
+    const jobs = [];
+    for (const record of filtered) {
+      const candidateId = record.profile.id;
+      const choices = record.profile.subdomain_choices ?? [];
+      for (const choice of choices) {
+        const domain = choice.subdomain?.domain;
+        if (!domain) continue;
+        const isTechnical = domain.slug === 'technical';
+        let submitted = false;
+        if (isTechnical) {
+          const attempt = payload.attempts.find(
+            (a) => a.candidate_id === candidateId && a.domain_id === choice.subdomain?.domain_id,
+          );
+          submitted = attempt?.status === 'submitted';
+        } else {
+          submitted = (payload.written_questions ?? []).some(
+            (wq) => wq.candidate_id === candidateId && wq.domain_id === choice.subdomain?.domain_id && wq.is_final,
+          );
+        }
+        if (!submitted) {
+          jobs.push({ candidateId, subdomainId: choice.subdomain_id });
+        }
+      }
+    }
+    if (jobs.length === 0) {
+      setError('No unsubmitted domain entries found — nothing to disqualify.');
+      setBulkDisqualifying(false);
+      return;
+    }
+    setBulkProgress({ done: 0, total: jobs.length });
+    let done = 0;
+    for (const job of jobs) {
+      try {
+        await adminFetch(
+          `/api/recruitment/admin/candidates/${encodeURIComponent(job.candidateId)}/qualify`,
+          { method: 'POST', body: JSON.stringify({ subdomainId: job.subdomainId, qualified: false }) },
+        );
+      } catch (err) {
+        // Log but continue; one failure shouldn't halt the bulk run
+        console.error('Bulk disqualify error for', job, err.message);
+      }
+      done += 1;
+      setBulkProgress({ done, total: jobs.length });
+    }
+    await load(true);
+    setBulkDisqualifying(false);
+    setBulkProgress({ done: 0, total: 0 });
+  }
+
   function openExportModal() {
     setExportDomainId(payload.domains[0]?.id ?? '');
     setExportQualFilter('qualified');
@@ -291,11 +389,29 @@ export default function AdminOperations() {
       </section>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2 font-mono text-[10px]" style={{ borderColor: 'var(--border)', background: '#060709' }}>
-        <span><strong style={{ color: 'var(--accent)' }}>{filtered.length}</strong> OF {records.length} CANDIDATES DISPLAYED</span>
+        <span>
+          <strong style={{ color: 'var(--accent)' }}>{filtered.length}</strong> OF {records.length} CANDIDATES DISPLAYED
+          {bulkDisqualifying && (
+            <span className="ml-3" style={{ color: 'var(--warning)' }}>
+              ⚡ BULK DISQUALIFYING… {bulkProgress.done}/{bulkProgress.total}
+            </span>
+          )}
+        </span>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setShowQuestionBank(true)} className="inline-flex items-center gap-2 border px-3 py-2 transition" style={{ borderColor: 'rgba(255,153,0,.6)', background: 'rgba(255,153,0,.1)', color: 'var(--accent)' }}><FilePlus2 size={13} />QUESTION BANK</button>
           <button onClick={openExportModal} disabled={exporting} className="inline-flex items-center gap-2 border px-3 py-2 transition disabled:opacity-50" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}><Download size={13} />{exporting ? 'EXPORTING…' : 'EXPORT CSV'}</button>
           <button onClick={() => load(true)} disabled={refreshing} className="inline-flex items-center gap-2 border px-3 py-2 transition disabled:opacity-50" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}><RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />SYNC LIVE</button>
+          <button
+            id="bulk-disqualify-btn"
+            onClick={() => setShowBulkModal(true)}
+            disabled={bulkDisqualifying || filtered.length === 0}
+            title="Bulk disqualify all visible candidates for every domain they have NOT submitted"
+            className="inline-flex items-center gap-2 border px-3 py-2 font-bold transition disabled:opacity-40"
+            style={{ borderColor: 'rgba(239,68,68,.7)', background: 'rgba(239,68,68,.12)', color: 'var(--error)' }}
+          >
+            <AlertTriangle size={13} />
+            {bulkDisqualifying ? `WORKING… ${bulkProgress.done}/${bulkProgress.total}` : 'BULK DISQUALIFY UNSUBMITTED'}
+          </button>
         </div>
       </div>
 
@@ -606,6 +722,85 @@ export default function AdminOperations() {
           </div>
         </div>
       )}
+
+      {/* ── Bulk Disqualify Confirmation Modal ── */}
+      {showBulkModal && (() => {
+        const preview = buildBulkPreview();
+        const totalJobs = preview.reduce((s, p) => s + p.candidateCount, 0);
+        return (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Bulk Disqualify Unsubmitted"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.8)' }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowBulkModal(false); }}
+          >
+            <div className="w-full max-w-lg border" style={{ background: '#0d0f14', borderColor: 'rgba(239,68,68,.5)' }}>
+              {/* Header */}
+              <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'rgba(239,68,68,.4)' }}>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={15} style={{ color: 'var(--error)' }} />
+                  <span className="font-mono text-xs font-bold tracking-widest" style={{ color: 'var(--error)' }}>BULK DISQUALIFY — CONFIRM</span>
+                </div>
+                <button onClick={() => setShowBulkModal(false)} aria-label="Close" className="border p-1 transition hover:border-[var(--error)]" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}><X size={13} /></button>
+              </div>
+
+              {/* Body */}
+              <div className="space-y-4 px-4 py-5">
+                <p className="font-mono text-[10px] leading-relaxed" style={{ color: 'var(--muted)' }}>
+                  This will mark <strong style={{ color: 'var(--error)' }}>NOT QUALIFIED</strong> for every candidate–domain pair where no response has been submitted.
+                  Candidates who <em>did</em> submit are untouched.
+                  This action affects only the <strong style={{ color: 'var(--accent)' }}>{filtered.length} visible candidates</strong> (apply domain / stage filters first to scope this).
+                </p>
+
+                {/* Per-domain preview breakdown */}
+                {preview.length === 0 ? (
+                  <div className="border px-3 py-3 font-mono text-[10px]" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>
+                    ✓ All visible candidates have submitted in every domain — nothing to disqualify.
+                  </div>
+                ) : (
+                  <div>
+                    <p className="mb-2 font-mono text-[9px] uppercase tracking-wider" style={{ color: 'var(--muted)' }}>
+                      Domains affected &amp; candidates to be disqualified:
+                    </p>
+                    <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                      {preview.map(({ domainName, candidateCount }) => (
+                        <div key={domainName} className="flex items-center justify-between border px-3 py-2 font-mono text-[10px]" style={{ borderColor: 'rgba(239,68,68,.25)', background: 'rgba(239,68,68,.05)' }}>
+                          <span style={{ color: 'var(--text)' }}>{domainName}</span>
+                          <span className="font-bold" style={{ color: 'var(--error)' }}>{candidateCount} candidate{candidateCount !== 1 ? 's' : ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 border px-3 py-2 font-mono text-[10px]" style={{ borderColor: 'rgba(239,68,68,.4)', background: 'rgba(239,68,68,.08)' }}>
+                      <span style={{ color: 'var(--muted)' }}>TOTAL API CALLS: </span>
+                      <strong style={{ color: 'var(--error)' }}>{totalJobs}</strong>
+                      <span style={{ color: 'var(--dim)' }}> disqualification{totalJobs !== 1 ? 's' : ''} will be applied</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 border-t px-4 py-3" style={{ borderColor: 'rgba(239,68,68,.3)' }}>
+                <button onClick={() => setShowBulkModal(false)} className="border px-4 py-2 font-mono text-[10px] transition" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>
+                  CANCEL
+                </button>
+                <button
+                  id="bulk-disqualify-confirm"
+                  onClick={bulkDisqualifyAll}
+                  disabled={preview.length === 0}
+                  className="inline-flex items-center gap-2 border px-4 py-2 font-mono text-[10px] font-bold transition disabled:opacity-40"
+                  style={{ borderColor: 'rgba(239,68,68,.7)', background: 'rgba(239,68,68,.15)', color: 'var(--error)' }}
+                >
+                  <AlertTriangle size={12} />
+                  YES, DISQUALIFY {totalJobs} ENTRIES
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
