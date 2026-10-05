@@ -22,6 +22,44 @@ function initials(name) { return name.split(/\s+/).slice(0, 2).map((p) => p[0]).
 function scorePercent(attempt) { if (attempt?.score == null || !attempt.total_marks) return null; return Math.round((attempt.score / attempt.total_marks) * 100); }
 function choiceLabel(choice) { const domain = choice.subdomain?.domain; return domain?.selection_mode === 'whole_domain' ? domain.name : `${domain?.name ?? 'Domain'} / ${choice.subdomain?.name ?? 'Track'}`; }
 
+function getChoiceQualStatus(record, choice, attempts) {
+  const domain = choice.subdomain?.domain;
+  const isTechnical = domain?.slug === 'technical';
+  if (isTechnical) {
+    const domainAttempt = (attempts ?? []).find(
+      (a) => a.candidate_id === record.profile.id && a.domain_id === choice.subdomain?.domain_id,
+    );
+    return domainAttempt?.admin_qualified ?? null;
+  }
+  return choice.admin_qualified ?? null;
+}
+
+function getRecordQualStatus(record, domainIds, attempts) {
+  const choices = record.profile.subdomain_choices ?? [];
+  if (domainIds.length > 0) {
+    const targetChoices = choices.filter(
+      (c) => c.subdomain?.domain_id && domainIds.includes(c.subdomain.domain_id),
+    );
+    if (targetChoices.length === 0) {
+      return { isQualified: false, isDisqualified: false, isPending: false };
+    }
+    const statuses = targetChoices.map((c) => getChoiceQualStatus(record, c, attempts));
+    return {
+      isQualified: statuses.some((s) => s === true),
+      isDisqualified: statuses.some((s) => s === false),
+      isPending: statuses.some((s) => s == null),
+    };
+  }
+  const allStatuses = choices.map((c) => getChoiceQualStatus(record, c, attempts));
+  const isQualified = record.profile.round_0_status === 'qualified' || allStatuses.some((s) => s === true);
+  const isDisqualified =
+    record.profile.round_0_status === 'not_qualified' ||
+    record.profile.status === 'rejected' ||
+    (allStatuses.length > 0 && allStatuses.every((s) => s === false));
+  const isPending = !isQualified && !isDisqualified;
+  return { isQualified, isDisqualified, isPending };
+}
+
 export default function AdminOperations() {
   const navigate = useNavigate();
   const [supabase] = useState(createClient);
@@ -36,6 +74,7 @@ export default function AdminOperations() {
   const [stage, setStage] = useState(() => readPersistedFilters()?.stage ?? '');
   const [minScore, setMinScore] = useState(() => readPersistedFilters()?.minScore ?? 0);
   const [sort, setSort] = useState(() => readPersistedFilters()?.sort ?? 'newest');
+  const [qualFilter, setQualFilter] = useState(() => readPersistedFilters()?.qualFilter ?? '');
   const [showQuestionBank, setShowQuestionBank] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -48,8 +87,8 @@ export default function AdminOperations() {
 
   // Persist filter state so it survives navigation to candidate profile and back
   useEffect(() => {
-    writePersistedFilters({ search, domainIds, subdomainId, stage, minScore, sort });
-  }, [search, domainIds, subdomainId, stage, minScore, sort]);
+    writePersistedFilters({ search, domainIds, subdomainId, stage, minScore, sort, qualFilter });
+  }, [search, domainIds, subdomainId, stage, minScore, sort, qualFilter]);
 
 
   const load = useCallback(async (silent = false) => {
@@ -90,7 +129,17 @@ export default function AdminOperations() {
       const domainMatch = domainIds.length === 0 || choices.some((c) => c.subdomain?.domain_id && domainIds.includes(c.subdomain.domain_id));
       const subdomainMatch = !subdomainId || choices.some((c) => c.subdomain_id === subdomainId);
       const pct = scorePercent(record.attempt);
-      return (!query || searchable.includes(query)) && domainMatch && subdomainMatch && (!stage || record.profile.status === stage) && (minScore === 0 || (pct != null && pct >= minScore));
+
+      // Qualification status filter (scoped to selected domain(s) if any, otherwise global)
+      let qualMatch = true;
+      if (qualFilter) {
+        const qStatus = getRecordQualStatus(record, domainIds, payload.attempts);
+        if (qualFilter === 'qualified') qualMatch = Boolean(qStatus.isQualified);
+        else if (qualFilter === 'disqualified') qualMatch = Boolean(qStatus.isDisqualified);
+        else if (qualFilter === 'pending') qualMatch = Boolean(qStatus.isPending);
+      }
+
+      return (!query || searchable.includes(query)) && domainMatch && subdomainMatch && qualMatch && (!stage || record.profile.status === stage) && (minScore === 0 || (pct != null && pct >= minScore));
     });
     return list.sort((a, b) => {
       if (sort === 'score_desc') return (scorePercent(b.attempt) ?? -1) - (scorePercent(a.attempt) ?? -1);
@@ -99,10 +148,37 @@ export default function AdminOperations() {
       if (sort === 'status') return (stageOrder[b.profile.status] ?? 0) - (stageOrder[a.profile.status] ?? 0);
       return new Date(b.profile.created_at).getTime() - new Date(a.profile.created_at).getTime();
     });
-  }, [records, search, domainIds, subdomainId, stage, minScore, sort]);
+  }, [records, search, domainIds, subdomainId, qualFilter, stage, minScore, sort, payload.attempts]);
 
   const visibleSubdomains = useMemo(() => payload.domains.filter((d) => domainIds.includes(d.id)).flatMap((d) => d.subdomains ?? []), [payload.domains, domainIds]);
   useEffect(() => { if (subdomainId && !visibleSubdomains.some((s) => s.id === subdomainId)) setSubdomainId(''); }, [subdomainId, visibleSubdomains]);
+
+  const selectedDomainLabel = useMemo(() => {
+    if (domainIds.length === 1) {
+      return payload.domains.find((d) => d.id === domainIds[0])?.name ?? 'Domain';
+    }
+    if (domainIds.length > 1) {
+      return `${domainIds.length} Domains`;
+    }
+    return '';
+  }, [domainIds, payload.domains]);
+
+  const qualCounts = useMemo(() => {
+    let pending = 0;
+    let qualified = 0;
+    let disqualified = 0;
+    for (const record of records) {
+      const choices = record.profile.subdomain_choices ?? [];
+      const domainMatch = domainIds.length === 0 || choices.some((c) => c.subdomain?.domain_id && domainIds.includes(c.subdomain.domain_id));
+      if (!domainMatch) continue;
+      const status = getRecordQualStatus(record, domainIds, payload.attempts);
+      if (status.isQualified) qualified++;
+      if (status.isDisqualified) disqualified++;
+      if (status.isPending) pending++;
+    }
+    return { pending, qualified, disqualified };
+  }, [records, domainIds, payload.attempts]);
+
   const metrics = useMemo(() => {
     const evaluated = payload.attempts.filter((a) => a.admin_qualified != null).length;
     const qualified = payload.attempts.filter((a) => a.admin_qualified === true).length;
@@ -113,7 +189,7 @@ export default function AdminOperations() {
   }, [payload, records]);
 
   function toggleDomain(id) { setDomainIds((curr) => curr.includes(id) ? curr.filter((item) => item !== id) : [...curr, id]); }
-  function resetFilters() { setSearch(''); setDomainIds([]); setSubdomainId(''); setStage(''); setMinScore(0); setSort('newest'); }
+  function resetFilters() { setSearch(''); setDomainIds([]); setSubdomainId(''); setStage(''); setMinScore(0); setSort('newest'); setQualFilter(''); }
 
   const adminFetch = useCallback(async (path, opts = {}) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -391,6 +467,26 @@ export default function AdminOperations() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2 font-mono text-[10px]" style={{ borderColor: 'var(--border)', background: '#060709' }}>
         <span>
           <strong style={{ color: 'var(--accent)' }}>{filtered.length}</strong> OF {records.length} CANDIDATES DISPLAYED
+          {qualFilter && (
+            <span
+              className="ml-2 inline-flex items-center gap-1 border px-2 py-0.5 font-mono text-[9px] font-bold uppercase"
+              style={{
+                borderColor: 'rgba(255,153,0,.5)',
+                background: 'rgba(255,153,0,.12)',
+                color: 'var(--accent)',
+              }}
+            >
+              <span>{selectedDomainLabel || 'GLOBAL'}: {qualFilter}</span>
+              <button
+                type="button"
+                onClick={() => setQualFilter('')}
+                className="hover:text-white"
+                title="Clear qualification filter"
+              >
+                <X size={10} />
+              </button>
+            </span>
+          )}
           {bulkDisqualifying && (
             <span className="ml-3" style={{ color: 'var(--warning)' }}>
               ⚡ BULK DISQUALIFYING… {bulkProgress.done}/{bulkProgress.total}
@@ -453,6 +549,49 @@ export default function AdminOperations() {
               })}
             </div>
           </div>
+
+          {/* Qualification status filter: domain-scoped if domain selected, else global */}
+          <div className="mt-5">
+            <div className="flex items-center justify-between mb-1">
+              <span className="label !text-[9px] !mb-0">
+                {selectedDomainLabel ? `${selectedDomainLabel} status` : 'Qualification'}
+              </span>
+              <span
+                className="font-mono text-[8px] font-bold uppercase px-1.5 py-0.5"
+                style={{
+                  background: selectedDomainLabel ? 'rgba(255,153,0,.15)' : 'rgba(255,255,255,.06)',
+                  color: selectedDomainLabel ? 'var(--accent)' : 'var(--dim)',
+                  border: `1px solid ${selectedDomainLabel ? 'rgba(255,153,0,.3)' : 'var(--border)'}`,
+                }}
+              >
+                {selectedDomainLabel ? 'Domain scope' : 'Global scope'}
+              </span>
+            </div>
+            <select
+              id="qualification-filter"
+              value={qualFilter}
+              onChange={(e) => setQualFilter(e.target.value)}
+              className="field !py-2 font-mono text-xs"
+              style={{
+                borderColor: qualFilter ? 'rgba(255,153,0,.6)' : undefined,
+                background: qualFilter ? 'rgba(255,153,0,.05)' : undefined,
+              }}
+            >
+              <option value="">
+                All {selectedDomainLabel ? `(${selectedDomainLabel})` : '(Global)'}
+              </option>
+              <option value="pending">
+                ⋯ Pending ({qualCounts.pending})
+              </option>
+              <option value="qualified">
+                ✓ Qualified ({qualCounts.qualified})
+              </option>
+              <option value="disqualified">
+                ✗ Disqualified ({qualCounts.disqualified})
+              </option>
+            </select>
+          </div>
+
           <label className="mt-5 block"><span className="label !text-[9px]">Pipeline stage</span><select value={stage} onChange={(e) => setStage(e.target.value)} className="field !py-2 font-mono text-xs"><option value="">All stages</option>{['pending','round_0','round_1','round_2','selected','waitlisted','rejected'].map((v) => <option key={v} value={v}>{humanize(v)}</option>)}</select></label>
           <label className="mt-5 block"><span className="flex justify-between font-mono text-[9px] uppercase tracking-wider" style={{ color: 'var(--muted)' }}><span>Min R1 score</span><strong style={{ color: 'var(--accent)' }}>{minScore}%</strong></span><input type="range" min="0" max="100" step="5" value={minScore} onChange={(e) => setMinScore(Number(e.target.value))} className="mt-3 w-full" style={{ accentColor: 'var(--accent)' }} /></label>
         </aside>
