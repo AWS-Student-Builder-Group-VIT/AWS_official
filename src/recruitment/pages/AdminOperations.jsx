@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Activity, CalendarClock, CheckCircle2, ClipboardCheck, Download, FilePlus2, FolderKanban, RefreshCw, Search, ShieldCheck, Users, X } from 'lucide-react';
+import { Activity, AlertTriangle, CalendarClock, CheckCircle2, ClipboardCheck, Download, FilePlus2, FolderKanban, RefreshCw, Search, ShieldCheck, Users, X } from 'lucide-react';
 import { createClient } from '../lib/supabase.js';
 import { formatDateTime } from '../lib/utils.js';
 import QuestionBank from './QuestionBank.jsx';
 
+const FILTER_STORAGE_KEY = 'ops-filter-v1';
+
 const emptyPayload = { admin: { id: '', email: '', name: '', role: '' }, candidates: [], attempts: [], assignments: [], submissions: [], bookings: [], results: [], domains: [], slots: [], written_questions: [], written_rules: [], subdomain_lookup: {}, synced_at: '' };
 const stageOrder = { selected: 8, waitlisted: 7, round_2: 6, round_1: 5, round_0: 4, pending: 3, rejected: 1 };
+
+function readPersistedFilters() {
+  try { const raw = sessionStorage.getItem(FILTER_STORAGE_KEY); if (!raw) return null; return JSON.parse(raw); } catch { return null; }
+}
+function writePersistedFilters(state) {
+  try { sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(state)); } catch {}
+}
 
 function humanize(value) { return value ? value.replaceAll('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase()) : 'Not started'; }
 function initials(name) { return name.split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase(); }
@@ -20,17 +29,25 @@ export default function AdminOperations() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [domainIds, setDomainIds] = useState([]);
-  const [subdomainId, setSubdomainId] = useState('');
-  const [stage, setStage] = useState('');
-  const [minScore, setMinScore] = useState(0);
-  const [sort, setSort] = useState('newest');
+  // Restore filters from sessionStorage so navigation away + back keeps selection intact
+  const [search, setSearch] = useState(() => readPersistedFilters()?.search ?? '');
+  const [domainIds, setDomainIds] = useState(() => readPersistedFilters()?.domainIds ?? []);
+  const [subdomainId, setSubdomainId] = useState(() => readPersistedFilters()?.subdomainId ?? '');
+  const [stage, setStage] = useState(() => readPersistedFilters()?.stage ?? '');
+  const [minScore, setMinScore] = useState(() => readPersistedFilters()?.minScore ?? 0);
+  const [sort, setSort] = useState(() => readPersistedFilters()?.sort ?? 'newest');
   const [showQuestionBank, setShowQuestionBank] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportDomainId, setExportDomainId] = useState('');
   const [exportQualFilter, setExportQualFilter] = useState('qualified');
+  const [disqualifying, setDisqualifying] = useState(''); // candidateId being processed
+
+  // Persist filter state so it survives navigation to candidate profile and back
+  useEffect(() => {
+    writePersistedFilters({ search, domainIds, subdomainId, stage, minScore, sort });
+  }, [search, domainIds, subdomainId, stage, minScore, sort]);
+
 
   const load = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true); else setLoading(true);
@@ -95,20 +112,79 @@ export default function AdminOperations() {
   function toggleDomain(id) { setDomainIds((curr) => curr.includes(id) ? curr.filter((item) => item !== id) : [...curr, id]); }
   function resetFilters() { setSearch(''); setDomainIds([]); setSubdomainId(''); setStage(''); setMinScore(0); setSort('newest'); }
 
-  const adminFetch = useCallback(async (path) => {
+  const adminFetch = useCallback(async (path, opts = {}) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('Administrator session expired.');
-    const response = await fetch(path, { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' });
+    const response = await fetch(path, {
+      ...opts,
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(opts.headers ?? {}),
+      },
+      cache: 'no-store',
+    });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error ?? `Request failed (HTTP ${response.status}).`);
     return result;
   }, [supabase]);
+
+  /**
+   * Disqualify the candidate ONLY for domains where they have NOT submitted a response.
+   * – Technical domain  → no assessment attempt or attempt.status !== 'submitted'
+   * – Non-technical     → no is_final written answer for that domain
+   * Other domains (already submitted) are left completely untouched.
+   */
+  async function disqualifyNonSubmitted(record) {
+    const candidateId = record.profile.id;
+    setDisqualifying(candidateId);
+    setError('');
+    try {
+      const choices = record.profile.subdomain_choices ?? [];
+      const toDisqualify = [];
+      for (const choice of choices) {
+        const domain = choice.subdomain?.domain;
+        const isTechnical = domain?.slug === 'technical';
+        if (isTechnical) {
+          const attempt = payload.attempts.find(
+            (a) => a.candidate_id === candidateId && a.domain_id === choice.subdomain?.domain_id,
+          );
+          if (!attempt || attempt.status !== 'submitted') {
+            toDisqualify.push(choice.subdomain_id);
+          }
+        } else {
+          const hasSubmitted = (payload.written_questions ?? []).some(
+            (wq) => wq.candidate_id === candidateId && wq.domain_id === choice.subdomain?.domain_id && wq.is_final,
+          );
+          if (!hasSubmitted) {
+            toDisqualify.push(choice.subdomain_id);
+          }
+        }
+      }
+      if (toDisqualify.length === 0) {
+        setError('All domains for this candidate already have submissions — nothing to disqualify.');
+        setDisqualifying('');
+        return;
+      }
+      for (const subdomainId of toDisqualify) {
+        await adminFetch(`/api/recruitment/admin/candidates/${encodeURIComponent(candidateId)}/qualify`, {
+          method: 'POST',
+          body: JSON.stringify({ subdomainId, qualified: false }),
+        });
+      }
+      await load(true);
+    } catch (err) {
+      setError(`Disqualify failed: ${err.message}`);
+    }
+    setDisqualifying('');
+  }
 
   function openExportModal() {
     setExportDomainId(payload.domains[0]?.id ?? '');
     setExportQualFilter('qualified');
     setShowExportModal(true);
   }
+
 
   async function runExport() {
     if (!exportDomainId) return;
@@ -236,7 +312,31 @@ export default function AdminOperations() {
             <span className="label !text-[9px]">Identifier / search</span>
             <span className="relative block"><Search size={14} className="absolute left-3 top-3" style={{ color: 'var(--dim)' }} /><input value={search} onChange={(e) => setSearch(e.target.value)} className="field !py-2 !pl-9 font-mono text-xs" placeholder="Name, reg, email…" /></span>
           </label>
-          <div className="mt-5"><p className="label !text-[9px]">Domain groups</p><div className="space-y-1">{payload.domains.map((domain) => { const count = records.filter((r) => r.profile.subdomain_choices?.some((c) => c.subdomain?.domain_id === domain.id)).length; return <label key={domain.id} className="flex cursor-pointer items-center justify-between border border-transparent px-2 py-2 font-mono text-[10px] hover:border-[var(--border)]" style={{ background: 'var(--surface)' }}><span className="flex items-center gap-2"><input type="checkbox" checked={domainIds.includes(domain.id)} onChange={() => toggleDomain(domain.id)} style={{ accentColor: 'var(--accent)' }} />{domain.name}</span><span style={{ color: 'var(--accent)' }}>{count}</span></label>; })}</div></div>
+          <div className="mt-5">
+            <p className="label !text-[9px]">Domain groups</p>
+            <div className="space-y-1">
+              {payload.domains.map((domain) => {
+                const count = records.filter((r) => r.profile.subdomain_choices?.some((c) => c.subdomain?.domain_id === domain.id)).length;
+                const active = domainIds.includes(domain.id);
+                return (
+                  <label
+                    key={domain.id}
+                    className="flex cursor-pointer items-center justify-between border px-2 py-2 font-mono text-[10px] transition"
+                    style={{
+                      background: active ? 'rgba(255,153,0,.08)' : 'var(--surface)',
+                      borderColor: active ? 'rgba(255,153,0,.45)' : 'transparent',
+                    }}
+                  >
+                    <span className="flex items-center gap-2">
+                      <input type="checkbox" checked={active} onChange={() => toggleDomain(domain.id)} style={{ accentColor: 'var(--accent)' }} />
+                      <span style={{ color: active ? 'var(--accent)' : 'var(--text)' }}>{domain.name}</span>
+                    </span>
+                    <span style={{ color: 'var(--accent)' }}>{count}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
           <label className="mt-5 block"><span className="label !text-[9px]">Pipeline stage</span><select value={stage} onChange={(e) => setStage(e.target.value)} className="field !py-2 font-mono text-xs"><option value="">All stages</option>{['pending','round_0','round_1','round_2','selected','waitlisted','rejected'].map((v) => <option key={v} value={v}>{humanize(v)}</option>)}</select></label>
           <label className="mt-5 block"><span className="flex justify-between font-mono text-[9px] uppercase tracking-wider" style={{ color: 'var(--muted)' }}><span>Min R1 score</span><strong style={{ color: 'var(--accent)' }}>{minScore}%</strong></span><input type="range" min="0" max="100" step="5" value={minScore} onChange={(e) => setMinScore(Number(e.target.value))} className="mt-3 w-full" style={{ accentColor: 'var(--accent)' }} /></label>
         </aside>
@@ -252,23 +352,105 @@ export default function AdminOperations() {
             </label>
           </div>
           <div className="overflow-auto">
-            <table className="w-full min-w-[850px] border-collapse text-left text-xs">
+            <table className="w-full min-w-[1050px] border-collapse text-left text-xs">
               <thead className="sticky top-0 z-10 border-b-2 font-mono text-[9px] uppercase tracking-wider" style={{ borderColor: 'var(--border)', background: '#080a0d', color: 'var(--muted)' }}>
-                <tr>{['Candidate identity','Subdomain pair','Round 1','Round 2 projects','Round 3 interviews','Decision'].map((h) => <th key={h} className="px-3 py-3">{h}</th>)}</tr>
+                <tr>
+                  <th className="px-3 py-3">Candidate identity</th>
+                  <th className="px-3 py-3">Domain · Submission · Qualification</th>
+                  <th className="px-3 py-3">Round 1</th>
+                  <th className="px-3 py-3">Round 2 projects</th>
+                  <th className="px-3 py-3">Round 3 interviews</th>
+                  <th className="px-3 py-3">Decision</th>
+                  <th className="px-3 py-3">Actions</th>
+                </tr>
               </thead>
               <tbody>
                 {filtered.map((record) => {
                   const { profile, attempt, assignments, submissions, bookings, result } = record;
                   const pct = scorePercent(attempt);
                   const choices = [...(profile.subdomain_choices ?? [])].sort((a, b) => a.priority - b.priority);
+                  const isBusy = disqualifying === profile.id;
+
+                  // Build per-domain submission + qualification status
+                  const domainRows = choices.map((choice) => {
+                    const domain = choice.subdomain?.domain;
+                    const isTechnical = domain?.slug === 'technical';
+                    const label = choiceLabel(choice);
+                    let submitted = false;
+                    let qualStatus = null;
+                    if (isTechnical) {
+                      const domainAttempt = payload.attempts.find(
+                        (a) => a.candidate_id === profile.id && a.domain_id === choice.subdomain?.domain_id,
+                      );
+                      submitted = domainAttempt?.status === 'submitted';
+                      qualStatus = domainAttempt?.admin_qualified ?? null;
+                    } else {
+                      const hasSubmitted = (payload.written_questions ?? []).some(
+                        (wq) => wq.candidate_id === profile.id && wq.domain_id === choice.subdomain?.domain_id && wq.is_final,
+                      );
+                      submitted = hasSubmitted;
+                      qualStatus = choice.admin_qualified ?? null;
+                    }
+                    return { choice, label, submitted, qualStatus };
+                  });
+
+                  const hasUnsubmitted = domainRows.some((dr) => !dr.submitted);
+
                   return (
-                    <tr key={profile.id} onClick={() => navigate(`/recruitment/admin/candidates/${profile.id}`)} className="cursor-pointer border-b transition hover:bg-[rgba(255,153,0,.05)]" style={{ borderColor: 'var(--border)', background: 'rgba(17,19,24,.4)' }}>
-                      <td className="px-3 py-3"><div className="flex items-center gap-2"><span className="grid h-8 w-8 shrink-0 place-items-center border font-mono text-[10px] font-bold" style={{ borderColor: 'rgba(255,153,0,.4)', background: 'rgba(255,153,0,.1)', color: 'var(--accent)' }}>{initials(profile.full_name)}</span><span className="min-w-0"><strong className="block truncate text-sm" style={{ color: 'var(--text)' }}>{profile.full_name}</strong><span className="font-mono text-[9px]" style={{ color: 'var(--accent)' }}>#{profile.registration_number}</span><span className="block text-[9px]" style={{ color: 'var(--dim)' }}>{profile.branch ?? 'Branch —'} · Year {profile.year ?? '—'}</span></span></div></td>
-                      <td className="px-3 py-3">{choices.length ? choices.map((c) => <span key={c.subdomain_id} className="block font-mono text-[9px]" style={{ color: 'var(--accent)' }}>{choiceLabel(c)}</span>) : <span style={{ color: 'var(--dim)' }}>Unassigned</span>}</td>
-                      <td className="px-3 py-3 font-mono">{pct == null ? <span style={{ color: 'var(--dim)' }}>{humanize(profile.round_0_status)}</span> : <><strong style={{ color: pct >= 70 ? 'var(--success)' : pct >= 40 ? 'var(--warning)' : 'var(--error)' }}>{attempt?.score}/{attempt?.total_marks} ({pct}%)</strong><span className="block text-[9px]" style={{ color: 'var(--dim)' }}>{attempt?.auto_submitted ? 'Auto-submitted' : humanize(attempt?.status)}</span></>}</td>
-                      <td className="px-3 py-3 font-mono text-[9px]">{assignments.length ? <><span style={{ color: 'var(--text)' }}>{assignments.length} assigned</span><span className="block" style={{ color: 'var(--success)' }}>{submissions.length} submitted · {submissions.filter((s) => s.evaluation).length} graded</span></> : <span style={{ color: 'var(--dim)' }}>Not assigned</span>}</td>
-                      <td className="px-3 py-3 font-mono text-[9px]">{bookings.length ? <><span style={{ color: 'var(--text)' }}>{bookings.length} booked</span><span className="block" style={{ color: 'var(--success)' }}>Confirmed</span></> : <span style={{ color: 'var(--dim)' }}>Not booked</span>}</td>
-                      <td className="px-3 py-3"><span className="border px-2 py-1 font-mono text-[9px] uppercase" style={result?.result === 'selected' || profile.status === 'selected' ? { borderColor: 'rgba(34,197,94,.5)', background: 'rgba(34,197,94,.1)', color: 'var(--success)' } : profile.status === 'rejected' ? { borderColor: 'rgba(239,68,68,.5)', background: 'rgba(239,68,68,.1)', color: 'var(--error)' } : { borderColor: 'var(--border)', color: 'var(--muted)' }}>{humanize(result?.result ?? profile.status)}</span></td>
+                    <tr key={profile.id} className="border-b transition hover:bg-[rgba(255,153,0,.04)]" style={{ borderColor: 'var(--border)', background: 'rgba(17,19,24,.4)' }}>
+
+                      {/* Identity */}
+                      <td className="cursor-pointer px-3 py-3" onClick={() => navigate(`/recruitment/admin/candidates/${profile.id}`)}
+                      ><div className="flex items-center gap-2"><span className="grid h-8 w-8 shrink-0 place-items-center border font-mono text-[10px] font-bold" style={{ borderColor: 'rgba(255,153,0,.4)', background: 'rgba(255,153,0,.1)', color: 'var(--accent)' }}>{initials(profile.full_name)}</span><span className="min-w-0"><strong className="block truncate text-sm" style={{ color: 'var(--text)' }}>{profile.full_name}</strong><span className="font-mono text-[9px]" style={{ color: 'var(--accent)' }}>#{profile.registration_number}</span><span className="block text-[9px]" style={{ color: 'var(--dim)' }}>{profile.branch ?? 'Branch —'} · Year {profile.year ?? '—'}</span></span></div></td>
+
+                      {/* Domain · Submission · Qualification */}
+                      <td className="px-3 py-3">
+                        {domainRows.length ? (
+                          <div className="space-y-1.5">
+                            {domainRows.map(({ choice, label, submitted, qualStatus }) => (
+                              <div key={choice.subdomain_id} className="flex flex-wrap items-center gap-1">
+                                <span className="font-mono text-[9px]" style={{ color: 'var(--accent)' }}>{label}</span>
+                                <span className="rounded-sm px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase" style={submitted ? { background: 'rgba(34,197,94,.15)', color: 'var(--success)' } : { background: 'rgba(239,68,68,.12)', color: 'var(--error)' }}>
+                                  {submitted ? 'Submitted' : 'Not submitted'}
+                                </span>
+                                <span className="rounded-sm px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase" style={qualStatus === true ? { background: 'rgba(34,197,94,.12)', color: 'var(--success)' } : qualStatus === false ? { background: 'rgba(239,68,68,.12)', color: 'var(--error)' } : { background: 'rgba(255,153,0,.08)', color: 'var(--warning)' }}>
+                                  {qualStatus === true ? '✓ Qualified' : qualStatus === false ? '✗ Not qualified' : '⋯ Pending'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : <span style={{ color: 'var(--dim)' }}>Unassigned</span>}
+                      </td>
+
+                      {/* Round 1 */}
+                      <td className="cursor-pointer px-3 py-3 font-mono" onClick={() => navigate(`/recruitment/admin/candidates/${profile.id}`)}>{pct == null ? <span style={{ color: 'var(--dim)' }}>{humanize(profile.round_0_status)}</span> : <><strong style={{ color: pct >= 70 ? 'var(--success)' : pct >= 40 ? 'var(--warning)' : 'var(--error)' }}>{attempt?.score}/{attempt?.total_marks} ({pct}%)</strong><span className="block text-[9px]" style={{ color: 'var(--dim)' }}>{attempt?.auto_submitted ? 'Auto-submitted' : humanize(attempt?.status)}</span></>}</td>
+
+                      {/* Round 2 */}
+                      <td className="cursor-pointer px-3 py-3 font-mono text-[9px]" onClick={() => navigate(`/recruitment/admin/candidates/${profile.id}`)}>{assignments.length ? <><span style={{ color: 'var(--text)' }}>{assignments.length} assigned</span><span className="block" style={{ color: 'var(--success)' }}>{submissions.length} submitted · {submissions.filter((s) => s.evaluation).length} graded</span></> : <span style={{ color: 'var(--dim)' }}>Not assigned</span>}</td>
+
+                      {/* Round 3 */}
+                      <td className="cursor-pointer px-3 py-3 font-mono text-[9px]" onClick={() => navigate(`/recruitment/admin/candidates/${profile.id}`)}>{bookings.length ? <><span style={{ color: 'var(--text)' }}>{bookings.length} booked</span><span className="block" style={{ color: 'var(--success)' }}>Confirmed</span></> : <span style={{ color: 'var(--dim)' }}>Not booked</span>}</td>
+
+                      {/* Decision */}
+                      <td className="cursor-pointer px-3 py-3" onClick={() => navigate(`/recruitment/admin/candidates/${profile.id}`)}
+                      ><span className="border px-2 py-1 font-mono text-[9px] uppercase" style={result?.result === 'selected' || profile.status === 'selected' ? { borderColor: 'rgba(34,197,94,.5)', background: 'rgba(34,197,94,.1)', color: 'var(--success)' } : profile.status === 'rejected' ? { borderColor: 'rgba(239,68,68,.5)', background: 'rgba(239,68,68,.1)', color: 'var(--error)' } : { borderColor: 'var(--border)', color: 'var(--muted)' }}>{humanize(result?.result ?? profile.status)}</span></td>
+
+                      {/* Actions */}
+                      <td className="px-3 py-3">
+                        {hasUnsubmitted && (
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={(e) => { e.stopPropagation(); disqualifyNonSubmitted(record); }}
+                            title="Mark NOT QUALIFIED only for domains where this candidate has not submitted"
+                            className="inline-flex items-center gap-1 border px-2 py-1.5 font-mono text-[8px] font-bold uppercase transition hover:opacity-90 disabled:opacity-40"
+                            style={{ borderColor: 'rgba(239,68,68,.5)', background: 'rgba(239,68,68,.08)', color: 'var(--error)', whiteSpace: 'nowrap' }}
+                          >
+                            <AlertTriangle size={10} />
+                            {isBusy ? 'Working…' : 'Disqualify unsubmitted'}
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
