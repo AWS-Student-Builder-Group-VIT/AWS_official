@@ -187,6 +187,7 @@ CREATE TABLE interview_slots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   date_id UUID REFERENCES interview_dates(id) ON DELETE CASCADE,
   slot_time TIME NOT NULL,
+  slot_duration_minutes INTEGER DEFAULT 30,
   is_booked BOOLEAN DEFAULT false
   ,status TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available','reserved','booked','disabled'))
 );

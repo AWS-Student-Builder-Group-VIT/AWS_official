@@ -18,3 +18,17 @@ export function createInterviewSlotRows(dateId, schedule) {
 
   return slots;
 }
+
+/**
+ * Creates slot rows from a manually defined list of {slot_time, duration_minutes}.
+ * Allows each slot to have its own time and duration rather than being auto-generated.
+ */
+export function createManualSlotRows(dateId, manualSlots) {
+  return manualSlots
+    .filter((s) => s.slot_time && s.slot_time.trim())
+    .map((s) => ({
+      date_id: dateId,
+      slot_time: s.slot_time.length === 5 ? `${s.slot_time}:00` : s.slot_time,
+      slot_duration_minutes: Number(s.duration_minutes) || 30,
+    }));
+}
