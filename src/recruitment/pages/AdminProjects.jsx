@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Download } from 'lucide-react';
 import { createClient } from '../lib/supabase.js';
 import { formatDateTime } from '../lib/utils.js';
 
@@ -15,7 +16,7 @@ export default function AdminProjects() {
   const load = async () => {
     const { data } = await supabase
       .from('project_submissions')
-      .select('*, candidate:candidate_profiles(full_name,registration_number), assignment:project_assignments(project:projects(title,code)), evaluation:project_evaluations(*)')
+      .select('*, candidate:candidate_profiles(full_name,registration_number,email,domain:domains!candidate_profiles_domain_id_fkey(name),subdomain:subdomains!candidate_profiles_subdomain_id_fkey(name)), assignment:project_assignments(project:projects(title,code)), evaluation:project_evaluations(*)')
       .order('submitted_at', { ascending: false });
     setSubmissions(data ?? []);
     setLoading(false);
@@ -42,13 +43,48 @@ export default function AdminProjects() {
     setSaving(false);
   };
 
+  const handleExport = () => {
+    if (!submissions || submissions.length === 0) return;
+
+    let csv = 'Registration Number,Name,Email,Domain,Subdomain,Project,GitHub URL,Qualified\n';
+
+    submissions.forEach(s => {
+      const regNo = s.candidate?.registration_number || '';
+      const name = s.candidate?.full_name || '';
+      const email = s.candidate?.email || '';
+      const domain = s.candidate?.domain?.name || '';
+      const subdomain = s.candidate?.subdomain?.name || '';
+      const projectTitle = s.assignment?.project?.title || '';
+      const githubUrl = s.github_url || '';
+      const qualified = s.evaluation ? (s.evaluation.qualified ? 'Yes' : 'No') : 'Pending';
+
+      const escape = (str) => `"${String(str).replace(/"/g, '""')}"`;
+
+      csv += `${escape(regNo)},${escape(name)},${escape(email)},${escape(domain)},${escape(subdomain)},${escape(projectTitle)},${escape(githubUrl)},${escape(qualified)}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'project_submissions.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (loading) return <div className="flex h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }} /></div>;
   const activeSubmission = submissions.find((s) => s.id === active);
   const totalScore = evalData.technical_score + evalData.problem_solving_score + evalData.aws_score + evalData.code_quality_score + evalData.ux_score + evalData.documentation_score;
 
   return (
     <div className="p-6">
-      <h1 className="mb-6 text-2xl font-bold" style={{ color: 'var(--text)' }}>Project Submissions ({submissions.length})</h1>
+      <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>Project Submissions ({submissions.length})</h1>
+        <button onClick={handleExport} className="flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition hover:opacity-80" style={{ borderColor: 'var(--border)', color: 'var(--text)', background: 'var(--surface)' }}>
+          <Download size={16} /> Export CSV
+        </button>
+      </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {submissions.length === 0 && <div className="col-span-2 rounded-xl border p-8 text-center text-sm" style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--muted)' }}>No project submissions yet.</div>}
         {submissions.map((s) => (
