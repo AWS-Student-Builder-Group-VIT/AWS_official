@@ -19,6 +19,11 @@ export default function DashboardLayout() {
         supabase.from('candidate_profiles').select('*').eq('id', user.id).maybeSingle(),
         supabase.from('admin_users').select('id').eq('id', user.id).maybeSingle(),
       ]);
+      // Portal is closed — non-admin candidates are redirected to the notice page
+      if (!adminData) {
+        navigate('/recruitment/portal-closed', { replace: true });
+        return;
+      }
       setProfile(profileData);
       setIsAdmin(Boolean(adminData));
     });

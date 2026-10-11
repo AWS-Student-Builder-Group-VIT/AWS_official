@@ -37,19 +37,8 @@ export default function AuthCallback() {
           return;
         }
 
-        // Check profile completion
-        setStatus('Checking your profile…');
-        const { data: profile } = await supabase
-          .from('candidate_profiles')
-          .select('profile_complete')
-          .eq('id', data.user.id)
-          .maybeSingle();
-
-        if (profile?.profile_complete) {
-          navigate('/recruitment/dashboard', { replace: true });
-        } else {
-          navigate('/recruitment/profile/complete', { replace: true });
-        }
+        // Portal is closed — redirect all candidates to the closed notice
+        navigate('/recruitment/portal-closed', { replace: true });
       } catch (err) {
         const msg = encodeURIComponent(err?.message || 'An unexpected error occurred.');
         navigate(`/recruitment/login?error=oauth_failed&message=${msg}`, { replace: true });

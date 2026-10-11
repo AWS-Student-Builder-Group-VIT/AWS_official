@@ -21,6 +21,7 @@ import Assessment from './pages/Assessment.jsx';
 import RoundTwo from './pages/RoundTwo.jsx';
 import CandidateInterview from './pages/CandidateInterview.jsx';
 import CandidateResult from './pages/CandidateResult.jsx';
+import PortalClosed from './pages/PortalClosed.jsx';
 
 // Admin pages
 import AdminLogin from './pages/AdminLogin.jsx';
@@ -43,6 +44,7 @@ export default function Recruitment() {
         <Route index element={<Landing />} />
         <Route path="login" element={<Login />} />
         <Route path="auth/callback" element={<AuthCallback />} />
+        <Route path="portal-closed" element={<PortalClosed />} />
 
         {/* ── Candidate — protected by DashboardLayout ──── */}
         <Route element={<DashboardLayout />}>

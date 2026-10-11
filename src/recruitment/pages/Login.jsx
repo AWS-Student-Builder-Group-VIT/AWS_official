@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createClient } from '../lib/supabase.js';
 import { parseAllowedDomains, allowedDomainsMessage } from '../lib/email-domains.js';
@@ -10,6 +10,23 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const allowedDomains = parseAllowedDomains(import.meta.env.VITE_ALLOWED_EMAIL_DOMAINS);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const { data: adminData } = await supabase
+        .from('admin_users')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (adminData) {
+        navigate('/recruitment/admin/operations', { replace: true });
+      } else {
+        navigate('/recruitment/portal-closed', { replace: true });
+      }
+    });
+  }, [supabase, navigate]);
 
   async function signInWithGoogle() {
     setLoading(true);
@@ -54,12 +71,18 @@ export default function Login() {
             className="h-12 w-12 rounded-lg object-contain border border-[var(--border)] p-1.5 bg-black/40"
           />
         </div>
-        <p className="eyebrow text-center">AWS SBG // RECRUITMENT</p>
-        <h1 className="mt-6 text-center text-3xl font-bold sm:text-4xl">
-          SIGN IN<br /><span className="text-[var(--accent)]">TO APPLY.</span>
+        <div className="flex justify-center mb-3">
+          <div className="inline-flex items-center gap-2 border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-[var(--accent)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
+            Interviews In Progress
+          </div>
+        </div>
+        <p className="eyebrow text-center">AWS SBG // RECRUITMENT 2026</p>
+        <h1 className="mt-4 text-center text-3xl font-bold sm:text-4xl">
+          PORTAL<br /><span className="text-[var(--accent)]">CLOSED.</span>
         </h1>
         <p className="mt-4 text-center text-sm text-[var(--muted)]">
-          Use your institutional Google account to continue.
+          Interviews are currently underway. Sign in with your registered institutional account to check your recruitment status.
         </p>
 
         {displayError && (
