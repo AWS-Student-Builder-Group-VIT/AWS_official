@@ -27,7 +27,7 @@ const DIFFICULTY_LEVELS = [
   { id: 'hard', label: 'Hard', color: '#f87171', bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.4)' },
 ];
 
-// Time allowed per question: 0.75 minutes. Keep in step with the server.
+// Time allowed per question: 1 minute. Keep in step with the server.
 const SECONDS_PER_QUESTION = QUIZ_SECONDS_PER_QUESTION;
 
 const DEFAULT_ASSERTION_REASON_OPTIONS = [
@@ -899,7 +899,7 @@ export default function CloudIntelligenceAdmin({ token }) {
                 Automatic Dynamic Duration Rule
               </span>
               <p className="text-xs text-white/90">
-                Duration = <strong>15 minutes for 20 questions ({SECONDS_PER_QUESTION} seconds per question)</strong>.
+                Duration = <strong>20 minutes for 20 questions ({SECONDS_PER_QUESTION} seconds per question)</strong>.
               </p>
               <p className="text-[11px] text-[#dbc2ad]">
                 Current Allotted Duration: <strong>{QUIZ_DURATION_MINUTES} Minutes ({QUIZ_DURATION_MINUTES * 60}s)</strong> for <strong>{questions.length} Question(s)</strong> in question bank.
