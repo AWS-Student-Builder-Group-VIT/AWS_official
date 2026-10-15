@@ -556,7 +556,7 @@ export default function QuizParticipantPage() {
           } else {
             // All questions have expired
             clearInterval(timerRef.current);
-            handleFinalSubmit(true, 'Assessment auto-submitted: 45-second time expired for all questions.');
+            handleFinalSubmit(true, 'Assessment auto-submitted: 60-second time expired for all questions.');
           }
         }
 
@@ -1162,7 +1162,7 @@ export default function QuizParticipantPage() {
                       <span>Accuracy &amp; Quickness Weightage</span>
                     </div>
                     <p className="leading-relaxed text-white/90">
-                      You have <strong>15 minutes for 20 questions</strong>, with <strong>45 seconds per question</strong>. Each question is worth <strong>1 Mark Total</strong>, split into <strong>0.6 for Correctness (60%)</strong> and <strong>0.4 for Speed (40%)</strong>.
+                      You have <strong>20 minutes for 20 questions</strong>, with <strong>60 seconds per question</strong>. Each question is worth <strong>1 Mark Total</strong>, split into <strong>0.6 for Correctness (60%)</strong> and <strong>0.4 for Speed (40%)</strong>.
                     </p>
                     <p className="text-[#dbc2ad] leading-relaxed">
                       💡 <em>Quickness scoring scales with each question you answer correctly. Fast answers combined with high accuracy maximize your speed bonus!</em>

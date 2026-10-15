@@ -1,5 +1,5 @@
 import { QUIZ_EVENT_TITLE, QUIZ_DURATION_MINUTES, QUIZ_DURATION_SECONDS, QUIZ_SECONDS_PER_QUESTION } from '../shared/quizEvent.js';
-// Twenty questions share a fifteen-minute assessment window.
+// Twenty questions share a twenty-minute assessment window.
 export const SECONDS_PER_QUESTION = QUIZ_SECONDS_PER_QUESTION;
 
 export async function initializeCloudIntelligence(pool) {
@@ -78,7 +78,7 @@ async function initializeGreenCloudTables(pool) {
       incorrect_count INTEGER DEFAULT 0,
       unanswered_count INTEGER DEFAULT 0,
       time_taken_seconds INTEGER DEFAULT 0,
-      total_allotted_seconds INTEGER DEFAULT 900,
+      total_allotted_seconds INTEGER DEFAULT 1200,
       answers JSONB DEFAULT '{}'::jsonb,
       breakdown JSONB DEFAULT '[]'::jsonb,
       submitted_at TIMESTAMPTZ DEFAULT NOW()
@@ -222,7 +222,7 @@ export function evaluateQuizSubmission({ questions, userAnswers, timeTakenSecond
   const accuracyScore = correctCount * 0.6;
 
   // 2. Speed Score (Max = Total Questions * 0.4)
-  // Allotted duration is 15 minutes for the event
+  // Allotted duration is 20 minutes for the event
   const totalAllotted = allottedSeconds || QUIZ_DURATION_SECONDS;
   const validAllotted = Math.max(SECONDS_PER_QUESTION, totalAllotted);
   const actualTime = Math.min(timeTakenSeconds, validAllotted);
@@ -430,7 +430,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       const allQuestions = allQuestionsRes.rows;
       const allottedSeconds = QUIZ_DURATION_SECONDS;
 
-      // Evaluate with 1-mark system (0.6 correctness + 0.4 speed against the 900-second event window)
+      // Evaluate with 1-mark system (0.6 correctness + 0.4 speed against the 1200-second event window)
       // Elapsed time comes from the start row written when the questions were fetched;
       // a browser-supplied number is used as fallback.
       const startedRes = await pool.query(
