@@ -1,3 +1,4 @@
+import { QUIZ_EVENT_TITLE, QUIZ_DURATION_MINUTES, QUIZ_SECONDS_PER_QUESTION } from '../../shared/quizEvent.js';
 import { useState, useEffect, useMemo } from 'react';
 import {
   fetchCloudIntelligenceQuestions,
@@ -26,9 +27,8 @@ const DIFFICULTY_LEVELS = [
   { id: 'hard', label: 'Hard', color: '#f87171', bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.4)' },
 ];
 
-// Time allowed per question: 0.5 minutes. Keep in step with the server.
-const SECONDS_PER_QUESTION = 30;
-const MINUTES_PER_QUESTION = SECONDS_PER_QUESTION / 60;
+// Time allowed per question: 0.75 minutes. Keep in step with the server.
+const SECONDS_PER_QUESTION = QUIZ_SECONDS_PER_QUESTION;
 
 const DEFAULT_ASSERTION_REASON_OPTIONS = [
   'Both Assertion (A) and Reason (R) are true, and (R) is the correct explanation of (A).',
@@ -60,8 +60,8 @@ export default function CloudIntelligenceAdmin({ token }) {
   // Settings & Freeze State
   const [settings, setSettings] = useState({
     status: 'unfrozen',
-    title: 'AWS Cloud Intelligence Assessment',
-    duration_minutes: 30,
+    title: QUIZ_EVENT_TITLE,
+    duration_minutes: QUIZ_DURATION_MINUTES,
   });
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -354,7 +354,7 @@ export default function CloudIntelligenceAdmin({ token }) {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `cloud_intelligence_winners_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `green_cloud_winners_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -474,7 +474,7 @@ export default function CloudIntelligenceAdmin({ token }) {
           </div>
           <div className="bg-white/3 p-3 border border-white/5">
             <span className="text-[10px] text-[#dbc2ad] uppercase tracking-wider block">Duration ({SECONDS_PER_QUESTION}s / Q)</span>
-            <span className="text-xl font-bold text-white">{(questions.length * MINUTES_PER_QUESTION).toFixed(1)} mins</span>
+            <span className="text-xl font-bold text-white">{QUIZ_DURATION_MINUTES} mins</span>
           </div>
           <div className="bg-white/3 p-3 border border-white/5">
             <span className="text-[10px] text-[#dbc2ad] uppercase tracking-wider block">Participants</span>
@@ -899,10 +899,10 @@ export default function CloudIntelligenceAdmin({ token }) {
                 Automatic Dynamic Duration Rule
               </span>
               <p className="text-xs text-white/90">
-                Duration = <strong>Total Questions × {MINUTES_PER_QUESTION} Minutes ({SECONDS_PER_QUESTION} seconds per question)</strong>.
+                Duration = <strong>15 minutes for 20 questions ({SECONDS_PER_QUESTION} seconds per question)</strong>.
               </p>
               <p className="text-[11px] text-[#dbc2ad]">
-                Current Allotted Duration: <strong>{(questions.length * MINUTES_PER_QUESTION).toFixed(1)} Minutes ({questions.length * SECONDS_PER_QUESTION}s)</strong> for <strong>{questions.length} Question(s)</strong> in question bank.
+                Current Allotted Duration: <strong>{QUIZ_DURATION_MINUTES} Minutes ({QUIZ_DURATION_MINUTES * 60}s)</strong> for <strong>{questions.length} Question(s)</strong> in question bank.
               </p>
             </div>
           </div>

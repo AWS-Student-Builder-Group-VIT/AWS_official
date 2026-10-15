@@ -1,10 +1,25 @@
-// Time allowed per question: 0.5 minutes.
-export const SECONDS_PER_QUESTION = 30;
+import { QUIZ_EVENT_TITLE, QUIZ_DURATION_MINUTES, QUIZ_DURATION_SECONDS, QUIZ_SECONDS_PER_QUESTION } from '../shared/quizEvent.js';
+// Twenty questions share a fifteen-minute assessment window.
+export const SECONDS_PER_QUESTION = QUIZ_SECONDS_PER_QUESTION;
 
 export async function initializeCloudIntelligence(pool) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await initializeGreenCloudTables(client);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function initializeGreenCloudTables(pool) {
   // 1. Questions table
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS cloud_intelligence_questions (
+    CREATE TABLE IF NOT EXISTS green_cloud_questions (
       id SERIAL PRIMARY KEY,
       question_text TEXT NOT NULL,
       question_type VARCHAR(32) NOT NULL DEFAULT 'mcq',
@@ -21,23 +36,24 @@ export async function initializeCloudIntelligence(pool) {
 
   // 2. Settings table
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS cloud_intelligence_settings (
+    CREATE TABLE IF NOT EXISTS green_cloud_settings (
       key VARCHAR(64) PRIMARY KEY,
       value JSONB NOT NULL,
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
 
+  await pool.query('LOCK TABLE green_cloud_settings IN EXCLUSIVE MODE');
   const defaultSettings = [
     ['status', JSON.stringify('frozen')], // 'frozen' | 'unfrozen' (default is frozen)
-    ['title', JSON.stringify('Cloud Intelligence Assessment')],
-    ['duration_minutes', JSON.stringify(30)],
+    ['title', JSON.stringify(QUIZ_EVENT_TITLE)],
+    ['duration_minutes', JSON.stringify(QUIZ_DURATION_MINUTES)],
     ['results_released', JSON.stringify(false)], // marks stay hidden until an admin releases them
   ];
 
   for (const [key, val] of defaultSettings) {
     await pool.query(
-      `INSERT INTO cloud_intelligence_settings (key, value)
+      `INSERT INTO green_cloud_settings (key, value)
        VALUES ($1, $2::jsonb)
        ON CONFLICT (key) DO NOTHING`,
       [key, val]
@@ -46,7 +62,7 @@ export async function initializeCloudIntelligence(pool) {
 
   // 3. Submissions table
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS cloud_intelligence_submissions (
+    CREATE TABLE IF NOT EXISTS green_cloud_submissions (
       id SERIAL PRIMARY KEY,
       user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       participant_name VARCHAR(128) NOT NULL,
@@ -62,7 +78,7 @@ export async function initializeCloudIntelligence(pool) {
       incorrect_count INTEGER DEFAULT 0,
       unanswered_count INTEGER DEFAULT 0,
       time_taken_seconds INTEGER DEFAULT 0,
-      total_allotted_seconds INTEGER DEFAULT 1800,
+      total_allotted_seconds INTEGER DEFAULT 900,
       answers JSONB DEFAULT '{}'::jsonb,
       breakdown JSONB DEFAULT '[]'::jsonb,
       submitted_at TIMESTAMPTZ DEFAULT NOW()
@@ -71,24 +87,24 @@ export async function initializeCloudIntelligence(pool) {
 
   // 3b. Start times, so the elapsed clock comes from the server, not the browser.
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS cloud_intelligence_attempts (
+    CREATE TABLE IF NOT EXISTS green_cloud_attempts (
       participant_email VARCHAR(255) PRIMARY KEY,
       started_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
   // One submission per email, enforced by the database and not just a lookup.
   await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS cloud_intelligence_submissions_email_key
-    ON cloud_intelligence_submissions (LOWER(participant_email));
+    CREATE UNIQUE INDEX IF NOT EXISTS green_cloud_submissions_email_key
+    ON green_cloud_submissions (LOWER(participant_email));
   `);
 
   // 4. Seed questions in Database if empty or incomplete
-  const qCountRes = await pool.query('SELECT COUNT(*)::int as count FROM cloud_intelligence_questions');
+  const qCountRes = await pool.query('SELECT COUNT(*)::int as count FROM green_cloud_questions');
   const existingCount = parseInt(qCountRes.rows[0]?.count || 0, 10);
-  if (existingCount < 30) {
+  if (existingCount === 0) {
     try {
       const fs = await import('fs');
-      const seedPath = './server/cloud_intelligence_seed.json';
+      const seedPath = new URL('./green_cloud_seed.json', import.meta.url);
       if (fs.existsSync(seedPath)) {
         const seedData = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
         if (Array.isArray(seedData) && seedData.length > 0) {
@@ -97,7 +113,7 @@ export async function initializeCloudIntelligence(pool) {
             const ans = q.correct_answer !== undefined ? q.correct_answer : q.answer;
 
             await pool.query(
-              `INSERT INTO cloud_intelligence_questions (
+              `INSERT INTO green_cloud_questions (
                 id, question_text, question_type, difficulty, assertion, reason, options, correct_answer, points
               )
               VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
@@ -124,13 +140,13 @@ export async function initializeCloudIntelligence(pool) {
             );
           }
           try {
-            await pool.query("SELECT setval('cloud_intelligence_questions_id_seq', (SELECT MAX(id) FROM cloud_intelligence_questions))");
+            await pool.query("SELECT setval('green_cloud_questions_id_seq', (SELECT MAX(id) FROM green_cloud_questions))");
           } catch {}
-          console.log(`Loaded ${seedData.length} questions from cloud_intelligence_seed.json`);
+          console.log(`Loaded ${seedData.length} questions from green_cloud_seed.json`);
         }
       }
     } catch (seedErr) {
-      console.warn('Could not load cloud_intelligence_seed.json:', seedErr.message);
+      throw new Error('Could not load Green Cloud questions: ' + seedErr.message, { cause: seedErr });
     }
   }
 }
@@ -206,9 +222,9 @@ export function evaluateQuizSubmission({ questions, userAnswers, timeTakenSecond
   const accuracyScore = correctCount * 0.6;
 
   // 2. Speed Score (Max = Total Questions * 0.4)
-  // Allotted duration is n * 30 seconds (0.5 * n minutes)
-  const totalAllotted = allottedSeconds || (totalQuestions * SECONDS_PER_QUESTION);
-  const validAllotted = Math.max(30, totalAllotted);
+  // Allotted duration is 15 minutes for the event
+  const totalAllotted = allottedSeconds || QUIZ_DURATION_SECONDS;
+  const validAllotted = Math.max(SECONDS_PER_QUESTION, totalAllotted);
   const actualTime = Math.min(timeTakenSeconds, validAllotted);
   const timeSavedRatio = Math.max(0, (validAllotted - actualTime) / validAllotted);
   const accuracyRatio = correctCount / totalQuestions;
@@ -279,7 +295,7 @@ async function buildReview(pool, submission) {
   const ids = breakdown.map((row) => row.questionId).filter(Boolean);
   if (!ids.length) return [];
   const { rows } = await pool.query(
-    'SELECT id, question_text, question_type, difficulty, assertion, reason, options, correct_answer FROM cloud_intelligence_questions WHERE id = ANY($1::int[])',
+    'SELECT id, question_text, question_type, difficulty, assertion, reason, options, correct_answer FROM green_cloud_questions WHERE id = ANY($1::int[])',
     [ids]
   );
   const byId = new Map(rows.map((q) => [q.id, q]));
@@ -304,11 +320,11 @@ async function buildReview(pool, submission) {
 
 export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) {
   const quizStatus = async () => {
-    const r = await pool.query("SELECT value FROM cloud_intelligence_settings WHERE key = 'status'");
+    const r = await pool.query("SELECT value FROM green_cloud_settings WHERE key = 'status'");
     return r.rows[0]?.value === 'unfrozen' ? 'unfrozen' : 'frozen';
   };
   const resultsReleased = async () => {
-    const r = await pool.query("SELECT value FROM cloud_intelligence_settings WHERE key = 'results_released'");
+    const r = await pool.query("SELECT value FROM green_cloud_settings WHERE key = 'results_released'");
     return r.rows[0]?.value === true;
   };
   // ── Public / Participant Quiz Endpoints ──────────────────────
@@ -316,22 +332,20 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
   // 1. Get Quiz Public Info
   app.get('/api/cloud-intelligence/quiz-info', async (req, res) => {
     try {
-      const settingsRes = await pool.query('SELECT key, value FROM cloud_intelligence_settings');
+      const settingsRes = await pool.query('SELECT key, value FROM green_cloud_settings');
       const settings = {};
       settingsRes.rows.forEach(r => { settings[r.key] = r.value; });
 
-      const countRes = await pool.query('SELECT COUNT(*)::int as count FROM cloud_intelligence_questions');
+      const countRes = await pool.query('SELECT COUNT(*)::int as count FROM green_cloud_questions');
       const totalQuestions = countRes.rows[0]?.count || 0;
       // Default to frozen unless explicitly set to 'unfrozen'
       const isFrozen = settings.status !== 'unfrozen';
-      // Duration is 0.5 minutes (30 seconds) per question
-      const perQuestionMinutes = SECONDS_PER_QUESTION / 60;
-      const durationMinutes = Number(((totalQuestions || 1) * perQuestionMinutes).toFixed(1));
-      const allottedSeconds = Math.max(SECONDS_PER_QUESTION, totalQuestions * SECONDS_PER_QUESTION);
+      const durationMinutes = QUIZ_DURATION_MINUTES;
+      const allottedSeconds = QUIZ_DURATION_SECONDS;
 
       res.json({
         resultsReleased: settings.results_released === true,
-        title: settings.title || 'Cloud Intelligence Assessment',
+        title: settings.title || 'AWS 110 — SDG: The Green Cloud',
         durationMinutes,
         allottedSeconds,
         isFrozen,
@@ -346,7 +360,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
   // 2. Get Randomized Questions for Participant
   app.get('/api/cloud-intelligence/questions', async (req, res) => {
     try {
-      const statusRes = await pool.query("SELECT value FROM cloud_intelligence_settings WHERE key = 'status'");
+      const statusRes = await pool.query("SELECT value FROM green_cloud_settings WHERE key = 'status'");
       const status = statusRes.rows[0]?.value;
       if (status !== 'unfrozen') {
         return res.status(403).json({ error: 'Quiz is currently frozen by the administrator.' });
@@ -356,7 +370,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       const email = String(req.query.email || '').trim().toLowerCase();
       if (email) {
         await pool.query(
-          `INSERT INTO cloud_intelligence_attempts (participant_email, started_at)
+          `INSERT INTO green_cloud_attempts (participant_email, started_at)
            VALUES ($1, NOW())
            ON CONFLICT (participant_email) DO UPDATE SET started_at = NOW()`,
           [email]
@@ -365,7 +379,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
 
       const result = await pool.query(`
         SELECT id, question_text, question_type, difficulty, assertion, reason, options
-        FROM cloud_intelligence_questions
+        FROM green_cloud_questions
         ORDER BY RANDOM()
       `);
 
@@ -373,6 +387,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
         questions: result.rows,
         totalCount: result.rows.length,
         secondsPerQuestion: SECONDS_PER_QUESTION,
+        allottedSeconds: QUIZ_DURATION_SECONDS,
       });
     } catch (error) {
       console.error('Participant questions error:', error);
@@ -401,7 +416,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
 
       // Check duplicate submission
       const existing = await pool.query(
-        'SELECT * FROM cloud_intelligence_submissions WHERE LOWER(participant_email) = LOWER($1) ORDER BY submitted_at DESC LIMIT 1',
+        'SELECT * FROM green_cloud_submissions WHERE LOWER(participant_email) = LOWER($1) ORDER BY submitted_at DESC LIMIT 1',
         [participantEmail.trim()]
       );
       if (existing.rows.length > 0) {
@@ -411,16 +426,15 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
         });
       }
 
-      const allQuestionsRes = await pool.query('SELECT * FROM cloud_intelligence_questions');
+      const allQuestionsRes = await pool.query('SELECT * FROM green_cloud_questions');
       const allQuestions = allQuestionsRes.rows;
-      const totalQuestions = allQuestions.length;
-      const allottedSeconds = Math.max(SECONDS_PER_QUESTION, totalQuestions * SECONDS_PER_QUESTION);
+      const allottedSeconds = QUIZ_DURATION_SECONDS;
 
-      // Evaluate with 1-mark system (0.6 correctness + 0.4 speed against dynamic 30s/q)
+      // Evaluate with 1-mark system (0.6 correctness + 0.4 speed against the 900-second event window)
       // Elapsed time comes from the start row written when the questions were fetched;
       // a browser-supplied number is used as fallback.
       const startedRes = await pool.query(
-        'SELECT started_at FROM cloud_intelligence_attempts WHERE participant_email = $1',
+        'SELECT started_at FROM green_cloud_attempts WHERE participant_email = $1',
         [participantEmail.trim().toLowerCase()]
       );
       const startedAt = startedRes.rows[0]?.started_at;
@@ -437,7 +451,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       });
 
       const insertRes = await pool.query(
-        `INSERT INTO cloud_intelligence_submissions (
+        `INSERT INTO green_cloud_submissions (
           participant_name, participant_email, participant_reg_no,
           score, total_marks, percentage, composite_score, accuracy_score, speed_score,
           correct_count, incorrect_count, unanswered_count,
@@ -468,7 +482,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
 
       // Clean up the attempt record after successful submission
       await pool.query(
-        'DELETE FROM cloud_intelligence_attempts WHERE participant_email = $1',
+        'DELETE FROM green_cloud_attempts WHERE participant_email = $1',
         [participantEmail.trim().toLowerCase()]
       ).catch(() => {});
 
@@ -495,7 +509,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       if (!email) return res.status(400).json({ error: 'Email is required' });
 
       const result = await pool.query(
-        'SELECT * FROM cloud_intelligence_submissions WHERE LOWER(participant_email) = LOWER($1) ORDER BY submitted_at DESC LIMIT 1',
+        'SELECT * FROM green_cloud_submissions WHERE LOWER(participant_email) = LOWER($1) ORDER BY submitted_at DESC LIMIT 1',
         [email.trim()]
       );
 
@@ -521,7 +535,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
   // Get all questions
   app.get('/api/admin/cloud-intelligence/questions', adminMiddleware, async (req, res) => {
     try {
-      const result = await pool.query('SELECT * FROM cloud_intelligence_questions ORDER BY id ASC');
+      const result = await pool.query('SELECT * FROM green_cloud_questions ORDER BY id ASC');
       res.json(result.rows);
     } catch (error) {
       console.error('Fetch questions error:', error);
@@ -555,7 +569,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       const parsedOptions = Array.isArray(options) ? options : [];
 
       const result = await pool.query(
-        `INSERT INTO cloud_intelligence_questions (
+        `INSERT INTO green_cloud_questions (
           question_text, question_type, difficulty, assertion, reason, options,
           correct_answer, points
         )
@@ -596,7 +610,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       const parsedOptions = Array.isArray(options) ? options : [];
 
       const result = await pool.query(
-        `UPDATE cloud_intelligence_questions
+        `UPDATE green_cloud_questions
          SET question_text = $1,
              question_type = $2,
              difficulty = $3,
@@ -632,7 +646,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
   app.delete('/api/admin/cloud-intelligence/questions/:id', adminMiddleware, async (req, res) => {
     try {
       const { id } = req.params;
-      const result = await pool.query('DELETE FROM cloud_intelligence_questions WHERE id = $1 RETURNING id', [id]);
+      const result = await pool.query('DELETE FROM green_cloud_questions WHERE id = $1 RETURNING id', [id]);
       if (result.rows.length === 0) return res.status(404).json({ error: 'Question not found' });
       res.json({ success: true, deletedId: id });
     } catch (error) {
@@ -650,7 +664,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       }
 
       await pool.query(
-        `INSERT INTO cloud_intelligence_settings (key, value, updated_at)
+        `INSERT INTO green_cloud_settings (key, value, updated_at)
          VALUES ('status', $1::jsonb, NOW())
          ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
         [JSON.stringify(status)]
@@ -668,7 +682,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
     try {
       const released = Boolean(req.body?.released);
       await pool.query(
-        `INSERT INTO cloud_intelligence_settings (key, value, updated_at)
+        `INSERT INTO green_cloud_settings (key, value, updated_at)
          VALUES ('results_released', $1::jsonb, NOW())
          ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
         [JSON.stringify(released)]
@@ -683,13 +697,11 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
   // Get settings
   app.get('/api/admin/cloud-intelligence/settings', adminMiddleware, async (req, res) => {
     try {
-      const result = await pool.query('SELECT key, value FROM cloud_intelligence_settings');
+      const result = await pool.query('SELECT key, value FROM green_cloud_settings');
       const settings = {};
       result.rows.forEach(r => { settings[r.key] = r.value; });
 
-      const countRes = await pool.query('SELECT COUNT(*)::int as count FROM cloud_intelligence_questions');
-      const qCount = countRes.rows[0]?.count || 0;
-      settings.duration_minutes = Number(((qCount || 1) * (SECONDS_PER_QUESTION / 60)).toFixed(1));
+      settings.duration_minutes = QUIZ_DURATION_MINUTES;
 
       res.json(settings);
     } catch (error) {
@@ -703,14 +715,14 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
       const { title, duration_minutes } = req.body;
       if (title) {
         await pool.query(
-          "INSERT INTO cloud_intelligence_settings (key, value, updated_at) VALUES ('title', $1::jsonb, NOW()) ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()",
+          "INSERT INTO green_cloud_settings (key, value, updated_at) VALUES ('title', $1::jsonb, NOW()) ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()",
           [JSON.stringify(title)]
         );
       }
       if (duration_minutes) {
         await pool.query(
-          "INSERT INTO cloud_intelligence_settings (key, value, updated_at) VALUES ('duration_minutes', $1::jsonb, NOW()) ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()",
-          [JSON.stringify(Number(duration_minutes))]
+          "INSERT INTO green_cloud_settings (key, value, updated_at) VALUES ('duration_minutes', $1::jsonb, NOW()) ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()",
+          [JSON.stringify(QUIZ_DURATION_MINUTES)]
         );
       }
       res.json({ success: true });
@@ -723,7 +735,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
   app.get('/api/admin/cloud-intelligence/results', adminMiddleware, async (req, res) => {
     try {
       const submissionsRes = await pool.query(`
-        SELECT * FROM cloud_intelligence_submissions
+        SELECT * FROM green_cloud_submissions
         ORDER BY score DESC, accuracy_score DESC, time_taken_seconds ASC, submitted_at ASC
       `);
 
@@ -733,7 +745,7 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
           COALESCE(AVG(score), 0)::numeric(6,2) as avg_score,
           COALESCE(MAX(score), 0)::numeric(6,2) as max_score,
           COALESCE(AVG(time_taken_seconds), 0)::int as avg_time_seconds
-        FROM cloud_intelligence_submissions
+        FROM green_cloud_submissions
       `);
 
       res.json({
@@ -749,8 +761,8 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
   // Reset Results
   app.post('/api/admin/cloud-intelligence/results/reset', adminMiddleware, async (req, res) => {
     try {
-      await pool.query('TRUNCATE TABLE cloud_intelligence_submissions');
-      await pool.query('TRUNCATE TABLE cloud_intelligence_attempts').catch(() => {});
+      await pool.query('TRUNCATE TABLE green_cloud_submissions');
+      await pool.query('TRUNCATE TABLE green_cloud_attempts').catch(() => {});
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: 'Failed to reset results' });
@@ -761,11 +773,11 @@ export function registerCloudIntelligenceRoutes(app, { pool, adminMiddleware }) 
   app.delete('/api/admin/cloud-intelligence/results/:id', adminMiddleware, async (req, res) => {
     try {
       const { id } = req.params;
-      const subRes = await pool.query('SELECT participant_email FROM cloud_intelligence_submissions WHERE id = $1', [id]);
+      const subRes = await pool.query('SELECT participant_email FROM green_cloud_submissions WHERE id = $1', [id]);
       if (subRes.rows.length > 0 && subRes.rows[0].participant_email) {
-        await pool.query('DELETE FROM cloud_intelligence_attempts WHERE participant_email = $1', [subRes.rows[0].participant_email]).catch(() => {});
+        await pool.query('DELETE FROM green_cloud_attempts WHERE participant_email = $1', [subRes.rows[0].participant_email]).catch(() => {});
       }
-      await pool.query('DELETE FROM cloud_intelligence_submissions WHERE id = $1', [id]);
+      await pool.query('DELETE FROM green_cloud_submissions WHERE id = $1', [id]);
       res.json({ success: true, deletedId: id });
     } catch (error) {
       res.status(500).json({ error: 'Failed to delete result' });

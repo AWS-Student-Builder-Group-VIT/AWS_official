@@ -1,0 +1,282 @@
+[
+  {
+    "id": 1,
+    "question_text": "Which of these is NOT a cloud service model?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "IaaS",
+      "PaaS",
+      "SaaS",
+      "HaaS"
+    ],
+    "correct_answer": "HaaS",
+    "points": 1
+  },
+  {
+    "id": 2,
+    "question_text": "What is the ability to automatically scale resources up or down based on demand called?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Elasticity",
+      "Virtualization",
+      "Latency",
+      "Redundancy"
+    ],
+    "correct_answer": "Elasticity",
+    "points": 1
+  },
+  {
+    "id": 3,
+    "question_text": "SDG 12 focuses on:",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Clean Water",
+      "Responsible Consumption and Production",
+      "Climate Action",
+      "Zero Hunger"
+    ],
+    "correct_answer": "Responsible Consumption and Production",
+    "points": 1
+  },
+  {
+    "id": 4,
+    "question_text": "SDG 13 focuses on:",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Life on Land",
+      "Quality Education",
+      "Climate Action",
+      "Affordable Energy"
+    ],
+    "correct_answer": "Climate Action",
+    "points": 1
+  },
+  {
+    "id": 5,
+    "question_text": "What is the biggest source of environmental impact in a data center?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Office furniture",
+      "Electricity for servers and cooling",
+      "Paper use",
+      "Building paint"
+    ],
+    "correct_answer": "Electricity for servers and cooling",
+    "points": 1
+  },
+  {
+    "id": 6,
+    "question_text": "PUE in data centers stands for:",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Power Usage Effectiveness",
+      "Public Usage Estimate",
+      "Peak Uptime Efficiency",
+      "Processing Unit Energy"
+    ],
+    "correct_answer": "Power Usage Effectiveness",
+    "points": 1
+  },
+  {
+    "id": 7,
+    "question_text": "Which digital activity contributes to carbon emissions?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Video streaming",
+      "Cloud storage",
+      "Online gaming",
+      "All of the above"
+    ],
+    "correct_answer": "All of the above",
+    "points": 1
+  },
+  {
+    "id": 8,
+    "question_text": "“Right-sizing” means:",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Buying the largest server available",
+      "Matching resources to the actual workload",
+      "Deleting all backups",
+      "Moving to on-premise servers"
+    ],
+    "correct_answer": "Matching resources to the actual workload",
+    "points": 1
+  },
+  {
+    "id": 9,
+    "question_text": "Which practice best reduces energy wasted on idle resources?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Keeping all servers on 24/7",
+      "Auto scaling and shutting down unused instances",
+      "Doubling storage",
+      "Disabling monitoring"
+    ],
+    "correct_answer": "Auto scaling and shutting down unused instances",
+    "points": 1
+  },
+  {
+    "id": 10,
+    "question_text": "Choosing a cloud region powered by cleaner energy mainly helps reduce:",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Carbon emissions",
+      "Internet speed",
+      "Login time",
+      "Number of users"
+    ],
+    "correct_answer": "Carbon emissions",
+    "points": 1
+  },
+  {
+    "id": 11,
+    "question_text": "In AWS’s shared responsibility model for sustainability, who is responsible for sustainability in the cloud (how workloads are designed and run)?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "AWS only",
+      "The customer",
+      "The government",
+      "Internet providers"
+    ],
+    "correct_answer": "The customer",
+    "points": 1
+  },
+  {
+    "id": 12,
+    "question_text": "Which pillar was added to the AWS Well-Architected Framework to focus on environmental impact?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Security",
+      "Reliability",
+      "Sustainability",
+      "Scalability"
+    ],
+    "correct_answer": "Sustainability",
+    "points": 1
+  },
+  {
+    "id": 13,
+    "question_text": "Amazon co-founded The Climate Pledge, which targets net-zero carbon emissions by:",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "2030",
+      "2040",
+      "2060",
+      "2100"
+    ],
+    "correct_answer": "2040",
+    "points": 1
+  },
+  {
+    "id": 14,
+    "question_text": "Which AWS tool lets customers view the carbon emissions associated with their AWS usage?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "AWS Customer Carbon Footprint Tool",
+      "Amazon S3",
+      "AWS Shield",
+      "Amazon Route 53"
+    ],
+    "correct_answer": "AWS Customer Carbon Footprint Tool",
+    "points": 1
+  },
+  {
+    "id": 15,
+    "question_text": "Which approach usually lowers both cost and energy use?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Over-provisioning for rare peaks",
+      "Right-sizing and using auto scaling",
+      "Running idle test servers all night",
+      "Storing duplicate data everywhere"
+    ],
+    "correct_answer": "Right-sizing and using auto scaling",
+    "points": 1
+  },
+  {
+    "id": 16,
+    "question_text": "Energy-efficient AWS Graviton processors are based on which architecture?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "ARM",
+      "Quantum",
+      "Mainframe",
+      "Analog"
+    ],
+    "correct_answer": "ARM",
+    "points": 1
+  },
+  {
+    "id": 17,
+    "question_text": "Which is a smart campus solution that saves energy?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Lights that stay on all day",
+      "Motion-sensor-based lighting",
+      "Manual attendance",
+      "Printing all notices"
+    ],
+    "correct_answer": "Motion-sensor-based lighting",
+    "points": 1
+  },
+  {
+    "id": 18,
+    "question_text": "Which AWS service connects and manages IoT devices such as campus sensors?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "AWS IoT Core",
+      "Amazon Glacier",
+      "AWS Budgets",
+      "Amazon Redshift"
+    ],
+    "correct_answer": "AWS IoT Core",
+    "points": 1
+  },
+  {
+    "id": 19,
+    "question_text": "Scope 2 emissions refer to:",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Emissions from company-owned vehicles",
+      "Indirect emissions from purchased electricity",
+      "Emissions from the supply chain",
+      "Emissions from waste"
+    ],
+    "correct_answer": "Indirect emissions from purchased electricity",
+    "points": 1
+  },
+  {
+    "id": 20,
+    "question_text": "Which metric best helps track the sustainability of a cloud workload?",
+    "question_type": "mcq",
+    "difficulty": "easy",
+    "options": [
+      "Number of employees",
+      "Carbon emissions or energy used per transaction",
+      "Logo size",
+      "Number of social media posts"
+    ],
+    "correct_answer": "Carbon emissions or energy used per transaction",
+    "points": 1
+  }
+]

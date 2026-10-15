@@ -1,0 +1,6 @@
+export const QUIZ_EVENT_ID = 'sdg-green-cloud-2026';
+export const QUIZ_EVENT_TITLE = 'AWS 110 — SDG: The Green Cloud';
+export const QUIZ_QUESTION_COUNT = 20;
+export const QUIZ_DURATION_MINUTES = 15;
+export const QUIZ_DURATION_SECONDS = QUIZ_DURATION_MINUTES * 60;
+export const QUIZ_SECONDS_PER_QUESTION = QUIZ_DURATION_SECONDS / QUIZ_QUESTION_COUNT;

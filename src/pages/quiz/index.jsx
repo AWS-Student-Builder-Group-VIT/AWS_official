@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
-// Time allowed per question: 0.5 minutes. Keep in step with the server.
-const SECONDS_PER_QUESTION = 30;
+import { QUIZ_EVENT_ID, QUIZ_EVENT_TITLE, QUIZ_QUESTION_COUNT, QUIZ_DURATION_MINUTES, QUIZ_DURATION_SECONDS, QUIZ_SECONDS_PER_QUESTION } from '../../../shared/quizEvent.js';
+const SECONDS_PER_QUESTION = QUIZ_SECONDS_PER_QUESTION;
 import {
   fetchPublicQuizInfo,
   fetchPublicQuizQuestions,
@@ -60,7 +60,7 @@ export default function QuizParticipantPage() {
   // Participant State (Decoupled Internal vs External)
   const [participantType, setParticipantType] = useState(() => {
     try {
-      const saved = sessionStorage.getItem('quiz_participant');
+      const saved = sessionStorage.getItem(`${QUIZ_EVENT_ID}:participant`);
       return saved ? (JSON.parse(saved).participantType || 'internal') : 'internal';
     } catch {
       return 'internal';
@@ -69,7 +69,7 @@ export default function QuizParticipantPage() {
 
   const [internalData, setInternalData] = useState(() => {
     try {
-      const saved = sessionStorage.getItem('quiz_participant');
+      const saved = sessionStorage.getItem(`${QUIZ_EVENT_ID}:participant`);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.participantType === 'internal') {
@@ -88,7 +88,7 @@ export default function QuizParticipantPage() {
 
   const [externalData, setExternalData] = useState(() => {
     try {
-      const saved = sessionStorage.getItem('quiz_participant');
+      const saved = sessionStorage.getItem(`${QUIZ_EVENT_ID}:participant`);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.participantType === 'external') {
@@ -106,7 +106,7 @@ export default function QuizParticipantPage() {
 
   const [participant, setParticipant] = useState(() => {
     try {
-      const saved = sessionStorage.getItem('quiz_participant');
+      const saved = sessionStorage.getItem(`${QUIZ_EVENT_ID}:participant`);
       return saved ? JSON.parse(saved) : { name: '', email: '', regNo: '', participantType: 'internal', googleVerified: false };
     } catch {
       return { name: '', email: '', regNo: '', participantType: 'internal', googleVerified: false };
@@ -115,11 +115,11 @@ export default function QuizParticipantPage() {
 
   // Quiz Meta
   const [quizInfo, setQuizInfo] = useState({
-    title: 'Cloud Intelligence Assessment',
-    durationMinutes: 4.5,
-    allottedSeconds: 270,
+    title: QUIZ_EVENT_TITLE,
+    durationMinutes: QUIZ_DURATION_MINUTES,
+    allottedSeconds: QUIZ_DURATION_SECONDS,
     isFrozen: false,
-    totalQuestions: 0,
+    totalQuestions: QUIZ_QUESTION_COUNT,
   });
   const [loadingInfo, setLoadingInfo] = useState(true);
 
@@ -128,7 +128,7 @@ export default function QuizParticipantPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState({}); // { [qId]: value }
   const [markedForReview, setMarkedForReview] = useState({}); // { [qId]: boolean }
-  const [timeRemaining, setTimeRemaining] = useState(270); // Total Quiz Timer
+  const [timeRemaining, setTimeRemaining] = useState(QUIZ_DURATION_SECONDS); // Total Quiz Timer
   const [questionTimeMap, setQuestionTimeMap] = useState({}); // { [qId]: remaining seconds for that question }
   const [timeTaken, setTimeTaken] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -209,7 +209,7 @@ export default function QuizParticipantPage() {
 
   // ── Participant Logout / Switch Account ───────────────────────
   const handleLogoutParticipant = () => {
-    sessionStorage.removeItem('quiz_participant');
+    sessionStorage.removeItem(`${QUIZ_EVENT_ID}:participant`);
     setParticipant({ name: '', email: '', regNo: '', participantType: 'internal', googleVerified: false });
     setInternalData({ name: '', email: '', regNo: '', regNoFromGoogle: false, googleVerified: false });
     setExternalData({ name: '', email: '', regNo: '', googleVerified: false });
@@ -230,11 +230,11 @@ export default function QuizParticipantPage() {
     const res = await fetchPublicQuizInfo();
     if (res.ok) {
       const qCount = res.totalQuestions || 0;
-      const calculatedDuration = Number(((qCount || 1) * (SECONDS_PER_QUESTION / 60)).toFixed(1));
-      const calculatedAllotted = Math.max(SECONDS_PER_QUESTION, qCount * SECONDS_PER_QUESTION);
+      const calculatedDuration = QUIZ_DURATION_MINUTES;
+      const calculatedAllotted = QUIZ_DURATION_SECONDS;
 
       setQuizInfo({
-        title: res.title || 'Cloud Intelligence Assessment',
+        title: res.title || QUIZ_EVENT_TITLE,
         durationMinutes: res.durationMinutes || calculatedDuration,
         allottedSeconds: res.allottedSeconds || calculatedAllotted,
         isFrozen: res.isFrozen,
@@ -268,7 +268,7 @@ export default function QuizParticipantPage() {
 
     const savedProfile = (() => {
       try {
-        return JSON.parse(sessionStorage.getItem('quiz_participant') || '{}');
+        return JSON.parse(sessionStorage.getItem(`${QUIZ_EVENT_ID}:participant`) || '{}');
       } catch {
         return {};
       }
@@ -398,7 +398,7 @@ export default function QuizParticipantPage() {
         participantType: 'internal',
         googleVerified: internalData.googleVerified,
       };
-      sessionStorage.setItem('quiz_participant', JSON.stringify(profile));
+      sessionStorage.setItem(`${QUIZ_EVENT_ID}:participant`, JSON.stringify(profile));
       setParticipant(profile);
       participantRef.current = profile;
       setStage('dashboard');
@@ -423,7 +423,7 @@ export default function QuizParticipantPage() {
         participantType: 'external',
         googleVerified: externalData.googleVerified,
       };
-      sessionStorage.setItem('quiz_participant', JSON.stringify(profile));
+      sessionStorage.setItem(`${QUIZ_EVENT_ID}:participant`, JSON.stringify(profile));
       setParticipant(profile);
       participantRef.current = profile;
       setStage('dashboard');
@@ -460,9 +460,8 @@ export default function QuizParticipantPage() {
     setLoadingInfo(false);
 
     if (res.ok && res.questions?.length > 0) {
-      const qCount = res.questions.length;
       const perQuestionLimit = Number(res.secondsPerQuestion) || SECONDS_PER_QUESTION;
-      const dynamicAllottedSeconds = qCount * perQuestionLimit; // 30s per question (0.5 * n minutes)
+      const dynamicAllottedSeconds = res.allottedSeconds || QUIZ_DURATION_SECONDS;
 
       // Initialize the persistent per-question timer
       const initialMap = {};
@@ -557,7 +556,7 @@ export default function QuizParticipantPage() {
           } else {
             // All questions have expired
             clearInterval(timerRef.current);
-            handleFinalSubmit(true, 'Assessment auto-submitted: 30-second time expired for all questions.');
+            handleFinalSubmit(true, 'Assessment auto-submitted: 45-second time expired for all questions.');
           }
         }
 
@@ -735,9 +734,9 @@ export default function QuizParticipantPage() {
                   AWS Student Builder Group
                 </div>
                 <h1 className="mt-5 text-3xl sm:text-4xl font-semibold tracking-tight text-white">
-                  Cloud <span className="text-[#FF9900]">Intelligence</span>
+                  SDG: The <span className="text-[#FF9900]">Green Cloud</span>
                 </h1>
-                <p className="mt-3 text-sm text-[#dbc2ad]">Event assessment portal</p>
+                <p className="mt-3 text-sm text-[#dbc2ad]">AWS 110 · Event assessment portal</p>
                 <p className="mt-1 text-xs text-white/40">Build · Learn · Deploy</p>
                 <div className="mt-6 h-px bg-white/10" />
               </div>
@@ -1024,7 +1023,7 @@ export default function QuizParticipantPage() {
                   AWS STUDENT BUILDER GROUP
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-wide">
-                  Cloud Intelligence Assessment
+                  {quizInfo.title}
                 </h1>
                 <div className="flex items-center gap-2 text-[11px] font-bold tracking-wider text-[#FF9900] mt-1">
                   <span>BUILD</span>
@@ -1163,7 +1162,7 @@ export default function QuizParticipantPage() {
                       <span>Accuracy &amp; Quickness Weightage</span>
                     </div>
                     <p className="leading-relaxed text-white/90">
-                      Total duration is strictly <strong>30 seconds per question</strong>. Each question is worth <strong>1 Mark Total</strong>, split into <strong>0.6 for Correctness (60%)</strong> and <strong>0.4 for Speed (40%)</strong>.
+                      You have <strong>15 minutes for 20 questions</strong>, with <strong>45 seconds per question</strong>. Each question is worth <strong>1 Mark Total</strong>, split into <strong>0.6 for Correctness (60%)</strong> and <strong>0.4 for Speed (40%)</strong>.
                     </p>
                     <p className="text-[#dbc2ad] leading-relaxed">
                       💡 <em>Quickness scoring scales with each question you answer correctly. Fast answers combined with high accuracy maximize your speed bonus!</em>
@@ -1215,7 +1214,7 @@ export default function QuizParticipantPage() {
                 </div>
 
                 <div className="text-[11px] text-white/40 border-t border-white/10 pt-4">
-                  AWS Student Builder Group • Cloud Intelligence • Build, Learn, Deploy
+                  AWS Student Builder Group • AWS 110 — SDG: The Green Cloud
                 </div>
               </div>
             </div>
