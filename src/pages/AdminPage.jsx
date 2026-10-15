@@ -236,7 +236,7 @@ function Dashboard({ token, onLogout }) {
                   : 'text-[#dbc2ad] hover:text-white'
               }`}
             >
-              Cloud Intelligence
+              SDG: The Green Cloud
             </button>
             <button
               onClick={() => setActiveTab('quiz')}

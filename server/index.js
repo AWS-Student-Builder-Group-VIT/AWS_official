@@ -117,7 +117,7 @@ async function runDatabaseMigrations() {
 async function initDb() {
   const result = await initializeVersionedSchema({
     pool,
-    version: 'v11-cloud-intelligence',
+    version: 'v12-sdg-green-cloud',
     migrate: runDatabaseMigrations,
   });
   console.log(result.migrated ? 'Database tables ready (migrated to v11)' : 'Database schema already ready');
